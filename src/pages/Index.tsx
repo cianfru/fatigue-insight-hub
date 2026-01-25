@@ -167,7 +167,7 @@ const Index = () => {
                 <PerformanceTimeline duties={analysisResults.duties} month={settings.selectedMonth} />
 
                 {/* Route Network */}
-                <RouteNetwork duties={analysisResults.duties} />
+                <RouteNetwork duties={analysisResults.duties} homeBase={settings.homeBase} />
 
                 {/* Export Options */}
                 <ExportOptions />
