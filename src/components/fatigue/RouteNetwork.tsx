@@ -1,9 +1,24 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { DutyAnalysis } from '@/types/fatigue';
-import { Globe, Plane, MapPin } from 'lucide-react';
-import { ComposableMap, Geographies, Geography, Line, Marker } from 'react-simple-maps';
+import { Globe, Plane, MapPin, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ComposableMap, Geographies, Geography, Line, Marker, ZoomableGroup } from 'react-simple-maps';
 import { airportCoordinates, getAirportCoordinates } from '@/data/airportCoordinates';
 import { useState } from 'react';
+
+interface RegionPreset {
+  name: string;
+  center: [number, number];
+  zoom: number;
+}
+
+const regionPresets: RegionPreset[] = [
+  { name: 'World', center: [40, 25], zoom: 1 },
+  { name: 'Europe', center: [10, 50], zoom: 3.5 },
+  { name: 'Middle East', center: [50, 28], zoom: 3.5 },
+  { name: 'Asia', center: [100, 30], zoom: 2.5 },
+  { name: 'Americas', center: [-80, 35], zoom: 2 },
+];
 
 interface RouteNetworkProps {
   duties: DutyAnalysis[];
@@ -22,6 +37,35 @@ const geoUrl = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 export function RouteNetwork({ duties, homeBase = 'DOH' }: RouteNetworkProps) {
   const [hoveredAirport, setHoveredAirport] = useState<string | null>(null);
   const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
+  const [position, setPosition] = useState<{ coordinates: [number, number]; zoom: number }>({
+    coordinates: [40, 25],
+    zoom: 1,
+  });
+  const [activeRegion, setActiveRegion] = useState('World');
+
+  const handleZoomIn = () => {
+    if (position.zoom >= 8) return;
+    setPosition(pos => ({ ...pos, zoom: pos.zoom * 1.5 }));
+  };
+
+  const handleZoomOut = () => {
+    if (position.zoom <= 1) return;
+    setPosition(pos => ({ ...pos, zoom: pos.zoom / 1.5 }));
+  };
+
+  const handleMoveEnd = (position: { coordinates: [number, number]; zoom: number }) => {
+    setPosition(position);
+  };
+
+  const handleRegionSelect = (preset: RegionPreset) => {
+    setPosition({ coordinates: preset.center, zoom: preset.zoom });
+    setActiveRegion(preset.name);
+  };
+
+  const handleReset = () => {
+    setPosition({ coordinates: [40, 25], zoom: 1 });
+    setActiveRegion('World');
+  };
 
   // Extract unique routes with performance data
   const routeMap = new Map<string, RouteData>();
@@ -87,11 +131,39 @@ export function RouteNetwork({ duties, homeBase = 'DOH' }: RouteNetworkProps) {
 
   return (
     <Card variant="glass">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
           <Globe className="h-5 w-5 text-primary" />
           Route Network Analysis
         </CardTitle>
+        <div className="flex items-center gap-2">
+          {/* Region Presets */}
+          <div className="flex gap-1">
+            {regionPresets.map((preset) => (
+              <Button
+                key={preset.name}
+                variant={activeRegion === preset.name ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleRegionSelect(preset)}
+                className="text-xs px-2 py-1 h-7"
+              >
+                {preset.name}
+              </Button>
+            ))}
+          </div>
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-1 ml-2">
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleZoomIn}>
+              <ZoomIn className="h-3 w-3" />
+            </Button>
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleZoomOut}>
+              <ZoomOut className="h-3 w-3" />
+            </Button>
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleReset}>
+              <RotateCcw className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="relative overflow-hidden rounded-lg bg-secondary/20">
@@ -101,28 +173,32 @@ export function RouteNetwork({ duties, homeBase = 'DOH' }: RouteNetworkProps) {
               projection="geoMercator"
               projectionConfig={{
                 scale: 120,
-                center: [40, 25],
               }}
               style={{ width: '100%', height: '100%' }}
             >
-              <Geographies geography={geoUrl}>
-                {({ geographies }) =>
-                  geographies.map((geo) => (
-                    <Geography
-                      key={geo.rsmKey}
-                      geography={geo}
-                      fill="hsl(var(--secondary))"
-                      stroke="hsl(var(--border))"
-                      strokeWidth={0.5}
-                      style={{
-                        default: { outline: 'none' },
-                        hover: { outline: 'none', fill: 'hsl(var(--muted))' },
-                        pressed: { outline: 'none' },
-                      }}
-                    />
-                  ))
-                }
-              </Geographies>
+              <ZoomableGroup
+                zoom={position.zoom}
+                center={position.coordinates}
+                onMoveEnd={handleMoveEnd}
+              >
+                <Geographies geography={geoUrl}>
+                  {({ geographies }) =>
+                    geographies.map((geo) => (
+                      <Geography
+                        key={geo.rsmKey}
+                        geography={geo}
+                        fill="hsl(var(--secondary))"
+                        stroke="hsl(var(--border))"
+                        strokeWidth={0.5}
+                        style={{
+                          default: { outline: 'none' },
+                          hover: { outline: 'none', fill: 'hsl(var(--muted))' },
+                          pressed: { outline: 'none' },
+                        }}
+                      />
+                    ))
+                  }
+                </Geographies>
 
               {/* Route Lines */}
               {routeLines.map((route) => {
@@ -182,8 +258,13 @@ export function RouteNetwork({ duties, homeBase = 'DOH' }: RouteNetworkProps) {
                   </Marker>
                 );
               })}
+              </ZoomableGroup>
             </ComposableMap>
 
+            {/* Zoom Level Indicator */}
+            <div className="absolute top-2 left-2 rounded-md bg-card/80 px-2 py-1 text-xs backdrop-blur-sm">
+              Zoom: {position.zoom.toFixed(1)}x
+            </div>
             {/* Hovered Airport Info */}
             {hoveredAirport && (
               <div className="absolute bottom-4 left-4 rounded-lg border border-border bg-card/95 p-3 shadow-lg backdrop-blur-sm">
