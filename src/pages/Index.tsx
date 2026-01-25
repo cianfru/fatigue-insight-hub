@@ -153,6 +153,9 @@ const Index = () => {
                 {/* Chronogram */}
                 <Chronogram
                   duties={analysisResults.duties}
+                  statistics={analysisResults.statistics}
+                  month={settings.selectedMonth}
+                  pilotId={settings.pilotId}
                   onDutySelect={setSelectedDuty}
                   selectedDuty={selectedDuty}
                 />

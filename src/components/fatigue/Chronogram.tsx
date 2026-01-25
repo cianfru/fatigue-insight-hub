@@ -1,49 +1,126 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { DutyAnalysis } from '@/types/fatigue';
-import { format } from 'date-fns';
+import { DutyAnalysis, DutyStatistics } from '@/types/fatigue';
+import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface ChronogramProps {
   duties: DutyAnalysis[];
+  statistics: DutyStatistics;
+  month: Date;
+  pilotId: string;
   onDutySelect: (duty: DutyAnalysis) => void;
   selectedDuty: DutyAnalysis | null;
 }
 
 type DisplayMode = 'heatmap' | 'timeline' | 'combined';
 
-export function Chronogram({ duties, onDutySelect, selectedDuty }: ChronogramProps) {
+interface DutyBar {
+  dayIndex: number;
+  startHour: number;
+  endHour: number;
+  performance: number;
+  duty: DutyAnalysis;
+}
+
+// WOCL (Window of Circadian Low) is typically 02:00 - 06:00
+const WOCL_START = 2;
+const WOCL_END = 6;
+
+const getPerformanceColor = (performance: number): string => {
+  // Create gradient from red (0) to yellow (50) to green (100)
+  if (performance >= 80) return 'hsl(120, 70%, 45%)'; // Green
+  if (performance >= 70) return 'hsl(90, 70%, 50%)'; // Yellow-green
+  if (performance >= 60) return 'hsl(55, 90%, 55%)'; // Yellow
+  if (performance >= 50) return 'hsl(40, 95%, 50%)'; // Orange-yellow
+  if (performance >= 40) return 'hsl(25, 95%, 50%)'; // Orange
+  return 'hsl(0, 80%, 50%)'; // Red
+};
+
+export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, selectedDuty }: ChronogramProps) {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('heatmap');
   const [infoOpen, setInfoOpen] = useState(false);
 
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case 'LOW':
-        return 'bg-success hover:bg-success/80';
-      case 'MODERATE':
-        return 'bg-warning hover:bg-warning/80';
-      case 'HIGH':
-        return 'bg-high hover:bg-high/80';
-      case 'CRITICAL':
-        return 'bg-critical hover:bg-critical/80';
-      default:
-        return 'bg-muted hover:bg-muted/80';
-    }
+  const daysInMonth = getDaysInMonth(month);
+  const monthStart = startOfMonth(month);
+
+  // Generate all days of the month
+  const allDays = useMemo(() => {
+    return Array.from({ length: daysInMonth }, (_, i) => addDays(monthStart, i));
+  }, [daysInMonth, monthStart]);
+
+  // Convert duties to bar positions
+  const dutyBars = useMemo(() => {
+    const bars: DutyBar[] = [];
+    
+    duties.forEach((duty) => {
+      const dayOfMonth = duty.date.getDate();
+      
+      // Calculate start and end times from flight segments
+      if (duty.flightSegments.length > 0) {
+        const firstSegment = duty.flightSegments[0];
+        const lastSegment = duty.flightSegments[duty.flightSegments.length - 1];
+        
+        const [startH, startM] = firstSegment.departureTime.split(':').map(Number);
+        const [endH, endM] = lastSegment.arrivalTime.split(':').map(Number);
+        
+        const startHour = startH + startM / 60;
+        let endHour = endH + endM / 60;
+        
+        // Handle overnight duties
+        if (endHour < startHour) {
+          // First bar: from start to midnight
+          bars.push({
+            dayIndex: dayOfMonth,
+            startHour,
+            endHour: 24,
+            performance: duty.avgPerformance,
+            duty,
+          });
+          // Second bar: from midnight to end (next day)
+          if (dayOfMonth < daysInMonth) {
+            bars.push({
+              dayIndex: dayOfMonth + 1,
+              startHour: 0,
+              endHour,
+              performance: duty.landingPerformance,
+              duty,
+            });
+          }
+        } else {
+          bars.push({
+            dayIndex: dayOfMonth,
+            startHour,
+            endHour,
+            performance: duty.avgPerformance,
+            duty,
+          });
+        }
+      }
+    });
+    
+    return bars;
+  }, [duties, daysInMonth]);
+
+  // Check for WOCL exposure and FLIP violations
+  const getDayWarnings = (dayOfMonth: number) => {
+    const duty = duties.find(d => d.date.getDate() === dayOfMonth);
+    if (!duty) return { wocl: false, flip: null };
+    
+    return {
+      wocl: duty.woclExposure > 2,
+      flip: duty.priorSleep < 20 ? Math.round(duty.priorSleep) : null,
+    };
   };
 
-  const getPerformanceGradient = (performance: number) => {
-    if (performance >= 70) return 'from-success to-success/70';
-    if (performance >= 60) return 'from-warning to-warning/70';
-    if (performance >= 50) return 'from-high to-high/70';
-    return 'from-critical to-critical/70';
-  };
+  const hours = Array.from({ length: 8 }, (_, i) => i * 3); // 00, 03, 06, 09, 12, 15, 18, 21
 
   return (
     <Card variant="glass">
-      <CardHeader>
+      <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2">
           <span className="text-primary">📊</span>
           Monthly Chronogram - High-Resolution Timeline
@@ -63,7 +140,7 @@ export function Chronogram({ duties, onDutySelect, selectedDuty }: ChronogramPro
               onClick={() => setDisplayMode('heatmap')}
               className="text-xs"
             >
-              🎨 Performance Heatmap
+              🎨 Performance Heatmap (shows fatigue levels)
             </Button>
             <Button
               variant={displayMode === 'timeline' ? 'default' : 'outline'}
@@ -71,7 +148,7 @@ export function Chronogram({ duties, onDutySelect, selectedDuty }: ChronogramPro
               onClick={() => setDisplayMode('timeline')}
               className="text-xs"
             >
-              📊 Duty/Rest Timeline
+              📊 Duty/Rest Timeline (simple)
             </Button>
             <Button
               variant={displayMode === 'combined' ? 'default' : 'outline'}
@@ -94,52 +171,197 @@ export function Chronogram({ duties, onDutySelect, selectedDuty }: ChronogramPro
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-2">
             <div className="rounded-lg bg-secondary/30 p-3 text-xs text-muted-foreground">
-              <p className="mb-2">Each bar represents a duty day. Colors indicate fatigue risk:</p>
+              <p className="mb-2">The chart shows duty periods across the month. Colors indicate fatigue level (performance score):</p>
               <div className="flex flex-wrap gap-4">
-                <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-success" /> Low Risk</span>
-                <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-warning" /> Moderate</span>
-                <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-high" /> High</span>
-                <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-critical" /> Critical</span>
+                <span className="flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(120, 70%, 45%)' }} /> 80-100% (Good)</span>
+                <span className="flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(55, 90%, 55%)' }} /> 60-80% (Moderate)</span>
+                <span className="flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(25, 95%, 50%)' }} /> 40-60% (High Risk)</span>
+                <span className="flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(0, 80%, 50%)' }} /> &lt;40% (Critical)</span>
               </div>
+              <p className="mt-2">Purple shaded area = WOCL (Window of Circadian Low: 02:00-06:00)</p>
             </div>
           </CollapsibleContent>
         </Collapsible>
 
-        {/* Duty Analysis Section */}
-        <div className="space-y-2">
-          <h4 className="text-sm font-medium">Duty Analysis</h4>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
+        {/* High-Resolution Timeline */}
+        <div className="overflow-x-auto pb-4">
+          <div className="min-w-[800px]">
+            {/* Header with stats */}
+            <div className="mb-2 text-center text-sm font-medium">
+              {format(month, 'MMMM yyyy')} - High-Resolution Duty Timeline
+            </div>
+            <div className="mb-4 text-center text-xs text-muted-foreground">
+              Pilot: {pilotId} | Duties: {statistics.totalDuties} | High Risk: {statistics.highRiskDuties} | Critical: {statistics.criticalRiskDuties}
+            </div>
+            
+            {/* Legend */}
+            <div className="mb-4 flex items-center justify-center gap-4 text-xs">
+              <span className="flex items-center gap-2">
+                <span className="h-4 w-8 rounded bg-wocl/30" />
+                WOCL
+              </span>
+            </div>
+
+            {/* Timeline Grid */}
+            <div className="flex">
+              {/* Y-axis labels (days) */}
+              <div className="w-28 flex-shrink-0">
+                <div className="h-8" /> {/* Header spacer */}
+                {allDays.map((day, index) => {
+                  const warnings = getDayWarnings(index + 1);
+                  const hasDuty = dutyBars.some(bar => bar.dayIndex === index + 1);
+                  if (!hasDuty && displayMode !== 'timeline') return (
+                    <div key={index} className="h-7" />
+                  );
+                  return (
+                    <div
+                      key={index}
+                      className="relative flex h-7 items-center gap-1 pr-2 text-xs"
+                    >
+                      <div className="flex flex-col items-start">
+                        {warnings.wocl && (
+                          <span className="text-[9px] leading-tight text-warning">⚠ 3× WOCL</span>
+                        )}
+                        {warnings.flip && (
+                          <span className="text-[9px] leading-tight text-critical">⚠ FLIP {warnings.flip}h</span>
+                        )}
+                      </div>
+                      <span className="ml-auto font-medium text-foreground">
+                        {format(day, 'EEE d')}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Main chart area */}
+              <div className="relative flex-1">
+                {/* X-axis header */}
+                <div className="flex h-8 border-b border-border">
+                  {hours.map((hour) => (
+                    <div
+                      key={hour}
+                      className="flex-1 text-center text-[10px] text-muted-foreground"
+                      style={{ width: `${(3/24) * 100}%` }}
+                    >
+                      {hour.toString().padStart(2, '0')}:00
+                    </div>
+                  ))}
+                </div>
+
+                {/* Grid with WOCL shading and duty bars */}
+                <div className="relative">
+                  {/* WOCL shading */}
+                  <div
+                    className="absolute top-0 bottom-0 bg-wocl/20"
+                    style={{
+                      left: `${(WOCL_START / 24) * 100}%`,
+                      width: `${((WOCL_END - WOCL_START) / 24) * 100}%`,
+                    }}
+                  />
+
+                  {/* Grid lines */}
+                  <div className="absolute inset-0 flex pointer-events-none">
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <div
+                        key={hour}
+                        className={cn(
+                          "flex-1 border-r",
+                          hour % 3 === 0 ? "border-border/50" : "border-border/20"
+                        )}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Day rows */}
+                  {allDays.map((day, dayIndex) => {
+                    const hasDuty = dutyBars.some(bar => bar.dayIndex === dayIndex + 1);
+                    if (!hasDuty && displayMode !== 'timeline') return (
+                      <div key={dayIndex} className="h-7" />
+                    );
+                    return (
+                      <div
+                        key={dayIndex}
+                        className="relative h-7 border-b border-border/20"
+                      >
+                        {/* Duty bars for this day */}
+                        {dutyBars
+                          .filter((bar) => bar.dayIndex === dayIndex + 1)
+                          .map((bar, barIndex) => (
+                            <button
+                              key={barIndex}
+                              onClick={() => onDutySelect(bar.duty)}
+                              className={cn(
+                                "absolute top-1 bottom-1 rounded-sm transition-all hover:ring-2 hover:ring-foreground cursor-pointer",
+                                selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground"
+                              )}
+                              style={{
+                                left: `${(bar.startHour / 24) * 100}%`,
+                                width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
+                                backgroundColor: displayMode === 'timeline' 
+                                  ? 'hsl(var(--primary))' 
+                                  : getPerformanceColor(bar.performance),
+                              }}
+                              title={`${format(bar.duty.date, 'MMM d')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ')} - Performance: ${bar.performance.toFixed(0)}%`}
+                            />
+                          ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Color legend */}
+              {displayMode !== 'timeline' && (
+                <div className="ml-4 flex w-20 flex-shrink-0 flex-col items-center">
+                  <div className="h-8 text-[10px] text-muted-foreground">Performance<br/>Score</div>
+                  <div className="relative flex-1 min-h-[150px] w-4 rounded-sm overflow-hidden">
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        background: 'linear-gradient(to bottom, hsl(120, 70%, 45%), hsl(90, 70%, 50%), hsl(55, 90%, 55%), hsl(40, 95%, 50%), hsl(25, 95%, 50%), hsl(0, 80%, 50%))',
+                      }}
+                    />
+                  </div>
+                  <div className="mt-1 flex w-full flex-col justify-between text-[9px] text-muted-foreground h-[150px]">
+                    <span className="text-left">100</span>
+                    <span className="text-left">80</span>
+                    <span className="text-left">60</span>
+                    <span className="text-left">40</span>
+                    <span className="text-left">20</span>
+                    <span className="text-left">0</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* X-axis label */}
+            <div className="mt-2 text-center text-xs text-muted-foreground">
+              Time of Day (Home Base)
+            </div>
+          </div>
+        </div>
+
+        {/* Quick duty selection grid */}
+        <div className="space-y-2 pt-4 border-t border-border">
+          <h4 className="text-sm font-medium">Quick Duty Selection</h4>
+          <div className="flex flex-wrap gap-2">
             {duties.map((duty, index) => (
               <button
                 key={index}
                 onClick={() => onDutySelect(duty)}
                 className={cn(
-                  "group relative rounded-lg p-3 text-left transition-all duration-200 text-foreground",
-                  getRiskColor(duty.overallRisk),
+                  "rounded-lg px-3 py-2 text-xs font-medium transition-all duration-200 text-foreground",
+                  duty.overallRisk === 'LOW' && "bg-success hover:bg-success/80",
+                  duty.overallRisk === 'MODERATE' && "bg-warning hover:bg-warning/80",
+                  duty.overallRisk === 'HIGH' && "bg-high hover:bg-high/80",
+                  duty.overallRisk === 'CRITICAL' && "bg-critical hover:bg-critical/80",
                   selectedDuty?.date.getTime() === duty.date.getTime()
                     ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
                     : 'hover:scale-105'
                 )}
               >
-                <div className="text-xs font-medium text-foreground">
-                  {duty.dayOfWeek}, {format(duty.date, 'MMM dd')}
-                </div>
-                {displayMode !== 'timeline' && (
-                  <div className="mt-1 text-xs opacity-80">
-                    {duty.minPerformance.toFixed(0)}%
-                  </div>
-                )}
-                {displayMode === 'combined' && (
-                  <div className="mt-1">
-                    <div
-                      className={cn(
-                        "h-1 rounded-full bg-gradient-to-r",
-                        getPerformanceGradient(duty.minPerformance)
-                      )}
-                      style={{ width: `${duty.minPerformance}%` }}
-                    />
-                  </div>
-                )}
+                {duty.dayOfWeek}, {format(duty.date, 'MMM dd')}
               </button>
             ))}
           </div>

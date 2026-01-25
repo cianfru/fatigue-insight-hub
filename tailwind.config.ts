@@ -47,6 +47,10 @@ export default {
           DEFAULT: "hsl(var(--critical))",
           foreground: "hsl(var(--critical-foreground))",
         },
+        wocl: {
+          DEFAULT: "hsl(var(--wocl))",
+          foreground: "hsl(var(--wocl-foreground))",
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
