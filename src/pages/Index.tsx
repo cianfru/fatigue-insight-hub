@@ -72,7 +72,7 @@ const Index = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <Header />
+      <Header theme={settings.theme} onThemeChange={(theme) => handleSettingsChange({ theme })} />
       
       <div className="flex flex-1">
         {/* Settings Sidebar */}
@@ -164,7 +164,7 @@ const Index = () => {
                 {selectedDuty && <DutyDetails duty={selectedDuty} />}
 
                 {/* Performance Timeline */}
-                <PerformanceTimeline duties={analysisResults.duties} />
+                <PerformanceTimeline duties={analysisResults.duties} month={settings.selectedMonth} />
 
                 {/* Route Network */}
                 <RouteNetwork duties={analysisResults.duties} />
