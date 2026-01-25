@@ -1,4 +1,4 @@
-import { Settings, Moon, Sun, Info, BookOpen, ChevronDown } from 'lucide-react';
+import { Settings, Info, BookOpen, ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -118,40 +118,6 @@ export function SettingsSidebar({ settings, onSettingsChange }: SettingsSidebarP
         </CardContent>
       </Card>
 
-      {/* Appearance Card */}
-      <Card variant="glass">
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <span className="text-primary">🎨</span>
-            Appearance
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Theme:</Label>
-            <div className="flex gap-2">
-              <Button
-                variant={settings.theme === 'dark' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => onSettingsChange({ theme: 'dark' })}
-                className="flex-1 text-xs"
-              >
-                <Moon className="mr-1 h-3 w-3" />
-                Dark
-              </Button>
-              <Button
-                variant={settings.theme === 'light' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => onSettingsChange({ theme: 'light' })}
-                className="flex-1 text-xs"
-              >
-                <Sun className="mr-1 h-3 w-3" />
-                Light
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Model Configuration Card */}
       <Card variant="glass">
