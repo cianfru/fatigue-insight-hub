@@ -40,6 +40,9 @@
     --critical: 0 84% 60%;
     --critical-foreground: 210 40% 98%;
 
+    --wocl: 280 60% 70%;
+    --wocl-foreground: 222 47% 6%;
+
     --border: 222 30% 18%;
     --input: 222 30% 14%;
     --ring: 199 89% 48%;
@@ -108,6 +111,9 @@
 
     --critical: 0 84% 60%;
     --critical-foreground: 210 40% 98%;
+
+    --wocl: 280 60% 80%;
+    --wocl-foreground: 222 47% 11%;
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
