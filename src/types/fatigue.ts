@@ -32,6 +32,23 @@ export interface FlightSegment {
   performance: number;
 }
 
+export type FlightPhase = 'preflight' | 'taxi' | 'takeoff' | 'climb' | 'cruise' | 'descent' | 'approach' | 'landing';
+
+export interface PinchEvent {
+  time: string;
+  phase: FlightPhase;
+  performance: number;
+  circadian: number;
+  sleepPressure: number;
+  severity: 'high' | 'critical';
+}
+
+export interface FlightPhasePerformance {
+  phase: FlightPhase;
+  performance: number;
+  isCritical: boolean;
+}
+
 export interface DutyAnalysis {
   date: Date;
   dayOfWeek: string;
@@ -48,6 +65,12 @@ export interface DutyAnalysis {
   landingRisk: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
   smsReportable: boolean;
   flightSegments: FlightSegment[];
+  // New fields from backend model
+  pinchEvents?: PinchEvent[];
+  circadianPhaseShift?: number; // Hours deviation from home base
+  phasePerformance?: FlightPhasePerformance[];
+  sleepQuality?: 'poor' | 'fair' | 'good' | 'excellent';
+  sleepEnvironment?: 'home' | 'layover';
 }
 
 export interface AnalysisResults {

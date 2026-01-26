@@ -1,4 +1,4 @@
-import { AnalysisResults, DutyAnalysis } from '@/types/fatigue';
+import { AnalysisResults, DutyAnalysis, PinchEvent } from '@/types/fatigue';
 
 const generateMockDuties = (): DutyAnalysis[] => {
   const duties: DutyAnalysis[] = [
@@ -17,6 +17,9 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'LOW',
       landingRisk: 'LOW',
       smsReportable: false,
+      circadianPhaseShift: 0,
+      sleepQuality: 'excellent',
+      sleepEnvironment: 'home',
       flightSegments: [
         { flightNumber: 'QR841', departure: 'DOH', arrival: 'DXB', departureTime: '06:30', arrivalTime: '07:45', performance: 78.5 },
         { flightNumber: 'QR842', departure: 'DXB', arrival: 'DOH', departureTime: '09:00', arrivalTime: '10:15', performance: 75.2 }
@@ -37,6 +40,12 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'HIGH',
       landingRisk: 'MODERATE',
       smsReportable: false,
+      circadianPhaseShift: 0,
+      sleepQuality: 'fair',
+      sleepEnvironment: 'home',
+      pinchEvents: [
+        { time: '04:30', phase: 'cruise', performance: 58.4, circadian: 0.32, sleepPressure: 0.65, severity: 'high' }
+      ],
       flightSegments: [
         { flightNumber: 'QR103', departure: 'DOH', arrival: 'LHR', departureTime: '02:15', arrivalTime: '07:30', performance: 64.2 },
         { flightNumber: 'QR104', departure: 'LHR', arrival: 'DOH', departureTime: '09:45', arrivalTime: '18:00', performance: 60.1 }
@@ -96,6 +105,13 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'CRITICAL',
       landingRisk: 'CRITICAL',
       smsReportable: true,
+      circadianPhaseShift: -8, // JFK is -8h from DOH
+      sleepQuality: 'poor',
+      sleepEnvironment: 'layover',
+      pinchEvents: [
+        { time: '03:15', phase: 'approach', performance: 48.4, circadian: 0.22, sleepPressure: 0.78, severity: 'critical' },
+        { time: '03:45', phase: 'landing', performance: 50.1, circadian: 0.25, sleepPressure: 0.75, severity: 'critical' }
+      ],
       flightSegments: [
         { flightNumber: 'QR175', departure: 'JFK', arrival: 'DOH', departureTime: '01:30', arrivalTime: '20:00', performance: 50.1 }
       ]
@@ -115,6 +131,13 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'CRITICAL',
       landingRisk: 'CRITICAL',
       smsReportable: true,
+      circadianPhaseShift: 5, // SIN is +5h from DOH
+      sleepQuality: 'poor',
+      sleepEnvironment: 'home',
+      pinchEvents: [
+        { time: '03:30', phase: 'cruise', performance: 45.2, circadian: 0.18, sleepPressure: 0.82, severity: 'critical' },
+        { time: '04:15', phase: 'approach', performance: 47.5, circadian: 0.21, sleepPressure: 0.79, severity: 'critical' }
+      ],
       flightSegments: [
         { flightNumber: 'QR512', departure: 'DOH', arrival: 'SIN', departureTime: '02:00', arrivalTime: '14:30', performance: 52.8 },
         { flightNumber: 'QR513', departure: 'SIN', arrival: 'DOH', departureTime: '16:00', arrivalTime: '20:30', performance: 47.5 }
@@ -154,6 +177,13 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'CRITICAL',
       landingRisk: 'CRITICAL',
       smsReportable: true,
+      circadianPhaseShift: 1, // CDG is +1h
+      sleepQuality: 'poor',
+      sleepEnvironment: 'layover',
+      pinchEvents: [
+        { time: '02:45', phase: 'takeoff', performance: 53.2, circadian: 0.28, sleepPressure: 0.72, severity: 'critical' },
+        { time: '03:30', phase: 'cruise', performance: 46.5, circadian: 0.20, sleepPressure: 0.80, severity: 'critical' }
+      ],
       flightSegments: [
         { flightNumber: 'QR225', departure: 'CDG', arrival: 'DOH', departureTime: '01:00', arrivalTime: '08:30', performance: 53.2 },
         { flightNumber: 'QR400', departure: 'DOH', arrival: 'BKK', departureTime: '10:30', arrivalTime: '21:00', performance: 48.8 }
@@ -174,6 +204,13 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'CRITICAL',
       landingRisk: 'CRITICAL',
       smsReportable: true,
+      circadianPhaseShift: 4, // BKK is +4h from DOH
+      sleepQuality: 'poor',
+      sleepEnvironment: 'layover',
+      pinchEvents: [
+        { time: '02:00', phase: 'cruise', performance: 44.8, circadian: 0.15, sleepPressure: 0.85, severity: 'critical' },
+        { time: '03:30', phase: 'landing', performance: 46.2, circadian: 0.18, sleepPressure: 0.82, severity: 'critical' }
+      ],
       flightSegments: [
         { flightNumber: 'QR401', departure: 'BKK', arrival: 'DOH', departureTime: '23:30', arrivalTime: '04:00', performance: 46.2 }
       ]
@@ -232,6 +269,13 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'CRITICAL',
       landingRisk: 'CRITICAL',
       smsReportable: true,
+      circadianPhaseShift: 7, // SYD is +7h from DOH
+      sleepQuality: 'poor',
+      sleepEnvironment: 'layover',
+      pinchEvents: [
+        { time: '01:30', phase: 'takeoff', performance: 53.8, circadian: 0.30, sleepPressure: 0.70, severity: 'high' },
+        { time: '04:00', phase: 'landing', performance: 49.5, circadian: 0.22, sleepPressure: 0.78, severity: 'critical' }
+      ],
       flightSegments: [
         { flightNumber: 'QR753', departure: 'SYD', arrival: 'DOH', departureTime: '22:00', arrivalTime: '05:30', performance: 49.5 }
       ]
@@ -251,6 +295,9 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'MODERATE',
       landingRisk: 'MODERATE',
       smsReportable: false,
+      circadianPhaseShift: 6, // NRT is +6h from DOH
+      sleepQuality: 'fair',
+      sleepEnvironment: 'home',
       flightSegments: [
         { flightNumber: 'QR362', departure: 'DOH', arrival: 'NRT', departureTime: '21:45', arrivalTime: '14:00', performance: 65.2 }
       ]
@@ -270,6 +317,13 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'CRITICAL',
       landingRisk: 'CRITICAL',
       smsReportable: true,
+      circadianPhaseShift: 6, // NRT is +6h from DOH
+      sleepQuality: 'poor',
+      sleepEnvironment: 'layover',
+      pinchEvents: [
+        { time: '02:15', phase: 'cruise', performance: 52.4, circadian: 0.24, sleepPressure: 0.76, severity: 'critical' },
+        { time: '05:30', phase: 'landing', performance: 48.2, circadian: 0.35, sleepPressure: 0.72, severity: 'critical' }
+      ],
       flightSegments: [
         { flightNumber: 'QR363', departure: 'NRT', arrival: 'DOH', departureTime: '00:30', arrivalTime: '06:45', performance: 52.4 },
         { flightNumber: 'QR148', departure: 'DOH', arrival: 'FCO', departureTime: '08:30', arrivalTime: '13:00', performance: 48.2 }
