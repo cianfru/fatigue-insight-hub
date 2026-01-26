@@ -130,10 +130,20 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMap
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    // Remove existing layers/sources
-    ['routes', 'airports', 'home-base'].forEach(id => {
-      if (map.current?.getLayer(id)) map.current.removeLayer(id);
-      if (map.current?.getSource(id)) map.current.removeSource(id);
+    // Remove existing layers first, then sources (order matters!)
+    const layerIds = ['airport-labels', 'airports', 'routes'];
+    const sourceIds = ['airports', 'routes'];
+    
+    layerIds.forEach(id => {
+      if (map.current?.getLayer(id)) {
+        map.current.removeLayer(id);
+      }
+    });
+    
+    sourceIds.forEach(id => {
+      if (map.current?.getSource(id)) {
+        map.current.removeSource(id);
+      }
     });
 
     // Add routes as lines
