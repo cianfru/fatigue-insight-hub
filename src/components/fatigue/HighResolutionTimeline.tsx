@@ -15,7 +15,8 @@ interface DutyBar {
   dayIndex: number;
   startHour: number;
   endHour: number;
-  performance: number;
+  startPerformance: number;
+  endPerformance: number;
   duty: DutyAnalysis;
 }
 
@@ -42,7 +43,7 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
     return Array.from({ length: daysInMonth }, (_, i) => addDays(monthStart, i));
   }, [daysInMonth, monthStart]);
 
-  // Convert duties to bar positions
+  // Convert duties to bar positions with start/end performance for gradients
   const dutyBars = useMemo(() => {
     const bars: DutyBar[] = [];
     
@@ -60,14 +61,24 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
         const startHour = startH + startM / 60;
         let endHour = endH + endM / 60;
         
+        // Get performance at start (first segment) and end (last segment/landing)
+        const startPerformance = firstSegment.performance;
+        const endPerformance = duty.landingPerformance;
+        
         // Handle overnight duties
         if (endHour < startHour) {
+          // Calculate mid-point performance for the split
+          const totalDuration = (24 - startHour) + endHour;
+          const firstPartRatio = (24 - startHour) / totalDuration;
+          const midPerformance = startPerformance - (startPerformance - endPerformance) * firstPartRatio;
+          
           // First bar: from start to midnight
           bars.push({
             dayIndex: dayOfMonth,
             startHour,
             endHour: 24,
-            performance: duty.avgPerformance,
+            startPerformance,
+            endPerformance: midPerformance,
             duty,
           });
           // Second bar: from midnight to end (next day)
@@ -76,7 +87,8 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
               dayIndex: dayOfMonth + 1,
               startHour: 0,
               endHour,
-              performance: duty.landingPerformance,
+              startPerformance: midPerformance,
+              endPerformance,
               duty,
             });
           }
@@ -85,7 +97,8 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
             dayIndex: dayOfMonth,
             startHour,
             endHour,
-            performance: duty.avgPerformance,
+            startPerformance,
+            endPerformance,
             duty,
           });
         }
@@ -196,7 +209,7 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
                     key={dayIndex}
                     className="relative h-7 border-b border-border/20"
                   >
-                    {/* Duty bars for this day */}
+                    {/* Duty bars for this day with gradient showing performance decay */}
                     {dutyBars
                       .filter((bar) => bar.dayIndex === dayIndex + 1)
                       .map((bar, barIndex) => (
@@ -206,9 +219,9 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
                           style={{
                             left: `${(bar.startHour / 24) * 100}%`,
                             width: `${((bar.endHour - bar.startHour) / 24) * 100}%`,
-                            backgroundColor: getPerformanceColor(bar.performance),
+                            background: `linear-gradient(to right, ${getPerformanceColor(bar.startPerformance)}, ${getPerformanceColor(bar.endPerformance)})`,
                           }}
-                          title={`${format(bar.duty.date, 'MMM d')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ')} - Performance: ${bar.performance.toFixed(0)}%`}
+                          title={`${format(bar.duty.date, 'MMM d')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ')} - Start: ${bar.startPerformance.toFixed(0)}% → End: ${bar.endPerformance.toFixed(0)}%`}
                         />
                       ))}
                   </div>
