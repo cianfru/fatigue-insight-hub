@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Play, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Header } from '@/components/fatigue/Header';
 import { Footer } from '@/components/fatigue/Footer';
 import { SettingsSidebar } from '@/components/fatigue/SettingsSidebar';
@@ -12,6 +13,10 @@ import { DutyDetails } from '@/components/fatigue/DutyDetails';
 import { PerformanceTimeline } from '@/components/fatigue/PerformanceTimeline';
 import { RouteNetwork } from '@/components/fatigue/RouteNetwork';
 import { ExportOptions } from '@/components/fatigue/ExportOptions';
+import { PinchEventAlerts } from '@/components/fatigue/PinchEventAlerts';
+import { BodyClockDriftChart } from '@/components/fatigue/BodyClockDriftChart';
+import { SleepDebtTrendChart } from '@/components/fatigue/SleepDebtTrendChart';
+import { FlightPhasePerformance } from '@/components/fatigue/FlightPhasePerformance';
 import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { mockAnalysisResults } from '@/data/mockAnalysisData';
 import { useTheme } from '@/hooks/useTheme';
@@ -150,6 +155,9 @@ const Index = () => {
                   </CardContent>
                 </Card>
 
+                {/* Pinch Event Alerts - Critical warnings */}
+                <PinchEventAlerts duties={analysisResults.duties} />
+
                 {/* Chronogram */}
                 <Chronogram
                   duties={analysisResults.duties}
@@ -160,11 +168,35 @@ const Index = () => {
                   selectedDuty={selectedDuty}
                 />
 
-                {/* Selected Duty Details */}
-                {selectedDuty && <DutyDetails duty={selectedDuty} />}
+                {/* Selected Duty Details with Flight Phase Performance */}
+                {selectedDuty && (
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <DutyDetails duty={selectedDuty} />
+                    <FlightPhasePerformance duty={selectedDuty} />
+                  </div>
+                )}
 
-                {/* Performance Timeline */}
-                <PerformanceTimeline duties={analysisResults.duties} month={settings.selectedMonth} />
+                {/* Advanced Analytics Tabs */}
+                <Tabs defaultValue="performance" className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="performance">Performance Timeline</TabsTrigger>
+                    <TabsTrigger value="circadian">Body Clock Drift</TabsTrigger>
+                    <TabsTrigger value="sleepdebt">Sleep Debt Trend</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="performance" className="mt-4">
+                    <PerformanceTimeline duties={analysisResults.duties} month={settings.selectedMonth} />
+                  </TabsContent>
+                  <TabsContent value="circadian" className="mt-4">
+                    <BodyClockDriftChart 
+                      duties={analysisResults.duties} 
+                      month={settings.selectedMonth} 
+                      homeBase={settings.homeBase}
+                    />
+                  </TabsContent>
+                  <TabsContent value="sleepdebt" className="mt-4">
+                    <SleepDebtTrendChart duties={analysisResults.duties} month={settings.selectedMonth} />
+                  </TabsContent>
+                </Tabs>
 
                 {/* Route Network */}
                 <RouteNetwork duties={analysisResults.duties} homeBase={settings.homeBase} />

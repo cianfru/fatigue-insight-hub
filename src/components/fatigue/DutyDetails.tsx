@@ -1,11 +1,11 @@
-import { AlertTriangle, Plane, Clock, Moon, BedDouble } from 'lucide-react';
+import { AlertTriangle, Plane, Clock, Moon, BedDouble, ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DutyAnalysis } from '@/types/fatigue';
 import { format } from 'date-fns';
 import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { PriorSleepIndicator } from './PriorSleepIndicator';
 
 interface DutyDetailsProps {
   duty: DutyAnalysis;
@@ -100,13 +100,11 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
               {duty.woclExposure.toFixed(1)}h
             </p>
           </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-1">
-              <BedDouble className="h-3 w-3 text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">Prior Sleep</p>
-            </div>
-            <p className="font-medium">{duty.priorSleep.toFixed(1)}h</p>
-          </div>
+        </div>
+
+        {/* Prior Sleep Indicator - Enhanced */}
+        <div className="pt-2">
+          <PriorSleepIndicator duty={duty} variant="detailed" />
         </div>
 
         {/* Flight Segments */}
