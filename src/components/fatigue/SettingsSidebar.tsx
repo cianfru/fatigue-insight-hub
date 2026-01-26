@@ -5,12 +5,19 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { PilotSettings } from '@/types/fatigue';
+import { PilotSettings, UploadedFile } from '@/types/fatigue';
 import { useState } from 'react';
+import { SidebarUpload } from './SidebarUpload';
 
 interface SettingsSidebarProps {
   settings: PilotSettings;
   onSettingsChange: (settings: Partial<PilotSettings>) => void;
+  uploadedFile: UploadedFile | null;
+  onFileUpload: (file: UploadedFile) => void;
+  onRemoveFile: () => void;
+  onRunAnalysis: () => void;
+  isAnalyzing: boolean;
+  hasResults: boolean;
 }
 
 const airports = [
@@ -28,12 +35,31 @@ const configPresets = [
   { value: 'custom', label: 'Custom Configuration' },
 ];
 
-export function SettingsSidebar({ settings, onSettingsChange }: SettingsSidebarProps) {
+export function SettingsSidebar({ 
+  settings, 
+  onSettingsChange,
+  uploadedFile,
+  onFileUpload,
+  onRemoveFile,
+  onRunAnalysis,
+  isAnalyzing,
+  hasResults,
+}: SettingsSidebarProps) {
   const [configOpen, setConfigOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
 
   return (
     <div className="w-80 flex-shrink-0 space-y-4 overflow-y-auto p-4">
+      {/* Roster Upload - Now at the top */}
+      <SidebarUpload
+        uploadedFile={uploadedFile}
+        onFileUpload={onFileUpload}
+        onRemoveFile={onRemoveFile}
+        onRunAnalysis={onRunAnalysis}
+        isAnalyzing={isAnalyzing}
+        hasResults={hasResults}
+      />
+
       {/* Settings Card */}
       <Card variant="glass">
         <CardHeader className="pb-4">
@@ -183,9 +209,9 @@ export function SettingsSidebar({ settings, onSettingsChange }: SettingsSidebarP
           <CollapsibleContent>
             <CardContent className="pt-0">
               <ol className="list-inside list-decimal space-y-2 text-xs text-muted-foreground">
+                <li>Upload your roster file (PDF or CSV)</li>
                 <li>Configure your pilot settings and home base</li>
                 <li>Select the analysis period</li>
-                <li>Upload your roster file (PDF or CSV)</li>
                 <li>Click "Run Analysis" to generate fatigue predictions</li>
                 <li>Review results and export reports as needed</li>
               </ol>
