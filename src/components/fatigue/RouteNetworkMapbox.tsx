@@ -89,7 +89,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMap
     if (!mapContainer.current || map.current) return;
 
     // Mapbox public token - safe to embed in client-side code
-    const token = import.meta.env.VITE_MAPBOX_TOKEN;
+    const token = 'pk.eyJ1Ijoib3BlbmNsaW1iIiwiYSI6ImNta3V1bzhjczI0aTIzZXFybnRhZWt6Z3gifQ.Rv9rv-HauUDgONzqMBkLcg';
     
     if (!token) {
       setTokenMissing(true);
