@@ -1,0 +1,433 @@
+import { useEffect, useRef, useState } from 'react';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { DutyAnalysis } from '@/types/fatigue';
+import { Globe, Plane, MapPin, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { getAirportCoordinates } from '@/data/airportCoordinates';
+
+interface RegionPreset {
+  name: string;
+  center: [number, number];
+  zoom: number;
+}
+
+const regionPresets: RegionPreset[] = [
+  { name: 'World', center: [40, 25], zoom: 1.5 },
+  { name: 'Europe', center: [10, 50], zoom: 3.5 },
+  { name: 'Middle East', center: [50, 28], zoom: 3.5 },
+  { name: 'Asia', center: [100, 30], zoom: 2.5 },
+  { name: 'Americas', center: [-80, 35], zoom: 2 },
+];
+
+interface RouteNetworkMapboxProps {
+  duties: DutyAnalysis[];
+  homeBase?: string;
+}
+
+interface RouteData {
+  from: string;
+  to: string;
+  count: number;
+  avgPerformance: number;
+}
+
+// Get route color based on performance
+const getRouteColor = (performance: number): string => {
+  if (performance >= 70) return '#22c55e'; // success
+  if (performance >= 60) return '#eab308'; // warning
+  if (performance >= 50) return '#f97316'; // high
+  return '#ef4444'; // critical
+};
+
+export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMapboxProps) {
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
+  const [activeRegion, setActiveRegion] = useState('World');
+  const [hoveredAirport, setHoveredAirport] = useState<string | null>(null);
+  const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [tokenMissing, setTokenMissing] = useState(false);
+
+  // Extract unique routes with performance data
+  const routeMap = new Map<string, RouteData>();
+  
+  duties.forEach((duty) => {
+    duty.flightSegments.forEach((segment) => {
+      const key = `${segment.departure}-${segment.arrival}`;
+      const existing = routeMap.get(key);
+      if (existing) {
+        existing.count++;
+        existing.avgPerformance = (existing.avgPerformance + segment.performance) / 2;
+      } else {
+        routeMap.set(key, { 
+          from: segment.departure, 
+          to: segment.arrival, 
+          count: 1,
+          avgPerformance: segment.performance
+        });
+      }
+    });
+  });
+
+  const routes = Array.from(routeMap.values());
+
+  // Get unique airports with coordinates
+  const airportSet = new Set<string>();
+  routes.forEach((r) => {
+    airportSet.add(r.from);
+    airportSet.add(r.to);
+  });
+
+  const airports = Array.from(airportSet)
+    .map(code => getAirportCoordinates(code))
+    .filter((a): a is NonNullable<typeof a> => a !== null);
+
+  // Initialize map
+  useEffect(() => {
+    if (!mapContainer.current || map.current) return;
+
+    // Mapbox public token - safe to embed in client-side code
+    const token = import.meta.env.VITE_MAPBOX_TOKEN;
+    
+    if (!token) {
+      setTokenMissing(true);
+      return;
+    }
+
+    mapboxgl.accessToken = token;
+
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: 'mapbox://styles/mapbox/dark-v11',
+      center: [40, 25],
+      zoom: 1.5,
+      projection: 'globe',
+    });
+
+    map.current.on('load', () => {
+      setMapLoaded(true);
+      
+      // Add atmosphere and stars
+      map.current?.setFog({
+        color: 'hsl(220, 30%, 5%)',
+        'high-color': 'hsl(220, 50%, 10%)',
+        'horizon-blend': 0.1,
+        'space-color': 'hsl(220, 30%, 3%)',
+        'star-intensity': 0.3,
+      });
+    });
+
+    // Cleanup
+    return () => {
+      map.current?.remove();
+      map.current = null;
+    };
+  }, []);
+
+  // Add routes and airports when map is loaded
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    // Remove existing layers/sources
+    ['routes', 'airports', 'home-base'].forEach(id => {
+      if (map.current?.getLayer(id)) map.current.removeLayer(id);
+      if (map.current?.getSource(id)) map.current.removeSource(id);
+    });
+
+    // Add routes as lines
+    const routeFeatures = routes.map(route => {
+      const from = getAirportCoordinates(route.from);
+      const to = getAirportCoordinates(route.to);
+      if (!from || !to) return null;
+
+      return {
+        type: 'Feature' as const,
+        properties: {
+          color: getRouteColor(route.avgPerformance),
+          width: Math.min(route.count + 1, 4),
+          from: route.from,
+          to: route.to,
+          performance: route.avgPerformance,
+          count: route.count,
+        },
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: [[from.lng, from.lat], [to.lng, to.lat]],
+        },
+      };
+    }).filter(Boolean);
+
+    map.current.addSource('routes', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: routeFeatures as any,
+      },
+    });
+
+    map.current.addLayer({
+      id: 'routes',
+      type: 'line',
+      source: 'routes',
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': ['get', 'width'],
+        'line-opacity': 0.7,
+      },
+    });
+
+    // Add airports as circles
+    const airportFeatures = airports.map(airport => ({
+      type: 'Feature' as const,
+      properties: {
+        code: airport.code,
+        city: airport.city,
+        country: airport.country,
+        isHomeBase: airport.code === homeBase,
+      },
+      geometry: {
+        type: 'Point' as const,
+        coordinates: [airport.lng, airport.lat],
+      },
+    }));
+
+    map.current.addSource('airports', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: airportFeatures,
+      },
+    });
+
+    map.current.addLayer({
+      id: 'airports',
+      type: 'circle',
+      source: 'airports',
+      paint: {
+        'circle-radius': ['case', ['get', 'isHomeBase'], 8, 5],
+        'circle-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 90%, 60%)', 'hsl(0, 0%, 90%)'],
+        'circle-stroke-width': 2,
+        'circle-stroke-color': 'hsl(220, 30%, 10%)',
+      },
+    });
+
+    // Add airport labels
+    map.current.addLayer({
+      id: 'airport-labels',
+      type: 'symbol',
+      source: 'airports',
+      layout: {
+        'text-field': ['get', 'code'],
+        'text-size': ['case', ['get', 'isHomeBase'], 12, 10],
+        'text-offset': [0, -1.2],
+        'text-anchor': 'bottom',
+      },
+      paint: {
+        'text-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 90%, 60%)', 'hsl(0, 0%, 80%)'],
+        'text-halo-color': 'hsl(220, 30%, 10%)',
+        'text-halo-width': 1,
+      },
+    });
+
+    // Hover interactions
+    map.current.on('mouseenter', 'airports', (e) => {
+      if (e.features?.[0]?.properties?.code) {
+        setHoveredAirport(e.features[0].properties.code);
+        map.current!.getCanvas().style.cursor = 'pointer';
+      }
+    });
+
+    map.current.on('mouseleave', 'airports', () => {
+      setHoveredAirport(null);
+      map.current!.getCanvas().style.cursor = '';
+    });
+
+    map.current.on('mouseenter', 'routes', (e) => {
+      if (e.features?.[0]?.properties) {
+        const { from, to } = e.features[0].properties;
+        setHoveredRoute(`${from}-${to}`);
+        map.current!.getCanvas().style.cursor = 'pointer';
+      }
+    });
+
+    map.current.on('mouseleave', 'routes', () => {
+      setHoveredRoute(null);
+      map.current!.getCanvas().style.cursor = '';
+    });
+
+  }, [mapLoaded, routes, airports, homeBase]);
+
+  const handleZoomIn = () => {
+    map.current?.zoomIn();
+  };
+
+  const handleZoomOut = () => {
+    map.current?.zoomOut();
+  };
+
+  const handleReset = () => {
+    map.current?.flyTo({ center: [40, 25], zoom: 1.5 });
+    setActiveRegion('World');
+  };
+
+  const handleRegionSelect = (preset: RegionPreset) => {
+    map.current?.flyTo({ center: preset.center, zoom: preset.zoom });
+    setActiveRegion(preset.name);
+  };
+
+  return (
+    <Card variant="glass">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="flex items-center gap-2">
+          <Globe className="h-5 w-5 text-primary" />
+          Route Network Analysis
+        </CardTitle>
+        <div className="flex items-center gap-2">
+          {/* Region Presets */}
+          <div className="flex gap-1">
+            {regionPresets.map((preset) => (
+              <Button
+                key={preset.name}
+                variant={activeRegion === preset.name ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleRegionSelect(preset)}
+                className="text-xs px-2 py-1 h-7"
+              >
+                {preset.name}
+              </Button>
+            ))}
+          </div>
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-1 ml-2">
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleZoomIn}>
+              <ZoomIn className="h-3 w-3" />
+            </Button>
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleZoomOut}>
+              <ZoomOut className="h-3 w-3" />
+            </Button>
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleReset}>
+              <RotateCcw className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="relative overflow-hidden rounded-lg bg-secondary/20">
+          {/* Map Container or Placeholder */}
+          {tokenMissing ? (
+            <div className="h-[400px] w-full flex items-center justify-center bg-secondary/30">
+              <div className="text-center space-y-3 p-6">
+                <Globe className="h-12 w-12 text-muted-foreground mx-auto" />
+                <div>
+                  <p className="text-sm font-medium">Mapbox Token Required</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Add your Mapbox public token to enable the interactive map.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Get a free token at{' '}
+                    <a 
+                      href="https://account.mapbox.com/" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      mapbox.com
+                    </a>
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div ref={mapContainer} className="h-[400px] w-full" />
+          )}
+
+          {/* Hovered Airport Info */}
+          {hoveredAirport && (
+            <div className="absolute bottom-4 left-4 rounded-lg border border-border bg-card/95 p-3 shadow-lg backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" />
+                <span className="font-bold">{hoveredAirport}</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {getAirportCoordinates(hoveredAirport)?.city}, {getAirportCoordinates(hoveredAirport)?.country}
+              </p>
+            </div>
+          )}
+
+          {/* Hovered Route Info */}
+          {hoveredRoute && (
+            <div className="absolute bottom-4 right-4 rounded-lg border border-border bg-card/95 p-3 shadow-lg backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <Plane className="h-4 w-4 text-primary" />
+                <span className="font-mono font-bold">{hoveredRoute.replace('-', ' → ')}</span>
+              </div>
+              {routes.find(r => `${r.from}-${r.to}` === hoveredRoute) && (
+                <div className="mt-1 text-xs text-muted-foreground">
+                  <span>Flights: {routes.find(r => `${r.from}-${r.to}` === hoveredRoute)?.count}</span>
+                  <span className="mx-2">•</span>
+                  <span>Avg Perf: {routes.find(r => `${r.from}-${r.to}` === hoveredRoute)?.avgPerformance.toFixed(1)}%</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Route Frequency Table */}
+          <div className="border-t border-border p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-sm font-medium">Route Frequency</h4>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-success" />
+                  Safe (&gt;70%)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-warning" />
+                  Moderate
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-high" />
+                  High
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-critical" />
+                  Critical
+                </span>
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {routes.map((route, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between rounded-lg bg-secondary/50 p-2 text-sm transition-colors hover:bg-secondary/70"
+                  onMouseEnter={() => setHoveredRoute(`${route.from}-${route.to}`)}
+                  onMouseLeave={() => setHoveredRoute(null)}
+                >
+                  <div className="flex items-center gap-2">
+                    <span 
+                      className="h-2 w-2 rounded-full" 
+                      style={{ backgroundColor: getRouteColor(route.avgPerformance) }}
+                    />
+                    <span className="font-mono">
+                      {route.from} → {route.to}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>×{route.count}</span>
+                    <span className="text-[10px]">({route.avgPerformance.toFixed(0)}%)</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 text-center text-xs text-muted-foreground">
+              <MapPin className="mr-1 inline-block h-3 w-3" />
+              {airports.length} airports • {routes.length} unique routes • Home base: {homeBase}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

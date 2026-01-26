@@ -1,26 +1,22 @@
 import { useState } from 'react';
-import { Play, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Header } from '@/components/fatigue/Header';
 import { Footer } from '@/components/fatigue/Footer';
 import { SettingsSidebar } from '@/components/fatigue/SettingsSidebar';
-import { FileUpload } from '@/components/fatigue/FileUpload';
 import { StatisticsCards } from '@/components/fatigue/StatisticsCards';
 import { Chronogram } from '@/components/fatigue/Chronogram';
-import { DutyDetails } from '@/components/fatigue/DutyDetails';
 import { PerformanceTimeline } from '@/components/fatigue/PerformanceTimeline';
-import { RouteNetwork } from '@/components/fatigue/RouteNetwork';
+import { RouteNetworkMapbox } from '@/components/fatigue/RouteNetworkMapbox';
 import { ExportOptions } from '@/components/fatigue/ExportOptions';
 import { PinchEventAlerts } from '@/components/fatigue/PinchEventAlerts';
 import { BodyClockDriftChart } from '@/components/fatigue/BodyClockDriftChart';
 import { SleepDebtTrendChart } from '@/components/fatigue/SleepDebtTrendChart';
-import { FlightPhasePerformance } from '@/components/fatigue/FlightPhasePerformance';
+import { DutyDetailsDrawer } from '@/components/fatigue/DutyDetailsDrawer';
 import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { mockAnalysisResults } from '@/data/mockAnalysisData';
 import { useTheme } from '@/hooks/useTheme';
-import { Badge } from '@/components/ui/badge';
 
 const Index = () => {
   const { theme, setTheme } = useTheme();
@@ -41,7 +37,8 @@ const Index = () => {
   });
 
   const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(mockAnalysisResults);
-  const [selectedDuty, setSelectedDuty] = useState<DutyAnalysis | null>(mockAnalysisResults.duties[4]); // Pre-select the critical duty
+  const [selectedDuty, setSelectedDuty] = useState<DutyAnalysis | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleSettingsChange = (newSettings: Partial<PilotSettings>) => {
@@ -75,67 +72,43 @@ const Index = () => {
     }, 1500);
   };
 
+  const handleDutySelect = (duty: DutyAnalysis) => {
+    setSelectedDuty(duty);
+    setDrawerOpen(true);
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header theme={settings.theme} onThemeChange={(theme) => handleSettingsChange({ theme })} />
       
       <div className="flex flex-1">
-        {/* Settings Sidebar */}
-        <SettingsSidebar settings={settings} onSettingsChange={handleSettingsChange} />
+        {/* Settings Sidebar with Upload */}
+        <SettingsSidebar 
+          settings={settings} 
+          onSettingsChange={handleSettingsChange}
+          uploadedFile={uploadedFile}
+          onFileUpload={handleFileUpload}
+          onRemoveFile={handleRemoveFile}
+          onRunAnalysis={handleRunAnalysis}
+          isAnalyzing={isAnalyzing}
+          hasResults={!!analysisResults}
+        />
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto p-6">
           <div className="mx-auto max-w-6xl space-y-6">
-            {/* File Upload */}
-            <FileUpload
-              onFileUpload={handleFileUpload}
-              uploadedFile={uploadedFile}
-              onRemoveFile={handleRemoveFile}
-            />
-
-            {/* Run Analysis Button */}
-            {uploadedFile && (
-              <Card variant="glass">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <span className="text-primary">🚀</span>
-                    Step 2: Run Analysis
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Button
-                    variant="glow"
-                    size="lg"
-                    onClick={handleRunAnalysis}
-                    disabled={isAnalyzing}
-                    className="w-full sm:w-auto"
-                  >
-                    <Play className="mr-2 h-4 w-4" />
-                    {isAnalyzing ? 'Analyzing...' : 'Run Fatigue Analysis'}
-                  </Button>
-                  {analysisResults && (
-                    <div className="mt-4 flex items-center gap-2 text-success">
-                      <Badge variant="success">✅ Analysis complete</Badge>
-                      <span className="text-sm">- results shown below</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
             {/* Analysis Results */}
             {analysisResults && (
               <div className="space-y-6 animate-fade-in">
-                {/* Results Header */}
+                {/* Section 1: Overview - Summary Statistics */}
                 <Card variant="glass">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <span className="text-primary">📊</span>
-                      Step 3: Results
+                      Overview - Summary Statistics
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <h4 className="text-sm font-medium text-muted-foreground">Summary Statistics</h4>
                     <StatisticsCards statistics={analysisResults.statistics} />
 
                     {/* Critical Warning */}
@@ -155,28 +128,13 @@ const Index = () => {
                   </CardContent>
                 </Card>
 
-                {/* Pinch Event Alerts - Critical warnings */}
+                {/* Section 2: Pinch Event Alerts */}
                 <PinchEventAlerts duties={analysisResults.duties} />
 
-                {/* Chronogram */}
-                <Chronogram
-                  duties={analysisResults.duties}
-                  statistics={analysisResults.statistics}
-                  month={settings.selectedMonth}
-                  pilotId={settings.pilotId}
-                  onDutySelect={setSelectedDuty}
-                  selectedDuty={selectedDuty}
-                />
+                {/* Section 3: Route Network Map */}
+                <RouteNetworkMapbox duties={analysisResults.duties} homeBase={settings.homeBase} />
 
-                {/* Selected Duty Details with Flight Phase Performance */}
-                {selectedDuty && (
-                  <div className="grid gap-6 lg:grid-cols-2">
-                    <DutyDetails duty={selectedDuty} />
-                    <FlightPhasePerformance duty={selectedDuty} />
-                  </div>
-                )}
-
-                {/* Advanced Analytics Tabs */}
+                {/* Section 4: Analytics Tabs - Performance Timeline, Body Clock Drift, Sleep Debt Trend */}
                 <Tabs defaultValue="performance" className="w-full">
                   <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="performance">Performance Timeline</TabsTrigger>
@@ -198,16 +156,55 @@ const Index = () => {
                   </TabsContent>
                 </Tabs>
 
-                {/* Route Network */}
-                <RouteNetwork duties={analysisResults.duties} homeBase={settings.homeBase} />
+                {/* Section 5: Monthly Chronogram */}
+                <Chronogram
+                  duties={analysisResults.duties}
+                  statistics={analysisResults.statistics}
+                  month={settings.selectedMonth}
+                  pilotId={settings.pilotId}
+                  onDutySelect={handleDutySelect}
+                  selectedDuty={selectedDuty}
+                />
 
-                {/* Export Options */}
+                {/* Section 6: Export Options */}
                 <ExportOptions />
               </div>
+            )}
+
+            {/* Empty state when no results */}
+            {!analysisResults && uploadedFile && (
+              <Card variant="glass" className="p-12 text-center">
+                <div className="space-y-4">
+                  <span className="text-6xl">📊</span>
+                  <h3 className="text-xl font-semibold">Ready to Analyze</h3>
+                  <p className="text-muted-foreground">
+                    Click "Run Analysis" in the sidebar to generate your fatigue analysis.
+                  </p>
+                </div>
+              </Card>
+            )}
+
+            {!uploadedFile && (
+              <Card variant="glass" className="p-12 text-center">
+                <div className="space-y-4">
+                  <span className="text-6xl">📄</span>
+                  <h3 className="text-xl font-semibold">No Roster Uploaded</h3>
+                  <p className="text-muted-foreground">
+                    Upload a roster file using the sidebar to get started.
+                  </p>
+                </div>
+              </Card>
             )}
           </div>
         </main>
       </div>
+
+      {/* Duty Details Drawer */}
+      <DutyDetailsDrawer 
+        duty={selectedDuty} 
+        open={drawerOpen} 
+        onOpenChange={setDrawerOpen} 
+      />
 
       <Footer />
     </div>
