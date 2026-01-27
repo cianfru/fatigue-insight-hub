@@ -124,14 +124,36 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
     return bars;
   }, [duties, daysInMonth]);
 
-  // Check for WOCL exposure and FLIP violations
+  // Get duty warnings based on actual duty data
   const getDayWarnings = (dayOfMonth: number) => {
     const duty = duties.find(d => d.date.getDate() === dayOfMonth);
-    if (!duty) return { wocl: false, flip: null };
+    if (!duty) return null;
+    
+    const warnings: string[] = [];
+    
+    // WOCL exposure warning (hours in Window of Circadian Low)
+    if (duty.woclExposure > 0) {
+      warnings.push(`WOCL ${duty.woclExposure.toFixed(1)}h`);
+    }
+    
+    // Prior sleep / FLIP warning (Flight time Limitation Period)
+    if (duty.priorSleep < 8) {
+      warnings.push(`Sleep ${duty.priorSleep.toFixed(1)}h`);
+    }
+    
+    // Low performance warning
+    if (duty.minPerformance < 60) {
+      warnings.push(`Perf ${Math.round(duty.minPerformance)}%`);
+    }
+    
+    // Sleep debt warning
+    if (duty.sleepDebt > 4) {
+      warnings.push(`Debt ${duty.sleepDebt.toFixed(1)}h`);
+    }
     
     return {
-      wocl: duty.woclExposure > 2,
-      flip: duty.priorSleep < 20 ? Math.round(duty.priorSleep) : null,
+      warnings,
+      risk: duty.overallRisk,
     };
   };
 
@@ -223,26 +245,49 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
 
             {/* Timeline Grid */}
             <div className="flex">
-              {/* Y-axis labels (only days with duties) */}
-              <div className="w-28 flex-shrink-0">
+              {/* Y-axis labels (all days of month) */}
+              <div className="w-32 flex-shrink-0">
                 <div className="h-8" /> {/* Header spacer */}
-                {dutyDays.map((day) => {
+                {allDays.map((day) => {
                   const dayNum = day.getDate();
-                  const warnings = getDayWarnings(dayNum);
+                  const dayWarnings = getDayWarnings(dayNum);
+                  const hasDuty = dutyBars.some(bar => bar.dayIndex === dayNum);
                   return (
                     <div
                       key={dayNum}
-                      className="relative flex h-7 items-center gap-1 pr-2 text-xs"
+                      className={cn(
+                        "relative flex h-7 items-center gap-1 pr-2 text-xs",
+                        !hasDuty && "opacity-50"
+                      )}
                     >
-                      <div className="flex flex-col items-start">
-                        {warnings.wocl && (
-                          <span className="text-[9px] leading-tight text-warning">⚠ 3× WOCL</span>
+                      <div className="flex flex-col items-start min-w-[60px]">
+                        {dayWarnings && dayWarnings.warnings.length > 0 && (
+                          <span className={cn(
+                            "text-[8px] leading-tight truncate max-w-[60px]",
+                            dayWarnings.risk === 'CRITICAL' && "text-critical",
+                            dayWarnings.risk === 'HIGH' && "text-high",
+                            dayWarnings.risk === 'MODERATE' && "text-warning",
+                            dayWarnings.risk === 'LOW' && "text-muted-foreground"
+                          )}>
+                            ⚠ {dayWarnings.warnings[0]}
+                          </span>
                         )}
-                        {warnings.flip && (
-                          <span className="text-[9px] leading-tight text-critical">⚠ FLIP {warnings.flip}h</span>
+                        {dayWarnings && dayWarnings.warnings.length > 1 && (
+                          <span className={cn(
+                            "text-[8px] leading-tight truncate max-w-[60px]",
+                            dayWarnings.risk === 'CRITICAL' && "text-critical",
+                            dayWarnings.risk === 'HIGH' && "text-high",
+                            dayWarnings.risk === 'MODERATE' && "text-warning",
+                            dayWarnings.risk === 'LOW' && "text-muted-foreground"
+                          )}>
+                            ⚠ {dayWarnings.warnings[1]}
+                          </span>
                         )}
                       </div>
-                      <span className="ml-auto font-medium text-foreground">
+                      <span className={cn(
+                        "ml-auto font-medium",
+                        hasDuty ? "text-foreground" : "text-muted-foreground"
+                      )}>
                         {format(day, 'EEE d')}
                       </span>
                     </div>
@@ -289,8 +334,8 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
                     ))}
                   </div>
 
-                  {/* Day rows (only days with duties) */}
-                  {dutyDays.map((day) => {
+                  {/* Day rows (all days of month) */}
+                  {allDays.map((day) => {
                     const dayNum = day.getDate();
                     return (
                       <div
