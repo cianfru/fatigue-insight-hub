@@ -1,0 +1,183 @@
+// src/lib/api-client.ts
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// ============================================================================
+// TYPES (matching your existing types in src/types/fatigue.ts)
+// ============================================================================
+
+export interface DutySegment {
+  flight_number: string;
+  departure: string;
+  arrival: string;
+  departure_time: string;
+  arrival_time: string;
+  block_hours: number;
+}
+
+export interface Duty {
+  duty_id: string;
+  date: string;
+  report_time_utc: string;
+  release_time_utc: string;
+  duty_hours: number;
+  sectors: number;
+  segments: DutySegment[];
+  
+  min_performance: number;
+  avg_performance: number;
+  landing_performance: number | null;
+  
+  sleep_debt: number;
+  wocl_hours: number;
+  prior_sleep: number;
+  
+  risk_level: 'low' | 'moderate' | 'high' | 'critical' | 'extreme';
+  is_reportable: boolean;
+  pinch_events: number;
+}
+
+export interface AnalysisResult {
+  analysis_id: string;
+  roster_id: string;
+  pilot_id: string;
+  month: string;
+  
+  total_duties: number;
+  total_sectors: number;
+  total_duty_hours: number;
+  total_block_hours: number;
+  
+  high_risk_duties: number;
+  critical_risk_duties: number;
+  total_pinch_events: number;
+  
+  avg_sleep_per_night: number;
+  max_sleep_debt: number;
+  
+  worst_duty_id: string;
+  worst_performance: number;
+  
+  duties: Duty[];
+}
+
+export interface Statistics {
+  totalDuties: number;
+  totalSectors: number;
+  highRiskDuties: number;
+  criticalRiskDuties: number;
+  totalPinchEvents: number;
+  avgSleepPerNight: number;
+  maxSleepDebt: number;
+}
+
+// ============================================================================
+// API FUNCTIONS
+// ============================================================================
+
+export async function analyzeRoster(
+  file: File,
+  pilotId: string,
+  month: string,
+  homeBase: string,
+  homeTimezone: string,
+  configPreset: string = 'default'
+): Promise<AnalysisResult> {
+  
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('pilot_id', pilotId);
+  formData.append('month', month);
+  formData.append('home_base', homeBase);
+  formData.append('home_timezone', homeTimezone);
+  formData.append('config_preset', configPreset);
+  
+  const response = await fetch(`${API_BASE_URL}/api/analyze`, {
+    method: 'POST',
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Analysis failed');
+  }
+  
+  return response.json();
+}
+
+export async function getDutyDetail(
+  analysisId: string,
+  dutyId: string
+) {
+  
+  const response = await fetch(
+    `${API_BASE_URL}/api/duty/${analysisId}/${dutyId}`
+  );
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch duty detail');
+  }
+  
+  return response.json();
+}
+
+export async function getChronogram(
+  analysisId: string,
+  mode: 'risk' | 'state' | 'hybrid' = 'risk',
+  theme: 'light' | 'dark' = 'light',
+  showAnnotations: boolean = true
+): Promise<string> {
+  
+  const response = await fetch(`${API_BASE_URL}/api/visualize/chronogram`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      analysis_id: analysisId,
+      mode,
+      theme,
+      show_annotations: showAnnotations,
+    }),
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to generate chronogram');
+  }
+  
+  const data = await response.json();
+  return data.image; // Returns "data:image/png;base64,..."
+}
+
+export async function getCalendar(
+  analysisId: string,
+  theme: 'light' | 'dark' = 'light'
+): Promise<string> {
+  
+  const response = await fetch(`${API_BASE_URL}/api/visualize/calendar`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      analysis_id: analysisId,
+      theme,
+    }),
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to generate calendar');
+  }
+  
+  const data = await response.json();
+  return data.image;
+}
+
+export async function healthCheck(): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/health`);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}

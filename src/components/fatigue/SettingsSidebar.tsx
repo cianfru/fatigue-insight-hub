@@ -13,7 +13,7 @@ interface SettingsSidebarProps {
   settings: PilotSettings;
   onSettingsChange: (settings: Partial<PilotSettings>) => void;
   uploadedFile: UploadedFile | null;
-  onFileUpload: (file: UploadedFile) => void;
+  onFileUpload: (file: UploadedFile, actualFile: File) => void;
   onRemoveFile: () => void;
   onRunAnalysis: () => void;
   isAnalyzing: boolean;
