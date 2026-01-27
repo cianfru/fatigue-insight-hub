@@ -106,6 +106,9 @@ const Index = () => {
       // Convert API response to match frontend types
       setAnalysisResults({
         generatedAt: new Date(),
+        pilotName: result.pilot_name || undefined,
+        pilotBase: result.pilot_base || undefined,
+        pilotAircraft: result.pilot_aircraft || undefined,
         statistics: {
           totalDuties: result.total_duties,
           totalSectors: result.total_sectors,
@@ -128,6 +131,9 @@ const Index = () => {
           minPerformanceRisk: duty.risk_level.toUpperCase() as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
           landingRisk: duty.risk_level.toUpperCase() as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
           smsReportable: duty.is_reportable,
+          maxFdpHours: duty.max_fdp_hours,
+          extendedFdpHours: duty.extended_fdp_hours,
+          usedDiscretion: duty.used_discretion,
           flightSegments: duty.segments.map(seg => ({
             flightNumber: seg.flight_number,
             departure: seg.departure,
