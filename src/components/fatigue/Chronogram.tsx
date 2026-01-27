@@ -47,10 +47,29 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
   const daysInMonth = getDaysInMonth(month);
   const monthStart = startOfMonth(month);
 
-  // Generate all days of the month
+  // Get only days that have duties (will be populated after dutyBars are computed)
   const allDays = useMemo(() => {
     return Array.from({ length: daysInMonth }, (_, i) => addDays(monthStart, i));
   }, [daysInMonth, monthStart]);
+
+  // Days that have actual duties
+  const dutyDays = useMemo(() => {
+    const dutyDayIndices = new Set<number>();
+    duties.forEach((duty) => {
+      dutyDayIndices.add(duty.date.getDate());
+      // Also include next day for overnight duties
+      if (duty.flightSegments.length > 0) {
+        const lastSegment = duty.flightSegments[duty.flightSegments.length - 1];
+        const firstSegment = duty.flightSegments[0];
+        const [startH] = firstSegment.departureTime.split(':').map(Number);
+        const [endH] = lastSegment.arrivalTime.split(':').map(Number);
+        if (endH < startH && duty.date.getDate() < daysInMonth) {
+          dutyDayIndices.add(duty.date.getDate() + 1);
+        }
+      }
+    });
+    return Array.from(dutyDayIndices).sort((a, b) => a - b).map(dayNum => addDays(monthStart, dayNum - 1));
+  }, [duties, daysInMonth, monthStart]);
 
   // Convert duties to bar positions
   const dutyBars = useMemo(() => {
@@ -204,18 +223,15 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
 
             {/* Timeline Grid */}
             <div className="flex">
-              {/* Y-axis labels (days) */}
+              {/* Y-axis labels (only days with duties) */}
               <div className="w-28 flex-shrink-0">
                 <div className="h-8" /> {/* Header spacer */}
-                {allDays.map((day, index) => {
-                  const warnings = getDayWarnings(index + 1);
-                  const hasDuty = dutyBars.some(bar => bar.dayIndex === index + 1);
-                  if (!hasDuty && displayMode !== 'timeline') return (
-                    <div key={index} className="h-7" />
-                  );
+                {dutyDays.map((day) => {
+                  const dayNum = day.getDate();
+                  const warnings = getDayWarnings(dayNum);
                   return (
                     <div
-                      key={index}
+                      key={dayNum}
                       className="relative flex h-7 items-center gap-1 pr-2 text-xs"
                     >
                       <div className="flex flex-col items-start">
@@ -273,20 +289,17 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
                     ))}
                   </div>
 
-                  {/* Day rows */}
-                  {allDays.map((day, dayIndex) => {
-                    const hasDuty = dutyBars.some(bar => bar.dayIndex === dayIndex + 1);
-                    if (!hasDuty && displayMode !== 'timeline') return (
-                      <div key={dayIndex} className="h-7" />
-                    );
+                  {/* Day rows (only days with duties) */}
+                  {dutyDays.map((day) => {
+                    const dayNum = day.getDate();
                     return (
                       <div
-                        key={dayIndex}
+                        key={dayNum}
                         className="relative h-7 border-b border-border/20"
                       >
                         {/* Duty bars for this day */}
                         {dutyBars
-                          .filter((bar) => bar.dayIndex === dayIndex + 1)
+                          .filter((bar) => bar.dayIndex === dayNum)
                           .map((bar, barIndex) => (
                             <button
                               key={barIndex}
