@@ -25,6 +25,7 @@ const regionPresets: RegionPreset[] = [
 interface RouteNetworkMapboxProps {
   duties: DutyAnalysis[];
   homeBase?: string;
+  theme?: 'dark' | 'light';
 }
 
 interface RouteData {
@@ -42,7 +43,7 @@ const getRouteColor = (performance: number): string => {
   return '#ef4444'; // critical
 };
 
-export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMapboxProps) {
+export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }: RouteNetworkMapboxProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [activeRegion, setActiveRegion] = useState('World');
@@ -147,6 +148,32 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMap
     fetchAirports();
   }, [allAirportCodes]);
 
+  // Get map style based on theme
+  const getMapStyle = (currentTheme: 'dark' | 'light') => {
+    return currentTheme === 'dark' 
+      ? 'mapbox://styles/mapbox/dark-v11'
+      : 'mapbox://styles/mapbox/light-v11';
+  };
+
+  // Get fog settings based on theme
+  const getFogSettings = (currentTheme: 'dark' | 'light') => {
+    return currentTheme === 'dark' 
+      ? {
+          color: 'hsl(220, 30%, 5%)',
+          'high-color': 'hsl(220, 50%, 10%)',
+          'horizon-blend': 0.1,
+          'space-color': 'hsl(220, 30%, 3%)',
+          'star-intensity': 0.3,
+        }
+      : {
+          color: 'hsl(210, 40%, 96%)',
+          'high-color': 'hsl(210, 60%, 85%)',
+          'horizon-blend': 0.08,
+          'space-color': 'hsl(210, 50%, 92%)',
+          'star-intensity': 0,
+        };
+  };
+
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -163,7 +190,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMap
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: getMapStyle(theme),
       center: [40, 25],
       zoom: 1.5,
       projection: 'globe',
@@ -172,14 +199,8 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMap
     map.current.on('load', () => {
       setMapLoaded(true);
       
-      // Add atmosphere and stars
-      map.current?.setFog({
-        color: 'hsl(220, 30%, 5%)',
-        'high-color': 'hsl(220, 50%, 10%)',
-        'horizon-blend': 0.1,
-        'space-color': 'hsl(220, 30%, 3%)',
-        'star-intensity': 0.3,
-      });
+      // Add atmosphere and fog
+      map.current?.setFog(getFogSettings(theme) as any);
     });
 
     // Cleanup
@@ -188,6 +209,18 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMap
       map.current = null;
     };
   }, []);
+
+  // Update map style when theme changes
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    
+    map.current.setStyle(getMapStyle(theme));
+    
+    // Re-apply fog after style change
+    map.current.once('style.load', () => {
+      map.current?.setFog(getFogSettings(theme) as any);
+    });
+  }, [theme, mapLoaded]);
 
   // Add routes and airports when map is loaded
   useEffect(() => {

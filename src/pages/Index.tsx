@@ -225,7 +225,7 @@ const Index = () => {
                 <PinchEventAlerts duties={analysisResults.duties} />
 
                 {/* Section 3: Route Network Map */}
-                <RouteNetworkMapbox duties={analysisResults.duties} homeBase={settings.homeBase} />
+                <RouteNetworkMapbox duties={analysisResults.duties} homeBase={settings.homeBase} theme={settings.theme} />
 
                 {/* Section 4: Analytics Tabs - Performance Timeline, Body Clock Drift, Sleep Debt Trend */}
                 <Tabs defaultValue="performance" className="w-full">
