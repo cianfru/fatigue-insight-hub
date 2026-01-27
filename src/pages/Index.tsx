@@ -172,6 +172,12 @@ const Index = () => {
           onRunAnalysis={handleRunAnalysis}
           isAnalyzing={isAnalyzing}
           hasResults={!!analysisResults}
+          pilotInfo={analysisResults ? {
+            name: analysisResults.pilotName,
+            id: settings.pilotId,
+            base: analysisResults.pilotBase || settings.homeBase,
+            aircraft: analysisResults.pilotAircraft,
+          } : undefined}
         />
 
         {/* Main Content */}

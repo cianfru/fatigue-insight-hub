@@ -1,4 +1,4 @@
-import { Settings, Info, BookOpen, ChevronDown } from 'lucide-react';
+import { Info, BookOpen, ChevronDown, User, MapPin, Plane } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,14 @@ import { PilotSettings, UploadedFile } from '@/types/fatigue';
 import { useState } from 'react';
 import { SidebarUpload } from './SidebarUpload';
 import { ConnectionStatus } from './ConnectionStatus';
+
+interface PilotInfo {
+  name?: string;
+  id?: string;
+  base?: string;
+  aircraft?: string;
+}
+
 interface SettingsSidebarProps {
   settings: PilotSettings;
   onSettingsChange: (settings: Partial<PilotSettings>) => void;
@@ -18,16 +26,9 @@ interface SettingsSidebarProps {
   onRunAnalysis: () => void;
   isAnalyzing: boolean;
   hasResults: boolean;
+  pilotInfo?: PilotInfo;
 }
 
-const airports = [
-  { code: 'DOH', name: 'Doha, Qatar' },
-  { code: 'DXB', name: 'Dubai, UAE' },
-  { code: 'LHR', name: 'London Heathrow, UK' },
-  { code: 'JFK', name: 'New York JFK, USA' },
-  { code: 'SIN', name: 'Singapore' },
-  { code: 'CDG', name: 'Paris CDG, France' },
-];
 
 const configPresets = [
   { value: 'easa-default', label: 'Default (EASA)' },
@@ -44,6 +45,7 @@ export function SettingsSidebar({
   onRunAnalysis,
   isAnalyzing,
   hasResults,
+  pilotInfo,
 }: SettingsSidebarProps) {
   const [configOpen, setConfigOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
@@ -63,46 +65,55 @@ export function SettingsSidebar({
         hasResults={hasResults}
       />
 
-      {/* Settings Card */}
-      <Card variant="glass">
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Settings className="h-4 w-4 text-primary" />
-            Settings
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="pilotId" className="text-xs text-muted-foreground">Pilot ID</Label>
-            <Input
-              id="pilotId"
-              value={settings.pilotId}
-              onChange={(e) => onSettingsChange({ pilotId: e.target.value })}
-              placeholder="P12345"
-              className="h-9 bg-secondary/50"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="homeBase" className="text-xs text-muted-foreground">Home Base</Label>
-            <Select
-              value={settings.homeBase}
-              onValueChange={(value) => onSettingsChange({ homeBase: value })}
-            >
-              <SelectTrigger className="h-9 bg-secondary/50">
-                <SelectValue placeholder="Select home base" />
-              </SelectTrigger>
-              <SelectContent className="bg-popover border-border">
-                {airports.map((airport) => (
-                  <SelectItem key={airport.code} value={airport.code}>
-                    {airport.code} - {airport.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Pilot Info Card - shown after analysis */}
+      {pilotInfo && (pilotInfo.name || pilotInfo.id || pilotInfo.base) && (
+        <Card variant="glass">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <User className="h-4 w-4 text-primary" />
+              Pilot Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pilotInfo.name && (
+              <div className="flex items-center gap-2">
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Name</p>
+                  <p className="text-sm font-medium">{pilotInfo.name}</p>
+                </div>
+              </div>
+            )}
+            {pilotInfo.id && (
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground text-xs">ID</span>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Pilot ID</p>
+                  <p className="text-sm font-medium">{pilotInfo.id}</p>
+                </div>
+              </div>
+            )}
+            {pilotInfo.base && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Base</p>
+                  <p className="text-sm font-medium">{pilotInfo.base}</p>
+                </div>
+              </div>
+            )}
+            {pilotInfo.aircraft && (
+              <div className="flex items-center gap-2">
+                <Plane className="h-3.5 w-3.5 text-muted-foreground" />
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Aircraft</p>
+                  <p className="text-sm font-medium">{pilotInfo.aircraft}</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Analysis Period Card */}
       <Card variant="glass">
