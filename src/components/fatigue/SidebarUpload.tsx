@@ -6,7 +6,7 @@ import { UploadedFile } from '@/types/fatigue';
 import { cn } from '@/lib/utils';
 
 interface SidebarUploadProps {
-  onFileUpload: (file: UploadedFile) => void;
+  onFileUpload: (file: UploadedFile, actualFile: File) => void;
   uploadedFile: UploadedFile | null;
   onRemoveFile: () => void;
   onRunAnalysis: () => void;
@@ -46,7 +46,7 @@ export function SidebarUpload({
         name: file.name,
         size: file.size,
         type: file.type.includes('pdf') ? 'PDF' : 'CSV',
-      });
+      }, file);
     }
   }, [onFileUpload]);
 
@@ -58,7 +58,7 @@ export function SidebarUpload({
         name: file.name,
         size: file.size,
         type: file.type.includes('pdf') ? 'PDF' : 'CSV',
-      });
+      }, file);
     }
   };
 

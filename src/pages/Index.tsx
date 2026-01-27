@@ -17,6 +17,9 @@ import { DutyDetailsDrawer } from '@/components/fatigue/DutyDetailsDrawer';
 import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { mockAnalysisResults } from '@/data/mockAnalysisData';
 import { useTheme } from '@/hooks/useTheme';
+import { analyzeRoster } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 const Index = () => {
   const { theme, setTheme } = useTheme();
@@ -30,13 +33,10 @@ const Index = () => {
     configPreset: 'easa-default',
   });
 
-  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>({
-    name: 'Roster feb 2026.pdf',
-    size: 13318,
-    type: 'PDF',
-  });
+  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
+  const [actualFileObject, setActualFileObject] = useState<File | null>(null);
 
-  const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(mockAnalysisResults);
+  const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(null);
   const [selectedDuty, setSelectedDuty] = useState<DutyAnalysis | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -51,25 +51,89 @@ const Index = () => {
     });
   };
 
-  const handleFileUpload = (file: UploadedFile) => {
+  const handleFileUpload = (file: UploadedFile, actualFile: File) => {
     setUploadedFile(file);
+    setActualFileObject(actualFile);
     setAnalysisResults(null);
     setSelectedDuty(null);
   };
 
   const handleRemoveFile = () => {
     setUploadedFile(null);
+    setActualFileObject(null);
     setAnalysisResults(null);
     setSelectedDuty(null);
   };
 
-  const handleRunAnalysis = () => {
+  const handleRunAnalysis = async () => {
+    if (!uploadedFile || !actualFileObject) {
+      toast.error('Please upload a roster file first');
+      return;
+    }
+    
     setIsAnalyzing(true);
-    // Simulate analysis
-    setTimeout(() => {
+    
+    try {
+      console.log('Starting analysis...');
+      
+      const result = await analyzeRoster(
+        actualFileObject,
+        settings.pilotId,
+        format(settings.selectedMonth, 'yyyy-MM'),
+        settings.homeBase,
+        'Asia/Qatar', // TODO: Make dynamic based on homeBase
+        settings.configPreset
+      );
+      
+      console.log('Analysis complete:', result);
+      
+      // Convert API response to match frontend types
+      setAnalysisResults({
+        generatedAt: new Date(),
+        statistics: {
+          totalDuties: result.total_duties,
+          totalSectors: result.total_sectors,
+          highRiskDuties: result.high_risk_duties,
+          criticalRiskDuties: result.critical_risk_duties,
+          maxSleepDebt: result.max_sleep_debt,
+        },
+        duties: result.duties.map(duty => ({
+          date: new Date(duty.date),
+          dayOfWeek: format(new Date(duty.date), 'EEE'),
+          dutyHours: duty.duty_hours,
+          sectors: duty.sectors,
+          minPerformance: duty.min_performance,
+          avgPerformance: duty.avg_performance,
+          landingPerformance: duty.landing_performance || duty.min_performance,
+          sleepDebt: duty.sleep_debt,
+          woclExposure: duty.wocl_hours,
+          priorSleep: duty.prior_sleep,
+          overallRisk: duty.risk_level.toUpperCase() as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
+          minPerformanceRisk: duty.risk_level.toUpperCase() as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
+          landingRisk: duty.risk_level.toUpperCase() as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
+          smsReportable: duty.is_reportable,
+          flightSegments: duty.segments.map(seg => ({
+            flightNumber: seg.flight_number,
+            departure: seg.departure,
+            arrival: seg.arrival,
+            departureTime: seg.departure_time,
+            arrivalTime: seg.arrival_time,
+            performance: duty.avg_performance,
+          })),
+        })),
+      });
+      
+      toast.success('Analysis complete!');
+      
+    } catch (error) {
+      console.error('Analysis failed:', error);
+      toast.error('Analysis failed: ' + (error as Error).message);
+      
+      // Fallback to mock data for demo purposes
       setAnalysisResults(mockAnalysisResults);
+    } finally {
       setIsAnalyzing(false);
-    }, 1500);
+    }
   };
 
   const handleDutySelect = (duty: DutyAnalysis) => {
