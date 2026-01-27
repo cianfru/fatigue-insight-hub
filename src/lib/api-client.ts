@@ -34,15 +34,21 @@ export interface Duty {
   wocl_hours: number;
   prior_sleep: number;
   
-  risk_level: 'low' | 'moderate' | 'high' | 'critical' | 'extreme';
+  risk_level: 'low' | 'moderate' | 'high' | 'critical' | 'extreme' | 'unknown';
   is_reportable: boolean;
   pinch_events: number;
+  max_fdp_hours?: number;
+  extended_fdp_hours?: number;
+  used_discretion?: boolean;
 }
 
 export interface AnalysisResult {
   analysis_id: string;
   roster_id: string;
   pilot_id: string;
+  pilot_name: string | null;
+  pilot_base: string | null;
+  pilot_aircraft: string | null;
   month: string;
   
   total_duties: number;
