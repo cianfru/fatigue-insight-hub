@@ -3,6 +3,7 @@ import { Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DutyAnalysis, DutyStatistics } from '@/types/fatigue';
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -363,22 +364,56 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
                           .map((bar, barIndex) => {
                             const avgPerf = (bar.startPerformance + bar.endPerformance) / 2;
                             return (
-                              <button
-                                key={barIndex}
-                                onClick={() => onDutySelect(bar.duty)}
-                                className={cn(
-                                  "absolute top-1 bottom-1 rounded-sm transition-all hover:ring-2 hover:ring-foreground cursor-pointer overflow-hidden",
-                                  selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground"
-                                )}
-                                style={{
-                                  left: `${(bar.startHour / 24) * 100}%`,
-                                  width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
-                                  background: displayMode === 'timeline' 
-                                    ? 'hsl(var(--primary))' 
-                                    : `linear-gradient(to right, ${getPerformanceColor(bar.startPerformance)}, ${getPerformanceColor(bar.endPerformance)})`,
-                                }}
-                                title={`${format(bar.duty.date, 'MMM d')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ')} | Start: ${Math.round(bar.startPerformance)}% → End: ${Math.round(bar.endPerformance)}%`}
-                              />
+                              <TooltipProvider key={barIndex} delayDuration={100}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      onClick={() => onDutySelect(bar.duty)}
+                                      className={cn(
+                                        "absolute top-1 bottom-1 rounded-sm transition-all hover:ring-2 hover:ring-foreground cursor-pointer overflow-hidden",
+                                        selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground"
+                                      )}
+                                      style={{
+                                        left: `${(bar.startHour / 24) * 100}%`,
+                                        width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
+                                        background: displayMode === 'timeline' 
+                                          ? 'hsl(var(--primary))' 
+                                          : `linear-gradient(to right, ${getPerformanceColor(bar.startPerformance)}, ${getPerformanceColor(bar.endPerformance)})`,
+                                      }}
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right" className="max-w-xs p-3">
+                                    <div className="space-y-2 text-xs">
+                                      <div className="font-semibold text-sm border-b border-border pb-1">
+                                        {format(bar.duty.date, 'EEEE, MMM d')} {bar.isOvernightContinuation && '(continued)'}
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                        <span className="text-muted-foreground">Flights:</span>
+                                        <span>{bar.duty.flightSegments.map(s => s.flightNumber).join(', ')}</span>
+                                        <span className="text-muted-foreground">Start Perf:</span>
+                                        <span style={{ color: getPerformanceColor(bar.startPerformance) }}>{Math.round(bar.startPerformance)}%</span>
+                                        <span className="text-muted-foreground">Landing Perf:</span>
+                                        <span style={{ color: getPerformanceColor(bar.endPerformance) }}>{Math.round(bar.endPerformance)}%</span>
+                                        <span className="text-muted-foreground">Min Perf:</span>
+                                        <span style={{ color: getPerformanceColor(bar.duty.minPerformance) }}>{Math.round(bar.duty.minPerformance)}%</span>
+                                        <span className="text-muted-foreground">WOCL Exposure:</span>
+                                        <span className={bar.duty.woclExposure > 0 ? "text-warning" : ""}>{bar.duty.woclExposure.toFixed(1)}h</span>
+                                        <span className="text-muted-foreground">Prior Sleep:</span>
+                                        <span className={bar.duty.priorSleep < 8 ? "text-warning" : ""}>{bar.duty.priorSleep.toFixed(1)}h</span>
+                                        <span className="text-muted-foreground">Sleep Debt:</span>
+                                        <span className={bar.duty.sleepDebt > 4 ? "text-high" : ""}>{bar.duty.sleepDebt.toFixed(1)}h</span>
+                                        <span className="text-muted-foreground">Risk Level:</span>
+                                        <span className={cn(
+                                          bar.duty.overallRisk === 'LOW' && "text-success",
+                                          bar.duty.overallRisk === 'MODERATE' && "text-warning",
+                                          bar.duty.overallRisk === 'HIGH' && "text-high",
+                                          bar.duty.overallRisk === 'CRITICAL' && "text-critical"
+                                        )}>{bar.duty.overallRisk}</span>
+                                      </div>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             );
                           })}
                       </div>

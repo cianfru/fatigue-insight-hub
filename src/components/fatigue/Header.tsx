@@ -1,5 +1,7 @@
-import { Plane, Moon, Sun } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import logoDark from '@/assets/logo-dark.png';
+import logoLight from '@/assets/logo-light.png';
 
 interface HeaderProps {
   theme: 'dark' | 'light';
@@ -10,14 +12,13 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
   return (
     <header className="border-b border-border bg-card/50 backdrop-blur-xl">
       <div className="flex items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20">
-            <Plane className="h-5 w-5 text-primary" />
-          </div>
+        <div className="flex items-center gap-4">
+          <img 
+            src={theme === 'dark' ? logoDark : logoLight} 
+            alt="Aerowake Logo" 
+            className="h-10 w-auto object-contain"
+          />
           <div>
-            <h1 className="text-xl font-bold">
-              <span className="text-primary">EASA</span> Fatigue Analysis Tool
-            </h1>
             <p className="text-xs text-muted-foreground">
               Biomathematical fatigue prediction based on Borbély two-process model
             </p>
