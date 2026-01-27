@@ -19,10 +19,24 @@ import { mockAnalysisResults } from '@/data/mockAnalysisData';
 import { useTheme } from '@/hooks/useTheme';
 import { analyzeRoster } from '@/lib/api-client';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 
 const Index = () => {
   const { theme, setTheme } = useTheme();
+
+  const isoToHHmm = (iso: string) => {
+    // Backend returns ISO timestamps like "2026-02-03T04:45:00+00:00".
+    // Chronogram expects "HH:mm".
+    if (!iso) return '';
+    // Fast-path for ISO strings.
+    if (iso.length >= 16 && iso.includes('T')) return iso.slice(11, 16);
+    // Fallback for other formats.
+    try {
+      return format(parseISO(iso), 'HH:mm');
+    } catch {
+      return iso;
+    }
+  };
   
   const [settings, setSettings] = useState<PilotSettings>({
     pilotId: 'P12345',
@@ -98,8 +112,8 @@ const Index = () => {
           maxSleepDebt: result.max_sleep_debt,
         },
         duties: result.duties.map(duty => ({
-          date: new Date(duty.date),
-          dayOfWeek: format(new Date(duty.date), 'EEE'),
+          date: parseISO(duty.date),
+          dayOfWeek: format(parseISO(duty.date), 'EEE'),
           dutyHours: duty.duty_hours,
           sectors: duty.sectors,
           minPerformance: duty.min_performance,
@@ -116,8 +130,8 @@ const Index = () => {
             flightNumber: seg.flight_number,
             departure: seg.departure,
             arrival: seg.arrival,
-            departureTime: seg.departure_time,
-            arrivalTime: seg.arrival_time,
+            departureTime: isoToHHmm(seg.departure_time),
+            arrivalTime: isoToHHmm(seg.arrival_time),
             performance: duty.avg_performance,
           })),
         })),
