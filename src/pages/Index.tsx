@@ -100,6 +100,8 @@ const Index = () => {
       );
       
       console.log('Analysis complete:', result);
+      console.log('First duty segments:', result.duties[0]?.segments);
+      console.log('Sample segment times:', result.duties[0]?.segments[0]?.departure_time, result.duties[0]?.segments[0]?.arrival_time);
       
       // Convert API response to match frontend types
       setAnalysisResults({
