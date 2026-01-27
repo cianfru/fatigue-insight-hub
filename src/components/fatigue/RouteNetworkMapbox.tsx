@@ -50,6 +50,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
   const [hoveredAirport, setHoveredAirport] = useState<string | null>(null);
   const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [styleReady, setStyleReady] = useState(false);
   const [tokenMissing, setTokenMissing] = useState(false);
   const [isLoadingAirports, setIsLoadingAirports] = useState(false);
   const [airports, setAirports] = useState<AirportData[]>([]);
@@ -198,6 +199,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
 
     map.current.on('load', () => {
       setMapLoaded(true);
+      setStyleReady(true);
       
       // Add atmosphere and fog
       map.current?.setFog(getFogSettings(theme) as any);
@@ -214,17 +216,21 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
     
+    // Mark style as not ready while changing
+    setStyleReady(false);
+    
     map.current.setStyle(getMapStyle(theme));
     
-    // Re-apply fog after style change
+    // Re-apply fog and mark style as ready after change completes
     map.current.once('style.load', () => {
       map.current?.setFog(getFogSettings(theme) as any);
+      setStyleReady(true);
     });
   }, [theme, mapLoaded]);
 
-  // Add routes and airports when map is loaded
+  // Add routes and airports when map is loaded and style is ready
   useEffect(() => {
-    if (!map.current || !mapLoaded) return;
+    if (!map.current || !mapLoaded || !styleReady) return;
 
     // Remove existing layers first, then sources (order matters!)
     const layerIds = ['airport-labels', 'airports', 'routes'];
@@ -366,7 +372,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       map.current!.getCanvas().style.cursor = '';
     });
 
-  }, [mapLoaded, routes, airports, homeBase]);
+  }, [mapLoaded, styleReady, routes, airports, homeBase]);
 
   const handleZoomIn = () => {
     map.current?.zoomIn();
