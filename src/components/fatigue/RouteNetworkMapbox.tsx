@@ -4,7 +4,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DutyAnalysis } from '@/types/fatigue';
-import { Globe, Plane, MapPin, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Globe, Plane, MapPin, ZoomIn, ZoomOut, RotateCcw, AlertTriangle } from 'lucide-react';
 import { getAirportCoordinates } from '@/data/airportCoordinates';
 
 interface RegionPreset {
@@ -80,9 +80,16 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMap
     airportSet.add(r.to);
   });
 
-  const airports = Array.from(airportSet)
+  const allAirportCodes = Array.from(airportSet);
+  const airports = allAirportCodes
     .map(code => getAirportCoordinates(code))
     .filter((a): a is NonNullable<typeof a> => a !== null);
+
+  // Track missing airports for debugging
+  const missingAirports = allAirportCodes.filter(code => !getAirportCoordinates(code));
+  if (missingAirports.length > 0) {
+    console.warn('[RouteNetworkMapbox] Missing airport coordinates for:', missingAirports);
+  }
 
   // Initialize map
   useEffect(() => {
@@ -380,6 +387,24 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMap
                   <span>Avg Perf: {routes.find(r => `${r.from}-${r.to}` === hoveredRoute)?.avgPerformance.toFixed(1)}%</span>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Missing Airports Warning */}
+          {missingAirports.length > 0 && (
+            <div className="border-t border-warning/30 bg-warning/10 p-3">
+              <div className="flex items-start gap-2 text-xs">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0 text-warning" />
+                <div>
+                  <span className="font-medium text-warning">Missing coordinates for: </span>
+                  <span className="text-muted-foreground">
+                    {missingAirports.join(', ')}
+                  </span>
+                  <span className="text-muted-foreground ml-1">
+                    — these airports won't appear on the map
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 
