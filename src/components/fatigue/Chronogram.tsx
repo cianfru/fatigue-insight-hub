@@ -19,6 +19,13 @@ interface ChronogramProps {
 
 type DisplayMode = 'heatmap' | 'timeline' | 'combined';
 
+interface FlightPhaseSegment {
+  phase: 'takeoff' | 'cruise' | 'landing';
+  startPercent: number; // Position within duty bar (0-100)
+  widthPercent: number;
+  performance: number;
+}
+
 interface DutyBar {
   dayIndex: number;
   startHour: number;
@@ -27,6 +34,7 @@ interface DutyBar {
   endPerformance: number;
   duty: DutyAnalysis;
   isOvernightContinuation?: boolean;
+  phases: FlightPhaseSegment[]; // Flight phases within this bar
 }
 
 // WOCL (Window of Circadian Low) is typically 02:00 - 06:00
@@ -74,6 +82,38 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
     return Array.from(dutyDayIndices).sort((a, b) => a - b).map(dayNum => addDays(monthStart, dayNum - 1));
   }, [duties, daysInMonth, monthStart]);
 
+  // Calculate flight phases for a duty bar
+  const calculatePhases = (duty: DutyAnalysis, isOvernight: boolean, isOvernightContinuation: boolean): FlightPhaseSegment[] => {
+    const segments = duty.flightSegments;
+    if (segments.length === 0) return [];
+    
+    // Phase proportions: ~15% takeoff, ~70% cruise, ~15% landing
+    const takeoffPerf = Math.min(100, duty.avgPerformance + 5); // Slightly above avg at start
+    const cruisePerf = duty.avgPerformance;
+    const landingPerf = duty.landingPerformance;
+    
+    if (isOvernightContinuation) {
+      // For continuation (after midnight), show mostly cruise and landing
+      return [
+        { phase: 'cruise', startPercent: 0, widthPercent: 70, performance: cruisePerf },
+        { phase: 'landing', startPercent: 70, widthPercent: 30, performance: landingPerf },
+      ];
+    } else if (isOvernight) {
+      // For first part of overnight (before midnight), show takeoff and partial cruise
+      return [
+        { phase: 'takeoff', startPercent: 0, widthPercent: 20, performance: takeoffPerf },
+        { phase: 'cruise', startPercent: 20, widthPercent: 80, performance: cruisePerf },
+      ];
+    }
+    
+    // Normal duty - show all phases
+    return [
+      { phase: 'takeoff', startPercent: 0, widthPercent: 15, performance: takeoffPerf },
+      { phase: 'cruise', startPercent: 15, widthPercent: 70, performance: cruisePerf },
+      { phase: 'landing', startPercent: 85, widthPercent: 15, performance: landingPerf },
+    ];
+  };
+
   // Convert duties to bar positions with performance gradient data
   const dutyBars = useMemo(() => {
     const bars: DutyBar[] = [];
@@ -111,6 +151,7 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
             startPerformance: startPerf,
             endPerformance: midnightPerf,
             duty,
+            phases: calculatePhases(duty, true, false),
           });
           // Second bar: from midnight to end (next day)
           if (dayOfMonth < daysInMonth) {
@@ -122,6 +163,7 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
               endPerformance: endPerf,
               duty,
               isOvernightContinuation: true,
+              phases: calculatePhases(duty, false, true),
             });
           }
         } else {
@@ -132,6 +174,7 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
             startPerformance: startPerf,
             endPerformance: endPerf,
             duty,
+            phases: calculatePhases(duty, false, false),
           });
         }
       }
@@ -252,10 +295,22 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
             </div>
             
             {/* Legend */}
-            <div className="mb-4 flex items-center justify-center gap-4 text-xs">
+            <div className="mb-4 flex items-center justify-center gap-6 text-xs flex-wrap">
               <span className="flex items-center gap-2">
                 <span className="h-4 w-8 rounded bg-wocl/30" />
-                WOCL
+                WOCL (02:00-06:00)
+              </span>
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                Flight Phases:
+              </span>
+              <span className="flex items-center gap-1">
+                🛫 Takeoff
+              </span>
+              <span className="flex items-center gap-1">
+                ✈️ Cruise
+              </span>
+              <span className="flex items-center gap-1">
+                🛬 Landing
               </span>
             </div>
 
@@ -358,11 +413,10 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
                         key={dayNum}
                         className="relative h-7 border-b border-border/20"
                       >
-                        {/* Duty bars for this day with performance gradient */}
+                        {/* Duty bars for this day with flight phase segments */}
                         {dutyBars
                           .filter((bar) => bar.dayIndex === dayNum)
                           .map((bar, barIndex) => {
-                            const avgPerf = (bar.startPerformance + bar.endPerformance) / 2;
                             return (
                               <TooltipProvider key={barIndex} delayDuration={100}>
                                 <Tooltip>
@@ -370,17 +424,32 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
                                     <button
                                       onClick={() => onDutySelect(bar.duty)}
                                       className={cn(
-                                        "absolute top-1 bottom-1 rounded-sm transition-all hover:ring-2 hover:ring-foreground cursor-pointer overflow-hidden",
+                                        "absolute top-1 bottom-1 rounded-sm transition-all hover:ring-2 hover:ring-foreground cursor-pointer overflow-hidden flex",
                                         selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground"
                                       )}
                                       style={{
                                         left: `${(bar.startHour / 24) * 100}%`,
                                         width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
-                                        background: displayMode === 'timeline' 
-                                          ? 'hsl(var(--primary))' 
-                                          : `linear-gradient(to right, ${getPerformanceColor(bar.startPerformance)}, ${getPerformanceColor(bar.endPerformance)})`,
+                                        background: displayMode === 'timeline' ? 'hsl(var(--primary))' : undefined,
                                       }}
-                                    />
+                                    >
+                                      {/* Render flight phase segments */}
+                                      {displayMode !== 'timeline' && bar.phases.map((phase, phaseIndex) => (
+                                        <div
+                                          key={phaseIndex}
+                                          className="h-full relative"
+                                          style={{
+                                            width: `${phase.widthPercent}%`,
+                                            backgroundColor: getPerformanceColor(phase.performance),
+                                          }}
+                                        >
+                                          {/* Phase separator line */}
+                                          {phaseIndex > 0 && (
+                                            <div className="absolute left-0 top-0 bottom-0 w-px bg-background/50" />
+                                          )}
+                                        </div>
+                                      ))}
+                                    </button>
                                   </TooltipTrigger>
                                   <TooltipContent side="right" className="max-w-xs p-3">
                                     <div className="space-y-2 text-xs">
@@ -390,10 +459,20 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
                                       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                                         <span className="text-muted-foreground">Flights:</span>
                                         <span>{bar.duty.flightSegments.map(s => s.flightNumber).join(', ')}</span>
-                                        <span className="text-muted-foreground">Start Perf:</span>
-                                        <span style={{ color: getPerformanceColor(bar.startPerformance) }}>{Math.round(bar.startPerformance)}%</span>
-                                        <span className="text-muted-foreground">Landing Perf:</span>
-                                        <span style={{ color: getPerformanceColor(bar.endPerformance) }}>{Math.round(bar.endPerformance)}%</span>
+                                      </div>
+                                      {/* Flight Phase Performance */}
+                                      <div className="border-t border-border pt-2 mt-2">
+                                        <span className="text-muted-foreground font-medium">Phase Performance:</span>
+                                        <div className="grid grid-cols-3 gap-2 mt-1">
+                                          {bar.phases.map((phase, i) => (
+                                            <div key={i} className="flex flex-col items-center p-1 rounded" style={{ backgroundColor: `${getPerformanceColor(phase.performance)}20` }}>
+                                              <span className="text-[10px] capitalize">{phase.phase === 'takeoff' ? '🛫' : phase.phase === 'cruise' ? '✈️' : '🛬'}</span>
+                                              <span style={{ color: getPerformanceColor(phase.performance) }} className="font-medium">{Math.round(phase.performance)}%</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border pt-2">
                                         <span className="text-muted-foreground">Min Perf:</span>
                                         <span style={{ color: getPerformanceColor(bar.duty.minPerformance) }}>{Math.round(bar.duty.minPerformance)}%</span>
                                         <span className="text-muted-foreground">WOCL Exposure:</span>
