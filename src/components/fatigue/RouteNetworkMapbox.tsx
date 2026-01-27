@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DutyAnalysis } from '@/types/fatigue';
-import { Globe, Plane, MapPin, ZoomIn, ZoomOut, RotateCcw, AlertTriangle } from 'lucide-react';
-import { getAirportCoordinates } from '@/data/airportCoordinates';
+import { Globe, Plane, MapPin, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react';
+import { getAirportCoordinates, AirportData } from '@/data/airportCoordinates';
+import { getMultipleAirportsAsync } from '@/lib/airport-api';
 
 interface RegionPreset {
   name: string;
@@ -49,47 +50,102 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMap
   const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [tokenMissing, setTokenMissing] = useState(false);
+  const [isLoadingAirports, setIsLoadingAirports] = useState(false);
+  const [airports, setAirports] = useState<AirportData[]>([]);
+  const [missingAirports, setMissingAirports] = useState<string[]>([]);
 
   // Extract unique routes with performance data
-  const routeMap = new Map<string, RouteData>();
-  
-  duties.forEach((duty) => {
-    duty.flightSegments.forEach((segment) => {
-      const key = `${segment.departure}-${segment.arrival}`;
-      const existing = routeMap.get(key);
-      if (existing) {
-        existing.count++;
-        existing.avgPerformance = (existing.avgPerformance + segment.performance) / 2;
-      } else {
-        routeMap.set(key, { 
-          from: segment.departure, 
-          to: segment.arrival, 
-          count: 1,
-          avgPerformance: segment.performance
-        });
-      }
+  const routes = useMemo(() => {
+    const routeMap = new Map<string, RouteData>();
+    
+    duties.forEach((duty) => {
+      duty.flightSegments.forEach((segment) => {
+        const key = `${segment.departure}-${segment.arrival}`;
+        const existing = routeMap.get(key);
+        if (existing) {
+          existing.count++;
+          existing.avgPerformance = (existing.avgPerformance + segment.performance) / 2;
+        } else {
+          routeMap.set(key, { 
+            from: segment.departure, 
+            to: segment.arrival, 
+            count: 1,
+            avgPerformance: segment.performance
+          });
+        }
+      });
     });
-  });
 
-  const routes = Array.from(routeMap.values());
+    return Array.from(routeMap.values());
+  }, [duties]);
 
-  // Get unique airports with coordinates
-  const airportSet = new Set<string>();
-  routes.forEach((r) => {
-    airportSet.add(r.from);
-    airportSet.add(r.to);
-  });
+  // Get all unique airport codes
+  const allAirportCodes = useMemo(() => {
+    const airportSet = new Set<string>();
+    routes.forEach((r) => {
+      airportSet.add(r.from);
+      airportSet.add(r.to);
+    });
+    return Array.from(airportSet);
+  }, [routes]);
 
-  const allAirportCodes = Array.from(airportSet);
-  const airports = allAirportCodes
-    .map(code => getAirportCoordinates(code))
-    .filter((a): a is NonNullable<typeof a> => a !== null);
+  // Fetch airport coordinates (including from external API for unknown airports)
+  useEffect(() => {
+    async function fetchAirports() {
+      if (allAirportCodes.length === 0) {
+        setAirports([]);
+        setMissingAirports([]);
+        return;
+      }
 
-  // Track missing airports for debugging
-  const missingAirports = allAirportCodes.filter(code => !getAirportCoordinates(code));
-  if (missingAirports.length > 0) {
-    console.warn('[RouteNetworkMapbox] Missing airport coordinates for:', missingAirports);
-  }
+      // First, get what we have from static data
+      const knownAirports: AirportData[] = [];
+      const unknownCodes: string[] = [];
+
+      for (const code of allAirportCodes) {
+        const staticData = getAirportCoordinates(code);
+        if (staticData) {
+          knownAirports.push(staticData);
+        } else {
+          unknownCodes.push(code);
+        }
+      }
+
+      // If we have unknown airports, fetch them from the API
+      if (unknownCodes.length > 0) {
+        setIsLoadingAirports(true);
+        console.log('[RouteNetworkMapbox] Fetching unknown airports:', unknownCodes);
+
+        try {
+          const fetchedAirports = await getMultipleAirportsAsync(unknownCodes);
+          
+          // Add fetched airports to known list
+          fetchedAirports.forEach((data) => {
+            knownAirports.push(data);
+          });
+
+          // Track which airports are still missing
+          const stillMissing = unknownCodes.filter(code => !fetchedAirports.has(code));
+          setMissingAirports(stillMissing);
+
+          if (stillMissing.length > 0) {
+            console.warn('[RouteNetworkMapbox] Could not find coordinates for:', stillMissing);
+          }
+        } catch (error) {
+          console.error('[RouteNetworkMapbox] Error fetching airports:', error);
+          setMissingAirports(unknownCodes);
+        } finally {
+          setIsLoadingAirports(false);
+        }
+      } else {
+        setMissingAirports([]);
+      }
+
+      setAirports(knownAirports);
+    }
+
+    fetchAirports();
+  }, [allAirportCodes]);
 
   // Initialize map
   useEffect(() => {
@@ -153,10 +209,13 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMap
       }
     });
 
+    // Create a lookup map from airports state (includes API-fetched airports)
+    const airportLookup = new Map(airports.map(a => [a.code, a]));
+
     // Add routes as lines
     const routeFeatures = routes.map(route => {
-      const from = getAirportCoordinates(route.from);
-      const to = getAirportCoordinates(route.to);
+      const from = airportLookup.get(route.from);
+      const to = airportLookup.get(route.to);
       if (!from || !to) return null;
 
       return {
@@ -357,7 +416,15 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMap
               </div>
             </div>
           ) : (
-            <div ref={mapContainer} className="h-[400px] w-full" />
+            <div ref={mapContainer} className="h-[400px] w-full relative">
+              {/* Loading indicator for airport fetch */}
+              {isLoadingAirports && (
+                <div className="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-lg border border-border bg-card/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span className="text-xs text-muted-foreground">Loading airports...</span>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Hovered Airport Info */}
@@ -368,7 +435,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH' }: RouteNetworkMap
                 <span className="font-bold">{hoveredAirport}</span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                {getAirportCoordinates(hoveredAirport)?.city}, {getAirportCoordinates(hoveredAirport)?.country}
+                {airports.find(a => a.code === hoveredAirport)?.city}, {airports.find(a => a.code === hoveredAirport)?.country}
               </p>
             </div>
           )}
