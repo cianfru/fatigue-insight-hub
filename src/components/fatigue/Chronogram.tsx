@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Info } from 'lucide-react';
+import { Info, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DutyAnalysis, DutyStatistics } from '@/types/fatigue';
@@ -13,6 +14,9 @@ interface ChronogramProps {
   statistics: DutyStatistics;
   month: Date;
   pilotId: string;
+  pilotName?: string;
+  pilotBase?: string;
+  pilotAircraft?: string;
   onDutySelect: (duty: DutyAnalysis) => void;
   selectedDuty: DutyAnalysis | null;
 }
@@ -51,9 +55,14 @@ const getPerformanceColor = (performance: number): string => {
   return 'hsl(0, 80%, 50%)'; // Red
 };
 
-export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, selectedDuty }: ChronogramProps) {
+export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty }: ChronogramProps) {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('heatmap');
   const [infoOpen, setInfoOpen] = useState(false);
+
+  // Count duties with commander discretion
+  const discretionCount = useMemo(() => 
+    duties.filter(d => d.usedDiscretion).length
+  , [duties]);
 
   const daysInMonth = getDaysInMonth(month);
   const monthStart = startOfMonth(month);
@@ -286,31 +295,54 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
         {/* High-Resolution Timeline */}
         <div className="overflow-x-auto pb-4">
           <div className="min-w-[800px]">
-            {/* Header with stats */}
-            <div className="mb-2 text-center text-sm font-medium">
-              {format(month, 'MMMM yyyy')} - High-Resolution Duty Timeline
+            {/* Header with pilot info */}
+            <div className="mb-4 text-center">
+              {pilotName && (
+                <h2 className="text-lg font-semibold text-foreground">{pilotName}</h2>
+              )}
+              <div className="text-sm text-muted-foreground">
+                {pilotBase && pilotAircraft ? (
+                  <span>{pilotBase} | {pilotAircraft}</span>
+                ) : (
+                  <span>Pilot: {pilotId}</span>
+                )}
+              </div>
+              <div className="mt-1 text-sm font-medium">
+                {format(month, 'MMMM yyyy')} - High-Resolution Duty Timeline
+              </div>
             </div>
-            <div className="mb-4 text-center text-xs text-muted-foreground">
-              Pilot: {pilotId} | Duties: {statistics.totalDuties} | High Risk: {statistics.highRiskDuties} | Critical: {statistics.criticalRiskDuties}
+            
+            {/* Stats row */}
+            <div className="mb-4 flex items-center justify-center gap-4 text-xs flex-wrap">
+              <span>Duties: <strong>{statistics.totalDuties}</strong></span>
+              <span>High Risk: <strong className="text-high">{statistics.highRiskDuties}</strong></span>
+              <span>Critical: <strong className="text-critical">{statistics.criticalRiskDuties}</strong></span>
+              {discretionCount > 0 && (
+                <Badge variant="destructive" className="flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  {discretionCount} Discretion Used
+                </Badge>
+              )}
             </div>
             
             {/* Legend */}
             <div className="mb-4 flex items-center justify-center gap-6 text-xs flex-wrap">
               <span className="flex items-center gap-2">
                 <span className="h-4 w-8 rounded bg-wocl/30" />
-                WOCL (02:00-06:00)
+                WOCL
               </span>
-              <span className="flex items-center gap-1.5 text-muted-foreground">
-                Flight Phases:
+              <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
+              <span className="flex items-center gap-1">🛫 Takeoff</span>
+              <span className="flex items-center gap-1">✈️ Cruise</span>
+              <span className="flex items-center gap-1">🛬 Landing</span>
+              <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
+              <span className="flex items-center gap-1">
+                <span className="h-3 w-3 rounded border-2 border-dashed border-muted-foreground" />
+                FDP Limit
               </span>
               <span className="flex items-center gap-1">
-                🛫 Takeoff
-              </span>
-              <span className="flex items-center gap-1">
-                ✈️ Cruise
-              </span>
-              <span className="flex items-center gap-1">
-                🛬 Landing
+                <span className="h-3 w-3 rounded bg-critical ring-2 ring-critical/50" />
+                Discretion
               </span>
             </div>
 
@@ -417,6 +449,10 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
                         {dutyBars
                           .filter((bar) => bar.dayIndex === dayNum)
                           .map((bar, barIndex) => {
+                            const usedDiscretion = bar.duty.usedDiscretion;
+                            const maxFdp = bar.duty.maxFdpHours;
+                            const actualFdp = bar.duty.actualFdpHours || bar.duty.dutyHours;
+                            
                             return (
                               <TooltipProvider key={barIndex} delayDuration={100}>
                                 <Tooltip>
@@ -424,8 +460,9 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
                                     <button
                                       onClick={() => onDutySelect(bar.duty)}
                                       className={cn(
-                                        "absolute top-1 bottom-1 rounded-sm transition-all hover:ring-2 hover:ring-foreground cursor-pointer overflow-hidden flex",
-                                        selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground"
+                                        "absolute top-1 bottom-1 rounded-sm transition-all hover:ring-2 cursor-pointer overflow-hidden flex",
+                                        selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground",
+                                        usedDiscretion ? "ring-2 ring-critical hover:ring-critical/80" : "hover:ring-foreground"
                                       )}
                                       style={{
                                         left: `${(bar.startHour / 24) * 100}%`,
@@ -449,17 +486,79 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
                                           )}
                                         </div>
                                       ))}
+                                      {/* Discretion warning indicator */}
+                                      {usedDiscretion && (
+                                        <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-critical flex items-center justify-center">
+                                          <AlertTriangle className="h-2 w-2 text-critical-foreground" />
+                                        </div>
+                                      )}
                                     </button>
                                   </TooltipTrigger>
+
+                                  {/* FDP Limit indicator (dashed line at max FDP end) */}
+                                  {maxFdp && !bar.isOvernightContinuation && (
+                                    <div
+                                      className="absolute top-0 bottom-0 border-r-2 border-dashed border-muted-foreground/50 pointer-events-none"
+                                      style={{
+                                        left: `${((bar.startHour + maxFdp) / 24) * 100}%`,
+                                      }}
+                                      title={`Max FDP: ${maxFdp}h`}
+                                    />
+                                  )}
                                   <TooltipContent side="right" className="max-w-xs p-3">
                                     <div className="space-y-2 text-xs">
-                                      <div className="font-semibold text-sm border-b border-border pb-1">
-                                        {format(bar.duty.date, 'EEEE, MMM d')} {bar.isOvernightContinuation && '(continued)'}
+                                      <div className={cn(
+                                        "font-semibold text-sm border-b pb-1 flex items-center justify-between",
+                                        usedDiscretion ? "border-critical" : "border-border"
+                                      )}>
+                                        <span>
+                                          {format(bar.duty.date, 'EEEE, MMM d')} {bar.isOvernightContinuation && '(continued)'}
+                                        </span>
+                                        {usedDiscretion && (
+                                          <Badge variant="destructive" className="text-[10px] px-1 py-0">
+                                            DISCRETION
+                                          </Badge>
+                                        )}
                                       </div>
                                       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                                         <span className="text-muted-foreground">Flights:</span>
                                         <span>{bar.duty.flightSegments.map(s => s.flightNumber).join(', ')}</span>
                                       </div>
+                                      
+                                      {/* EASA ORO.FTL Section */}
+                                      {(maxFdp || bar.duty.extendedFdpHours) && (
+                                        <div className="border-t border-border pt-2 mt-2">
+                                          <span className="text-muted-foreground font-medium">EASA ORO.FTL:</span>
+                                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                                            {maxFdp && (
+                                              <>
+                                                <span className="text-muted-foreground">Max FDP:</span>
+                                                <span>{maxFdp.toFixed(1)}h</span>
+                                              </>
+                                            )}
+                                            {bar.duty.extendedFdpHours && (
+                                              <>
+                                                <span className="text-muted-foreground">Extended FDP:</span>
+                                                <span className="text-warning">{bar.duty.extendedFdpHours.toFixed(1)}h</span>
+                                              </>
+                                            )}
+                                            <span className="text-muted-foreground">Actual FDP:</span>
+                                            <span className={cn(
+                                              maxFdp && actualFdp > maxFdp && "text-critical font-medium",
+                                              maxFdp && actualFdp <= maxFdp && "text-success"
+                                            )}>
+                                              {actualFdp.toFixed(1)}h
+                                            </span>
+                                            {bar.duty.fdpExceedance && bar.duty.fdpExceedance > 0 && (
+                                              <>
+                                                <span className="text-muted-foreground">Exceedance:</span>
+                                                <span className="text-critical font-medium">+{bar.duty.fdpExceedance.toFixed(1)}h</span>
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+                                      
                                       {/* Flight Phase Performance */}
                                       <div className="border-t border-border pt-2 mt-2">
                                         <span className="text-muted-foreground font-medium">Phase Performance:</span>
