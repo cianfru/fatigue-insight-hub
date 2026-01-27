@@ -8,7 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { PilotSettings, UploadedFile } from '@/types/fatigue';
 import { useState } from 'react';
 import { SidebarUpload } from './SidebarUpload';
-
+import { ConnectionStatus } from './ConnectionStatus';
 interface SettingsSidebarProps {
   settings: PilotSettings;
   onSettingsChange: (settings: Partial<PilotSettings>) => void;
@@ -50,6 +50,9 @@ export function SettingsSidebar({
 
   return (
     <div className="w-80 flex-shrink-0 space-y-4 overflow-y-auto p-4">
+      {/* Connection Status */}
+      <ConnectionStatus />
+
       {/* Roster Upload - Now at the top */}
       <SidebarUpload
         uploadedFile={uploadedFile}
