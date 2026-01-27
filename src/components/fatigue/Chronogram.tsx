@@ -23,22 +23,26 @@ interface ChronogramProps {
 
 type DisplayMode = 'heatmap' | 'timeline' | 'combined';
 
-interface FlightPhaseSegment {
-  phase: 'takeoff' | 'cruise' | 'landing';
-  startPercent: number; // Position within duty bar (0-100)
-  widthPercent: number;
+// Check-in time before first sector (EASA typically 60 min)
+const CHECK_IN_MINUTES = 60;
+
+interface FlightSegmentBar {
+  type: 'checkin' | 'flight' | 'ground';
+  flightNumber?: string;
+  departure?: string;
+  arrival?: string;
+  startHour: number;
+  endHour: number;
   performance: number;
 }
 
 interface DutyBar {
   dayIndex: number;
-  startHour: number;
+  startHour: number; // FDP start (check-in time)
   endHour: number;
-  startPerformance: number;
-  endPerformance: number;
   duty: DutyAnalysis;
   isOvernightContinuation?: boolean;
-  phases: FlightPhaseSegment[]; // Flight phases within this bar
+  segments: FlightSegmentBar[]; // Individual flight segments
 }
 
 // WOCL (Window of Circadian Low) is typically 02:00 - 06:00
@@ -91,39 +95,98 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     return Array.from(dutyDayIndices).sort((a, b) => a - b).map(dayNum => addDays(monthStart, dayNum - 1));
   }, [duties, daysInMonth, monthStart]);
 
-  // Calculate flight phases for a duty bar
-  const calculatePhases = (duty: DutyAnalysis, isOvernight: boolean, isOvernightContinuation: boolean): FlightPhaseSegment[] => {
-    const segments = duty.flightSegments;
-    if (segments.length === 0) return [];
+  // Calculate flight segment bars for a duty
+  const calculateSegments = (duty: DutyAnalysis, isOvernightContinuation: boolean): FlightSegmentBar[] => {
+    const segments: FlightSegmentBar[] = [];
+    const flightSegs = duty.flightSegments;
+    if (flightSegs.length === 0) return [];
     
-    // Phase proportions: ~15% takeoff, ~70% cruise, ~15% landing
-    const takeoffPerf = Math.min(100, duty.avgPerformance + 5); // Slightly above avg at start
-    const cruisePerf = duty.avgPerformance;
-    const landingPerf = duty.landingPerformance;
-    
+    // For overnight continuation, we only show segments that fall after midnight
     if (isOvernightContinuation) {
-      // For continuation (after midnight), show mostly cruise and landing
-      return [
-        { phase: 'cruise', startPercent: 0, widthPercent: 70, performance: cruisePerf },
-        { phase: 'landing', startPercent: 70, widthPercent: 30, performance: landingPerf },
-      ];
-    } else if (isOvernight) {
-      // For first part of overnight (before midnight), show takeoff and partial cruise
-      return [
-        { phase: 'takeoff', startPercent: 0, widthPercent: 20, performance: takeoffPerf },
-        { phase: 'cruise', startPercent: 20, widthPercent: 80, performance: cruisePerf },
-      ];
+      // Find segments that are after midnight
+      flightSegs.forEach((seg, index) => {
+        const [depH, depM] = seg.departureTime.split(':').map(Number);
+        const [arrH, arrM] = seg.arrivalTime.split(':').map(Number);
+        const depHour = depH + depM / 60;
+        const arrHour = arrH + arrM / 60;
+        
+        // If departure is before midnight but arrival is after, or both are low hours (after midnight)
+        if (arrHour < 12 && (index > 0 || depHour < 12)) {
+          segments.push({
+            type: 'flight',
+            flightNumber: seg.flightNumber,
+            departure: seg.departure,
+            arrival: seg.arrival,
+            startHour: depHour,
+            endHour: arrHour,
+            performance: seg.performance,
+          });
+        }
+      });
+      return segments;
     }
     
-    // Normal duty - show all phases
-    return [
-      { phase: 'takeoff', startPercent: 0, widthPercent: 15, performance: takeoffPerf },
-      { phase: 'cruise', startPercent: 15, widthPercent: 70, performance: cruisePerf },
-      { phase: 'landing', startPercent: 85, widthPercent: 15, performance: landingPerf },
-    ];
+    // Get first departure for check-in calculation
+    const [firstDepH, firstDepM] = flightSegs[0].departureTime.split(':').map(Number);
+    const firstDepHour = firstDepH + firstDepM / 60;
+    const checkInHour = Math.max(0, firstDepHour - CHECK_IN_MINUTES / 60);
+    
+    // Add check-in segment
+    segments.push({
+      type: 'checkin',
+      startHour: checkInHour,
+      endHour: firstDepHour,
+      performance: Math.min(100, duty.avgPerformance + 10), // Higher at start
+    });
+    
+    // Add each flight segment
+    flightSegs.forEach((seg, index) => {
+      const [depH, depM] = seg.departureTime.split(':').map(Number);
+      const [arrH, arrM] = seg.arrivalTime.split(':').map(Number);
+      const depHour = depH + depM / 60;
+      let arrHour = arrH + arrM / 60;
+      
+      // Handle overnight: if arrival is before departure, it's the next day
+      if (arrHour < depHour) {
+        arrHour = 24; // Cap at midnight for this day's bar
+      }
+      
+      // Add ground time between flights if there's a gap
+      if (index > 0) {
+        const prevSeg = flightSegs[index - 1];
+        const [prevArrH, prevArrM] = prevSeg.arrivalTime.split(':').map(Number);
+        let prevArrHour = prevArrH + prevArrM / 60;
+        
+        // Skip ground time if previous flight was overnight
+        if (prevArrHour > depHour) {
+          prevArrHour = 0; // Reset for overnight continuation
+        }
+        
+        if (depHour > prevArrHour + 0.25) { // More than 15 min gap
+          segments.push({
+            type: 'ground',
+            startHour: prevArrHour,
+            endHour: depHour,
+            performance: duty.avgPerformance,
+          });
+        }
+      }
+      
+      segments.push({
+        type: 'flight',
+        flightNumber: seg.flightNumber,
+        departure: seg.departure,
+        arrival: seg.arrival,
+        startHour: depHour,
+        endHour: arrHour,
+        performance: seg.performance,
+      });
+    });
+    
+    return segments;
   };
 
-  // Convert duties to bar positions with performance gradient data
+  // Convert duties to bar positions with individual flight segments
   const dutyBars = useMemo(() => {
     const bars: DutyBar[] = [];
     
@@ -138,29 +201,19 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         const [startH, startM] = firstSegment.departureTime.split(':').map(Number);
         const [endH, endM] = lastSegment.arrivalTime.split(':').map(Number);
         
-        const startHour = startH + startM / 60;
+        // FDP starts at check-in (before first departure)
+        const checkInHour = Math.max(0, startH + startM / 60 - CHECK_IN_MINUTES / 60);
         let endHour = endH + endM / 60;
         
-        // Performance at start is higher, decays toward landing
-        const startPerf = Math.min(100, duty.avgPerformance + 10); // Slightly higher at start
-        const endPerf = duty.landingPerformance;
-        
         // Handle overnight duties
-        if (endHour < startHour) {
-          // Calculate midpoint performance at midnight
-          const totalDuration = (24 - startHour) + endHour;
-          const midnightRatio = (24 - startHour) / totalDuration;
-          const midnightPerf = startPerf - (startPerf - endPerf) * midnightRatio;
-          
-          // First bar: from start to midnight
+        if (endHour < checkInHour || endHour < (startH + startM / 60)) {
+          // First bar: from check-in to midnight
           bars.push({
             dayIndex: dayOfMonth,
-            startHour,
+            startHour: checkInHour,
             endHour: 24,
-            startPerformance: startPerf,
-            endPerformance: midnightPerf,
             duty,
-            phases: calculatePhases(duty, true, false),
+            segments: calculateSegments(duty, false),
           });
           // Second bar: from midnight to end (next day)
           if (dayOfMonth < daysInMonth) {
@@ -168,22 +221,18 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               dayIndex: dayOfMonth + 1,
               startHour: 0,
               endHour,
-              startPerformance: midnightPerf,
-              endPerformance: endPerf,
               duty,
               isOvernightContinuation: true,
-              phases: calculatePhases(duty, false, true),
+              segments: calculateSegments(duty, true),
             });
           }
         } else {
           bars.push({
             dayIndex: dayOfMonth,
-            startHour,
+            startHour: checkInHour,
             endHour,
-            startPerformance: startPerf,
-            endPerformance: endPerf,
             duty,
-            phases: calculatePhases(duty, false, false),
+            segments: calculateSegments(duty, false),
           });
         }
       }
@@ -332,9 +381,18 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 WOCL
               </span>
               <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
-              <span className="flex items-center gap-1">🛫 Takeoff</span>
-              <span className="flex items-center gap-1">✈️ Cruise</span>
-              <span className="flex items-center gap-1">🛬 Landing</span>
+              <span className="flex items-center gap-1">
+                <span className="h-3 w-6 rounded opacity-70" style={{ backgroundColor: 'hsl(120, 70%, 45%)' }} />
+                Check-in
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-3 w-6 rounded" style={{ backgroundColor: 'hsl(120, 70%, 45%)' }} />
+                ✈️ Flight
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-3 w-6 rounded bg-muted opacity-50" />
+                Ground
+              </span>
               <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
               <span className="flex items-center gap-1">
                 <span className="h-3 w-3 rounded border-2 border-dashed border-muted-foreground" />
@@ -469,23 +527,42 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
                                         background: displayMode === 'timeline' ? 'hsl(var(--primary))' : undefined,
                                       }}
-                                    >
-                                      {/* Render flight phase segments */}
-                                      {displayMode !== 'timeline' && bar.phases.map((phase, phaseIndex) => (
-                                        <div
-                                          key={phaseIndex}
-                                          className="h-full relative"
-                                          style={{
-                                            width: `${phase.widthPercent}%`,
-                                            backgroundColor: getPerformanceColor(phase.performance),
-                                          }}
-                                        >
-                                          {/* Phase separator line */}
-                                          {phaseIndex > 0 && (
-                                            <div className="absolute left-0 top-0 bottom-0 w-px bg-background/50" />
-                                          )}
-                                        </div>
-                                      ))}
+                                      >
+                                        {/* Render individual flight segments */}
+                                        {displayMode !== 'timeline' && bar.segments.map((segment, segIndex) => {
+                                          const segmentWidth = ((segment.endHour - segment.startHour) / (bar.endHour - bar.startHour)) * 100;
+                                          return (
+                                            <div
+                                              key={segIndex}
+                                              className={cn(
+                                                "h-full relative flex items-center justify-center",
+                                                segment.type === 'checkin' && "opacity-70",
+                                                segment.type === 'ground' && "opacity-50"
+                                              )}
+                                              style={{
+                                                width: `${segmentWidth}%`,
+                                                backgroundColor: segment.type === 'ground' 
+                                                  ? 'hsl(var(--muted))' 
+                                                  : getPerformanceColor(segment.performance),
+                                              }}
+                                            >
+                                              {/* Segment separator line */}
+                                              {segIndex > 0 && (
+                                                <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70" />
+                                              )}
+                                              {/* Flight number label for flights */}
+                                              {segment.type === 'flight' && segment.flightNumber && segmentWidth > 8 && (
+                                                <span className="text-[8px] font-medium text-background truncate px-0.5">
+                                                  {segment.flightNumber}
+                                                </span>
+                                              )}
+                                              {/* Check-in indicator */}
+                                              {segment.type === 'checkin' && segmentWidth > 5 && (
+                                                <span className="text-[8px] text-background/80">✓</span>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
                                       {/* Discretion warning indicator */}
                                       {usedDiscretion && (
                                         <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-critical flex items-center justify-center">
@@ -559,14 +636,15 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         </div>
                                       )}
                                       
-                                      {/* Flight Phase Performance */}
+                                      {/* Flight Segments */}
                                       <div className="border-t border-border pt-2 mt-2">
-                                        <span className="text-muted-foreground font-medium">Phase Performance:</span>
-                                        <div className="grid grid-cols-3 gap-2 mt-1">
-                                          {bar.phases.map((phase, i) => (
-                                            <div key={i} className="flex flex-col items-center p-1 rounded" style={{ backgroundColor: `${getPerformanceColor(phase.performance)}20` }}>
-                                              <span className="text-[10px] capitalize">{phase.phase === 'takeoff' ? '🛫' : phase.phase === 'cruise' ? '✈️' : '🛬'}</span>
-                                              <span style={{ color: getPerformanceColor(phase.performance) }} className="font-medium">{Math.round(phase.performance)}%</span>
+                                        <span className="text-muted-foreground font-medium">Flight Segments:</span>
+                                        <div className="flex flex-col gap-1 mt-1">
+                                          {bar.segments.filter(s => s.type === 'flight').map((segment, i) => (
+                                            <div key={i} className="flex items-center justify-between text-[10px] p-1 rounded" style={{ backgroundColor: `${getPerformanceColor(segment.performance)}20` }}>
+                                              <span className="font-medium">{segment.flightNumber}</span>
+                                              <span className="text-muted-foreground">{segment.departure} → {segment.arrival}</span>
+                                              <span style={{ color: getPerformanceColor(segment.performance) }} className="font-medium">{Math.round(segment.performance)}%</span>
                                             </div>
                                           ))}
                                         </div>
