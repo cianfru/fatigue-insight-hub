@@ -65,9 +65,15 @@ export interface DutyAnalysis {
   landingRisk: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
   smsReportable: boolean;
   flightSegments: FlightSegment[];
-  // New fields from backend model
+  // EASA ORO.FTL fields
+  maxFdpHours?: number; // Base FDP limit from ORO.FTL.205
+  extendedFdpHours?: number; // Extended limit with discretion
+  actualFdpHours?: number; // Actual FDP worked
+  usedDiscretion?: boolean; // Commander discretion used
+  fdpExceedance?: number; // Hours over limit (if any)
+  // Existing optional fields
   pinchEvents?: PinchEvent[];
-  circadianPhaseShift?: number; // Hours deviation from home base
+  circadianPhaseShift?: number;
   phasePerformance?: FlightPhasePerformance[];
   sleepQuality?: 'poor' | 'fair' | 'good' | 'excellent';
   sleepEnvironment?: 'home' | 'layover';
@@ -77,4 +83,8 @@ export interface AnalysisResults {
   statistics: DutyStatistics;
   duties: DutyAnalysis[];
   generatedAt: Date;
+  // Pilot info from backend
+  pilotName?: string;
+  pilotBase?: string;
+  pilotAircraft?: string;
 }
