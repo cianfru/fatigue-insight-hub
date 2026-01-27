@@ -22,8 +22,10 @@ interface DutyBar {
   dayIndex: number;
   startHour: number;
   endHour: number;
-  performance: number;
+  startPerformance: number;
+  endPerformance: number;
   duty: DutyAnalysis;
+  isOvernightContinuation?: boolean;
 }
 
 // WOCL (Window of Circadian Low) is typically 02:00 - 06:00
@@ -71,7 +73,7 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
     return Array.from(dutyDayIndices).sort((a, b) => a - b).map(dayNum => addDays(monthStart, dayNum - 1));
   }, [duties, daysInMonth, monthStart]);
 
-  // Convert duties to bar positions
+  // Convert duties to bar positions with performance gradient data
   const dutyBars = useMemo(() => {
     const bars: DutyBar[] = [];
     
@@ -89,14 +91,24 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
         const startHour = startH + startM / 60;
         let endHour = endH + endM / 60;
         
+        // Performance at start is higher, decays toward landing
+        const startPerf = Math.min(100, duty.avgPerformance + 10); // Slightly higher at start
+        const endPerf = duty.landingPerformance;
+        
         // Handle overnight duties
         if (endHour < startHour) {
+          // Calculate midpoint performance at midnight
+          const totalDuration = (24 - startHour) + endHour;
+          const midnightRatio = (24 - startHour) / totalDuration;
+          const midnightPerf = startPerf - (startPerf - endPerf) * midnightRatio;
+          
           // First bar: from start to midnight
           bars.push({
             dayIndex: dayOfMonth,
             startHour,
             endHour: 24,
-            performance: duty.avgPerformance,
+            startPerformance: startPerf,
+            endPerformance: midnightPerf,
             duty,
           });
           // Second bar: from midnight to end (next day)
@@ -105,8 +117,10 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
               dayIndex: dayOfMonth + 1,
               startHour: 0,
               endHour,
-              performance: duty.landingPerformance,
+              startPerformance: midnightPerf,
+              endPerformance: endPerf,
               duty,
+              isOvernightContinuation: true,
             });
           }
         } else {
@@ -114,7 +128,8 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
             dayIndex: dayOfMonth,
             startHour,
             endHour,
-            performance: duty.avgPerformance,
+            startPerformance: startPerf,
+            endPerformance: endPerf,
             duty,
           });
         }
@@ -342,52 +357,59 @@ export function Chronogram({ duties, statistics, month, pilotId, onDutySelect, s
                         key={dayNum}
                         className="relative h-7 border-b border-border/20"
                       >
-                        {/* Duty bars for this day */}
+                        {/* Duty bars for this day with performance gradient */}
                         {dutyBars
                           .filter((bar) => bar.dayIndex === dayNum)
-                          .map((bar, barIndex) => (
-                            <button
-                              key={barIndex}
-                              onClick={() => onDutySelect(bar.duty)}
-                              className={cn(
-                                "absolute top-1 bottom-1 rounded-sm transition-all hover:ring-2 hover:ring-foreground cursor-pointer",
-                                selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground"
-                              )}
-                              style={{
-                                left: `${(bar.startHour / 24) * 100}%`,
-                                width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
-                                backgroundColor: displayMode === 'timeline' 
-                                  ? 'hsl(var(--primary))' 
-                                  : getPerformanceColor(bar.performance),
-                              }}
-                              title={`${format(bar.duty.date, 'MMM d')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ')} - Performance: ${bar.performance.toFixed(0)}%`}
-                            />
-                          ))}
+                          .map((bar, barIndex) => {
+                            const avgPerf = (bar.startPerformance + bar.endPerformance) / 2;
+                            return (
+                              <button
+                                key={barIndex}
+                                onClick={() => onDutySelect(bar.duty)}
+                                className={cn(
+                                  "absolute top-1 bottom-1 rounded-sm transition-all hover:ring-2 hover:ring-foreground cursor-pointer overflow-hidden",
+                                  selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground"
+                                )}
+                                style={{
+                                  left: `${(bar.startHour / 24) * 100}%`,
+                                  width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
+                                  background: displayMode === 'timeline' 
+                                    ? 'hsl(var(--primary))' 
+                                    : `linear-gradient(to right, ${getPerformanceColor(bar.startPerformance)}, ${getPerformanceColor(bar.endPerformance)})`,
+                                }}
+                                title={`${format(bar.duty.date, 'MMM d')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ')} | Start: ${Math.round(bar.startPerformance)}% → End: ${Math.round(bar.endPerformance)}%`}
+                              />
+                            );
+                          })}
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Color legend */}
+              {/* Color legend - aligned with chart height */}
               {displayMode !== 'timeline' && (
-                <div className="ml-4 flex w-20 flex-shrink-0 flex-col items-center">
-                  <div className="h-8 text-[10px] text-muted-foreground">Performance<br/>Score</div>
-                  <div className="relative flex-1 min-h-[150px] w-4 rounded-sm overflow-hidden">
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        background: 'linear-gradient(to bottom, hsl(120, 70%, 45%), hsl(90, 70%, 50%), hsl(55, 90%, 55%), hsl(40, 95%, 50%), hsl(25, 95%, 50%), hsl(0, 80%, 50%))',
-                      }}
-                    />
-                  </div>
-                  <div className="mt-1 flex w-full flex-col justify-between text-[9px] text-muted-foreground h-[150px]">
-                    <span className="text-left">100</span>
-                    <span className="text-left">80</span>
-                    <span className="text-left">60</span>
-                    <span className="text-left">40</span>
-                    <span className="text-left">20</span>
-                    <span className="text-left">0</span>
+                <div className="ml-4 flex w-16 flex-shrink-0 flex-col">
+                  <div className="h-8 text-[10px] text-muted-foreground text-center">Score</div>
+                  <div className="flex gap-1" style={{ height: `${allDays.length * 28}px` }}>
+                    {/* Gradient bar */}
+                    <div className="w-3 rounded-sm overflow-hidden">
+                      <div
+                        className="h-full w-full"
+                        style={{
+                          background: 'linear-gradient(to bottom, hsl(120, 70%, 45%), hsl(90, 70%, 50%), hsl(55, 90%, 55%), hsl(40, 95%, 50%), hsl(25, 95%, 50%), hsl(0, 80%, 50%))',
+                        }}
+                      />
+                    </div>
+                    {/* Labels aligned with gradient */}
+                    <div className="flex flex-col justify-between text-[9px] text-muted-foreground">
+                      <span>100</span>
+                      <span>80</span>
+                      <span>60</span>
+                      <span>40</span>
+                      <span>20</span>
+                      <span>0</span>
+                    </div>
                   </div>
                 </div>
               )}
