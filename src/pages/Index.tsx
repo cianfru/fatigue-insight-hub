@@ -106,6 +106,7 @@ const Index = () => {
       // Convert API response to match frontend types
       setAnalysisResults({
         generatedAt: new Date(),
+        pilotId: result.pilot_id || undefined,
         pilotName: result.pilot_name || undefined,
         pilotBase: result.pilot_base || undefined,
         pilotAircraft: result.pilot_aircraft || undefined,
@@ -180,7 +181,7 @@ const Index = () => {
           hasResults={!!analysisResults}
           pilotInfo={analysisResults ? {
             name: analysisResults.pilotName,
-            id: settings.pilotId,
+            id: analysisResults.pilotId,
             base: analysisResults.pilotBase || settings.homeBase,
             aircraft: analysisResults.pilotAircraft,
           } : undefined}

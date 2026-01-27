@@ -84,6 +84,7 @@ export interface AnalysisResults {
   duties: DutyAnalysis[];
   generatedAt: Date;
   // Pilot info from backend
+  pilotId?: string;
   pilotName?: string;
   pilotBase?: string;
   pilotAircraft?: string;
