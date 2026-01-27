@@ -12,6 +12,8 @@ export interface DutySegment {
   arrival: string;
   departure_time: string;
   arrival_time: string;
+  departure_time_local: string;  // Pre-converted to HH:mm in home base timezone
+  arrival_time_local: string;    // Pre-converted to HH:mm in home base timezone
   block_hours: number;
 }
 
