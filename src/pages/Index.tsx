@@ -132,8 +132,8 @@ const Index = () => {
             flightNumber: seg.flight_number,
             departure: seg.departure,
             arrival: seg.arrival,
-            departureTime: isoToHHmm(seg.departure_time),
-            arrivalTime: isoToHHmm(seg.arrival_time),
+            departureTime: seg.departure_time_local,  // Already in HH:mm format, home base timezone
+            arrivalTime: seg.arrival_time_local,      // Already in HH:mm format, home base timezone
             performance: duty.avg_performance,
           })),
         })),
