@@ -254,9 +254,17 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
 
   // Add routes and airports when map is loaded and style is ready
   useEffect(() => {
-    if (!map.current || !mapLoaded || !styleReady) return;
+    const mapInstance = map.current;
+    if (!mapInstance || !mapLoaded || !styleReady) {
+      console.log('[RouteNetworkMapbox] Early return - map:', !!mapInstance, 'loaded:', mapLoaded, 'styleReady:', styleReady);
+      return;
+    }
     if (airports.length === 0) {
       console.log('[RouteNetworkMapbox] Waiting for airports to load...');
+      return;
+    }
+    if (routes.length === 0) {
+      console.log('[RouteNetworkMapbox] No routes to display');
       return;
     }
 
@@ -441,13 +449,27 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
     };
 
     // Check if style is actually loaded before adding layers
-    if (map.current.isStyleLoaded()) {
+    const isLoaded = mapInstance.isStyleLoaded();
+    console.log('[RouteNetworkMapbox] Style loaded check:', isLoaded);
+    
+    if (isLoaded) {
       addLayersToMap();
     } else {
-      // Wait for style to finish loading
-      console.log('[RouteNetworkMapbox] Style not ready, waiting...');
-      map.current.once('style.load', addLayersToMap);
+      // Wait for style to finish loading - try both events for safety
+      console.log('[RouteNetworkMapbox] Style not ready, waiting for style.load or idle...');
+      const handleStyleReady = () => {
+        mapInstance.off('idle', handleStyleReady);
+        addLayersToMap();
+      };
+      mapInstance.once('style.load', handleStyleReady);
+      // Also listen to idle as a fallback
+      mapInstance.once('idle', handleStyleReady);
     }
+
+    // Cleanup
+    return () => {
+      // Remove event listeners if component unmounts
+    };
 
   }, [mapLoaded, styleReady, routes, airports, homeBase]);
 
