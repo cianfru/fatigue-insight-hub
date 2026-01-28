@@ -83,6 +83,7 @@ export interface AnalysisResults {
   statistics: DutyStatistics;
   duties: DutyAnalysis[];
   generatedAt: Date;
+  month: Date; // Actual month from the roster data
   // Pilot info from backend
   pilotId?: string;
   pilotName?: string;

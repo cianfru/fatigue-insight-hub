@@ -103,9 +103,15 @@ const Index = () => {
       console.log('First duty segments:', result.duties[0]?.segments);
       console.log('Sample segment times:', result.duties[0]?.segments[0]?.departure_time, result.duties[0]?.segments[0]?.arrival_time);
       
+      // Derive actual month from the first duty in the response
+      const analysisMonth = result.duties.length > 0 
+        ? parseISO(result.duties[0].date) 
+        : settings.selectedMonth;
+      
       // Convert API response to match frontend types
       setAnalysisResults({
         generatedAt: new Date(),
+        month: analysisMonth, // Store the actual month from the data
         pilotId: result.pilot_id || undefined,
         pilotName: result.pilot_name || undefined,
         pilotBase: result.pilot_base || undefined,
@@ -153,7 +159,10 @@ const Index = () => {
       toast.error('Analysis failed: ' + (error as Error).message);
       
       // Fallback to mock data for demo purposes
-      setAnalysisResults(mockAnalysisResults);
+      setAnalysisResults({
+        ...mockAnalysisResults,
+        month: settings.selectedMonth,
+      });
     } finally {
       setIsAnalyzing(false);
     }
@@ -235,17 +244,17 @@ const Index = () => {
                     <TabsTrigger value="sleepdebt">Sleep Debt Trend</TabsTrigger>
                   </TabsList>
                   <TabsContent value="performance" className="mt-4">
-                    <PerformanceTimeline duties={analysisResults.duties} month={settings.selectedMonth} />
+                    <PerformanceTimeline duties={analysisResults.duties} month={analysisResults.month} />
                   </TabsContent>
                   <TabsContent value="circadian" className="mt-4">
                     <BodyClockDriftChart 
                       duties={analysisResults.duties} 
-                      month={settings.selectedMonth} 
+                      month={analysisResults.month} 
                       homeBase={settings.homeBase}
                     />
                   </TabsContent>
                   <TabsContent value="sleepdebt" className="mt-4">
-                    <SleepDebtTrendChart duties={analysisResults.duties} month={settings.selectedMonth} />
+                    <SleepDebtTrendChart duties={analysisResults.duties} month={analysisResults.month} />
                   </TabsContent>
                 </Tabs>
 
@@ -253,7 +262,7 @@ const Index = () => {
                 <Chronogram
                   duties={analysisResults.duties}
                   statistics={analysisResults.statistics}
-                  month={settings.selectedMonth}
+                  month={analysisResults.month}
                   pilotId={settings.pilotId}
                   onDutySelect={handleDutySelect}
                   selectedDuty={selectedDuty}
