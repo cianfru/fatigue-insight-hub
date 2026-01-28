@@ -243,13 +243,49 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
     // Mark style as not ready while changing
     setStyleReady(false);
     
-    map.current.setStyle(getMapStyle(theme));
-    
-    // Re-apply fog and mark style as ready after change completes
-    map.current.once('style.load', () => {
-      map.current?.setFog(getFogSettings(theme) as any);
-      setStyleReady(true);
-    });
+    const mapInstance = map.current;
+    mapInstance.setStyle(getMapStyle(theme));
+
+    // Re-apply fog and mark style as ready after change completes.
+    // In some cases (rapid refresh / React dev Strict Mode) `style.load` can be missed,
+    // leaving `styleReady=false` and preventing route layers from being added.
+    const markReadyIfLoaded = () => {
+      if (!map.current) return;
+      if (map.current.isStyleLoaded()) {
+        map.current.setFog(getFogSettings(theme) as any);
+        setStyleReady(true);
+      }
+    };
+
+    // Try the canonical event first, but also fall back to other signals.
+    const handleStyleLoad = () => markReadyIfLoaded();
+    const handleIdle = () => markReadyIfLoaded();
+
+    mapInstance.once('style.load', handleStyleLoad);
+    mapInstance.once('idle', handleIdle);
+
+    // Final safety net: poll a few frames until the style reports loaded.
+    let raf = 0;
+    let attempts = 0;
+    const tick = () => {
+      attempts += 1;
+      if (!map.current) return;
+      if (map.current.isStyleLoaded()) {
+        markReadyIfLoaded();
+        return;
+      }
+      if (attempts < 60) {
+        raf = window.requestAnimationFrame(tick);
+      }
+    };
+    raf = window.requestAnimationFrame(tick);
+
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      // Best-effort cleanup (listeners are `once`, but can still be pending)
+      mapInstance.off('idle', handleIdle);
+      mapInstance.off('style.load', handleStyleLoad);
+    };
   }, [theme, mapLoaded]);
 
   // Add routes and airports when map is loaded and style is ready
