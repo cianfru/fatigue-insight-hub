@@ -343,5 +343,6 @@ export const mockAnalysisResults: AnalysisResults = {
     maxSleepDebt: 8.0
   },
   duties: generateMockDuties(),
-  generatedAt: new Date()
+  generatedAt: new Date(),
+  month: new Date(2026, 1, 1) // February 2026 for mock data
 };
