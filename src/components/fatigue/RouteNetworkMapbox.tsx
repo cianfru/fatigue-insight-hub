@@ -259,181 +259,195 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       console.log('[RouteNetworkMapbox] Waiting for airports to load...');
       return;
     }
-    
-    console.log('[RouteNetworkMapbox] Adding routes:', routes.length, 'airports:', airports.length);
 
-    // Remove existing layers first, then sources (order matters!)
-    const layerIds = ['airport-labels', 'airports', 'routes'];
-    const sourceIds = ['airports', 'routes'];
-    
-    layerIds.forEach(id => {
-      if (map.current?.getLayer(id)) {
-        map.current.removeLayer(id);
-      }
-    });
-    
-    sourceIds.forEach(id => {
-      if (map.current?.getSource(id)) {
-        map.current.removeSource(id);
-      }
-    });
-
-    // Create a lookup map from airports state (includes API-fetched airports)
-    const airportLookup = new Map(airports.map(a => [a.code, a]));
-
-    // Group routes by pair to calculate offsets for overlapping routes
-    const routeGroups = new Map<string, number>();
-    routes.forEach(route => {
-      // Create a normalized key (alphabetically sorted) to group A→B and B→A together
-      const sortedKey = [route.from, route.to].sort().join('-');
-      routeGroups.set(sortedKey, (routeGroups.get(sortedKey) || 0) + 1);
-    });
-
-    // Track how many routes we've drawn for each pair to calculate offset
-    const routeOffsets = new Map<string, number>();
-
-    // Add routes as lines with slight offsets for overlapping routes
-    const routeFeatures = routes.map((route, index) => {
-      const from = airportLookup.get(route.from);
-      const to = airportLookup.get(route.to);
-      if (!from || !to) return null;
-
-      const sortedKey = [route.from, route.to].sort().join('-');
-      const totalInGroup = routeGroups.get(sortedKey) || 1;
-      const currentOffset = routeOffsets.get(sortedKey) || 0;
-      routeOffsets.set(sortedKey, currentOffset + 1);
-
-      // Calculate perpendicular offset for overlapping routes
-      // Offset increases with each route in the same pair
-      const offsetAmount = totalInGroup > 1 ? (currentOffset - (totalInGroup - 1) / 2) * 0.3 : 0;
+    // Helper function to add layers
+    const addLayersToMap = () => {
+      if (!map.current) return;
       
-      // Calculate perpendicular direction
-      const dx = to.lng - from.lng;
-      const dy = to.lat - from.lat;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      const perpX = length > 0 ? -dy / length * offsetAmount : 0;
-      const perpY = length > 0 ? dx / length * offsetAmount : 0;
+      console.log('[RouteNetworkMapbox] Adding routes:', routes.length, 'airports:', airports.length);
 
-      return {
+      // Remove existing layers first, then sources (order matters!)
+      const layerIds = ['airport-labels', 'airports', 'routes'];
+      const sourceIds = ['airports', 'routes'];
+      
+      layerIds.forEach(id => {
+        if (map.current?.getLayer(id)) {
+          map.current.removeLayer(id);
+        }
+      });
+      
+      sourceIds.forEach(id => {
+        if (map.current?.getSource(id)) {
+          map.current.removeSource(id);
+        }
+      });
+
+      // Create a lookup map from airports state (includes API-fetched airports)
+      const airportLookup = new Map(airports.map(a => [a.code, a]));
+
+      // Group routes by pair to calculate offsets for overlapping routes
+      const routeGroups = new Map<string, number>();
+      routes.forEach(route => {
+        // Create a normalized key (alphabetically sorted) to group A→B and B→A together
+        const sortedKey = [route.from, route.to].sort().join('-');
+        routeGroups.set(sortedKey, (routeGroups.get(sortedKey) || 0) + 1);
+      });
+
+      // Track how many routes we've drawn for each pair to calculate offset
+      const routeOffsets = new Map<string, number>();
+
+      // Add routes as lines with slight offsets for overlapping routes
+      const routeFeatures = routes.map((route, index) => {
+        const from = airportLookup.get(route.from);
+        const to = airportLookup.get(route.to);
+        if (!from || !to) return null;
+
+        const sortedKey = [route.from, route.to].sort().join('-');
+        const totalInGroup = routeGroups.get(sortedKey) || 1;
+        const currentOffset = routeOffsets.get(sortedKey) || 0;
+        routeOffsets.set(sortedKey, currentOffset + 1);
+
+        // Calculate perpendicular offset for overlapping routes
+        // Offset increases with each route in the same pair
+        const offsetAmount = totalInGroup > 1 ? (currentOffset - (totalInGroup - 1) / 2) * 0.3 : 0;
+        
+        // Calculate perpendicular direction
+        const dx = to.lng - from.lng;
+        const dy = to.lat - from.lat;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const perpX = length > 0 ? -dy / length * offsetAmount : 0;
+        const perpY = length > 0 ? dx / length * offsetAmount : 0;
+
+        return {
+          type: 'Feature' as const,
+          properties: {
+            color: getRouteColor(route.avgPerformance),
+            width: 3,
+            from: route.from,
+            to: route.to,
+            performance: route.avgPerformance,
+            count: route.count,
+            routeIndex: index,
+          },
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: [
+              [from.lng + perpX, from.lat + perpY], 
+              [to.lng + perpX, to.lat + perpY]
+            ],
+          },
+        };
+      }).filter(Boolean);
+
+      console.log('[RouteNetworkMapbox] Route features created:', routeFeatures.length);
+
+      map.current.addSource('routes', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: routeFeatures as any,
+        },
+      });
+
+      map.current.addLayer({
+        id: 'routes',
+        type: 'line',
+        source: 'routes',
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 3,
+          'line-opacity': 0.85,
+        },
+      });
+
+      // Add airports as circles
+      const airportFeatures = airports.map(airport => ({
         type: 'Feature' as const,
         properties: {
-          color: getRouteColor(route.avgPerformance),
-          width: 2,
-          from: route.from,
-          to: route.to,
-          performance: route.avgPerformance,
-          count: route.count,
-          routeIndex: index,
+          code: airport.code,
+          city: airport.city,
+          country: airport.country,
+          isHomeBase: airport.code === homeBase,
         },
         geometry: {
-          type: 'LineString' as const,
-          coordinates: [
-            [from.lng + perpX, from.lat + perpY], 
-            [to.lng + perpX, to.lat + perpY]
-          ],
+          type: 'Point' as const,
+          coordinates: [airport.lng, airport.lat],
         },
-      };
-    }).filter(Boolean);
+      }));
 
-    console.log('[RouteNetworkMapbox] Route features created:', routeFeatures.length);
+      map.current.addSource('airports', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: airportFeatures,
+        },
+      });
 
-    map.current.addSource('routes', {
-      type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: routeFeatures as any,
-      },
-    });
+      map.current.addLayer({
+        id: 'airports',
+        type: 'circle',
+        source: 'airports',
+        paint: {
+          'circle-radius': ['case', ['get', 'isHomeBase'], 8, 5],
+          'circle-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 90%, 60%)', 'hsl(0, 0%, 90%)'],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': 'hsl(220, 30%, 10%)',
+        },
+      });
 
-    map.current.addLayer({
-      id: 'routes',
-      type: 'line',
-      source: 'routes',
-      paint: {
-        'line-color': ['get', 'color'],
-        'line-width': 3,
-        'line-opacity': 0.85,
-      },
-    });
+      // Add airport labels
+      map.current.addLayer({
+        id: 'airport-labels',
+        type: 'symbol',
+        source: 'airports',
+        layout: {
+          'text-field': ['get', 'code'],
+          'text-size': ['case', ['get', 'isHomeBase'], 12, 10],
+          'text-offset': [0, -1.2],
+          'text-anchor': 'bottom',
+        },
+        paint: {
+          'text-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 90%, 60%)', 'hsl(0, 0%, 80%)'],
+          'text-halo-color': 'hsl(220, 30%, 10%)',
+          'text-halo-width': 1,
+        },
+      });
 
-    // Add airports as circles
-    const airportFeatures = airports.map(airport => ({
-      type: 'Feature' as const,
-      properties: {
-        code: airport.code,
-        city: airport.city,
-        country: airport.country,
-        isHomeBase: airport.code === homeBase,
-      },
-      geometry: {
-        type: 'Point' as const,
-        coordinates: [airport.lng, airport.lat],
-      },
-    }));
+      // Hover interactions
+      map.current.on('mouseenter', 'airports', (e) => {
+        if (e.features?.[0]?.properties?.code) {
+          setHoveredAirport(e.features[0].properties.code);
+          map.current!.getCanvas().style.cursor = 'pointer';
+        }
+      });
 
-    map.current.addSource('airports', {
-      type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: airportFeatures,
-      },
-    });
+      map.current.on('mouseleave', 'airports', () => {
+        setHoveredAirport(null);
+        map.current!.getCanvas().style.cursor = '';
+      });
 
-    map.current.addLayer({
-      id: 'airports',
-      type: 'circle',
-      source: 'airports',
-      paint: {
-        'circle-radius': ['case', ['get', 'isHomeBase'], 8, 5],
-        'circle-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 90%, 60%)', 'hsl(0, 0%, 90%)'],
-        'circle-stroke-width': 2,
-        'circle-stroke-color': 'hsl(220, 30%, 10%)',
-      },
-    });
+      map.current.on('mouseenter', 'routes', (e) => {
+        if (e.features?.[0]?.properties) {
+          const { from, to } = e.features[0].properties;
+          setHoveredRoute(`${from}-${to}`);
+          map.current!.getCanvas().style.cursor = 'pointer';
+        }
+      });
 
-    // Add airport labels
-    map.current.addLayer({
-      id: 'airport-labels',
-      type: 'symbol',
-      source: 'airports',
-      layout: {
-        'text-field': ['get', 'code'],
-        'text-size': ['case', ['get', 'isHomeBase'], 12, 10],
-        'text-offset': [0, -1.2],
-        'text-anchor': 'bottom',
-      },
-      paint: {
-        'text-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 90%, 60%)', 'hsl(0, 0%, 80%)'],
-        'text-halo-color': 'hsl(220, 30%, 10%)',
-        'text-halo-width': 1,
-      },
-    });
+      map.current.on('mouseleave', 'routes', () => {
+        setHoveredRoute(null);
+        map.current!.getCanvas().style.cursor = '';
+      });
+    };
 
-    // Hover interactions
-    map.current.on('mouseenter', 'airports', (e) => {
-      if (e.features?.[0]?.properties?.code) {
-        setHoveredAirport(e.features[0].properties.code);
-        map.current!.getCanvas().style.cursor = 'pointer';
-      }
-    });
-
-    map.current.on('mouseleave', 'airports', () => {
-      setHoveredAirport(null);
-      map.current!.getCanvas().style.cursor = '';
-    });
-
-    map.current.on('mouseenter', 'routes', (e) => {
-      if (e.features?.[0]?.properties) {
-        const { from, to } = e.features[0].properties;
-        setHoveredRoute(`${from}-${to}`);
-        map.current!.getCanvas().style.cursor = 'pointer';
-      }
-    });
-
-    map.current.on('mouseleave', 'routes', () => {
-      setHoveredRoute(null);
-      map.current!.getCanvas().style.cursor = '';
-    });
+    // Check if style is actually loaded before adding layers
+    if (map.current.isStyleLoaded()) {
+      addLayersToMap();
+    } else {
+      // Wait for style to finish loading
+      console.log('[RouteNetworkMapbox] Style not ready, waiting...');
+      map.current.once('style.load', addLayersToMap);
+    }
 
   }, [mapLoaded, styleReady, routes, airports, homeBase]);
 
