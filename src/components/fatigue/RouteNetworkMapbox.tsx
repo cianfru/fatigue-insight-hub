@@ -56,30 +56,54 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
   const [airports, setAirports] = useState<AirportData[]>([]);
   const [missingAirports, setMissingAirports] = useState<string[]>([]);
 
-  // Extract unique routes with performance data
+  // Extract all routes with performance data - keep directions separate (DOH-FCO vs FCO-DOH)
+  // Each flight instance is tracked separately to show varying risk levels
   const routes = useMemo(() => {
-    const routeMap = new Map<string, RouteData>();
+    const routeList: RouteData[] = [];
     
     duties.forEach((duty) => {
       duty.flightSegments.forEach((segment) => {
-        const key = `${segment.departure}-${segment.arrival}`;
-        const existing = routeMap.get(key);
-        if (existing) {
-          existing.count++;
-          existing.avgPerformance = (existing.avgPerformance + segment.performance) / 2;
-        } else {
-          routeMap.set(key, { 
-            from: segment.departure, 
-            to: segment.arrival, 
-            count: 1,
-            avgPerformance: segment.performance
-          });
-        }
+        routeList.push({ 
+          from: segment.departure, 
+          to: segment.arrival, 
+          count: 1,
+          avgPerformance: segment.performance
+        });
       });
     });
 
-    return Array.from(routeMap.values());
+    return routeList;
   }, [duties]);
+
+  // Aggregate routes for the frequency table (grouped by route pair)
+  const aggregatedRoutes = useMemo(() => {
+    const routeMap = new Map<string, { from: string; to: string; count: number; performances: number[] }>();
+    
+    routes.forEach((route) => {
+      const key = `${route.from}-${route.to}`;
+      const existing = routeMap.get(key);
+      if (existing) {
+        existing.count++;
+        existing.performances.push(route.avgPerformance);
+      } else {
+        routeMap.set(key, { 
+          from: route.from, 
+          to: route.to, 
+          count: 1,
+          performances: [route.avgPerformance]
+        });
+      }
+    });
+
+    return Array.from(routeMap.values()).map(r => ({
+      from: r.from,
+      to: r.to,
+      count: r.count,
+      avgPerformance: r.performances.reduce((a, b) => a + b, 0) / r.performances.length,
+      minPerformance: Math.min(...r.performances),
+      maxPerformance: Math.max(...r.performances),
+    })).sort((a, b) => a.minPerformance - b.minPerformance);
+  }, [routes]);
 
   // Get all unique airport codes
   const allAirportCodes = useMemo(() => {
@@ -251,25 +275,56 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
     // Create a lookup map from airports state (includes API-fetched airports)
     const airportLookup = new Map(airports.map(a => [a.code, a]));
 
-    // Add routes as lines
-    const routeFeatures = routes.map(route => {
+    // Group routes by pair to calculate offsets for overlapping routes
+    const routeGroups = new Map<string, number>();
+    routes.forEach(route => {
+      // Create a normalized key (alphabetically sorted) to group A→B and B→A together
+      const sortedKey = [route.from, route.to].sort().join('-');
+      routeGroups.set(sortedKey, (routeGroups.get(sortedKey) || 0) + 1);
+    });
+
+    // Track how many routes we've drawn for each pair to calculate offset
+    const routeOffsets = new Map<string, number>();
+
+    // Add routes as lines with slight offsets for overlapping routes
+    const routeFeatures = routes.map((route, index) => {
       const from = airportLookup.get(route.from);
       const to = airportLookup.get(route.to);
       if (!from || !to) return null;
+
+      const sortedKey = [route.from, route.to].sort().join('-');
+      const totalInGroup = routeGroups.get(sortedKey) || 1;
+      const currentOffset = routeOffsets.get(sortedKey) || 0;
+      routeOffsets.set(sortedKey, currentOffset + 1);
+
+      // Calculate perpendicular offset for overlapping routes
+      // Offset increases with each route in the same pair
+      const offsetAmount = totalInGroup > 1 ? (currentOffset - (totalInGroup - 1) / 2) * 0.3 : 0;
+      
+      // Calculate perpendicular direction
+      const dx = to.lng - from.lng;
+      const dy = to.lat - from.lat;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      const perpX = length > 0 ? -dy / length * offsetAmount : 0;
+      const perpY = length > 0 ? dx / length * offsetAmount : 0;
 
       return {
         type: 'Feature' as const,
         properties: {
           color: getRouteColor(route.avgPerformance),
-          width: Math.min(route.count + 1, 4),
+          width: 2,
           from: route.from,
           to: route.to,
           performance: route.avgPerformance,
           count: route.count,
+          routeIndex: index,
         },
         geometry: {
           type: 'LineString' as const,
-          coordinates: [[from.lng, from.lat], [to.lng, to.lat]],
+          coordinates: [
+            [from.lng + perpX, from.lat + perpY], 
+            [to.lng + perpX, to.lat + perpY]
+          ],
         },
       };
     }).filter(Boolean);
@@ -538,7 +593,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {routes.map((route, index) => (
+              {aggregatedRoutes.map((route, index) => (
                 <div
                   key={index}
                   className="flex items-center justify-between rounded-lg bg-secondary/50 p-2 text-sm transition-colors hover:bg-secondary/70"
@@ -548,7 +603,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
                   <div className="flex items-center gap-2">
                     <span 
                       className="h-2 w-2 rounded-full" 
-                      style={{ backgroundColor: getRouteColor(route.avgPerformance) }}
+                      style={{ backgroundColor: getRouteColor(route.minPerformance) }}
                     />
                     <span className="font-mono">
                       {route.from} → {route.to}
@@ -556,7 +611,9 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>×{route.count}</span>
-                    <span className="text-[10px]">({route.avgPerformance.toFixed(0)}%)</span>
+                    <span className="text-[10px]">
+                      ({route.minPerformance.toFixed(0)}-{route.maxPerformance.toFixed(0)}%)
+                    </span>
                   </div>
                 </div>
               ))}
@@ -564,7 +621,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
 
             <div className="mt-4 text-center text-xs text-muted-foreground">
               <MapPin className="mr-1 inline-block h-3 w-3" />
-              {airports.length} airports • {routes.length} unique routes • Home base: {homeBase}
+              {airports.length} airports • {routes.length} flight segments • {aggregatedRoutes.length} routes • Home base: {homeBase}
             </div>
           </div>
         </div>
