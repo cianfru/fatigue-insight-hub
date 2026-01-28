@@ -255,6 +255,12 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
   // Add routes and airports when map is loaded and style is ready
   useEffect(() => {
     if (!map.current || !mapLoaded || !styleReady) return;
+    if (airports.length === 0) {
+      console.log('[RouteNetworkMapbox] Waiting for airports to load...');
+      return;
+    }
+    
+    console.log('[RouteNetworkMapbox] Adding routes:', routes.length, 'airports:', airports.length);
 
     // Remove existing layers first, then sources (order matters!)
     const layerIds = ['airport-labels', 'airports', 'routes'];
@@ -329,6 +335,8 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       };
     }).filter(Boolean);
 
+    console.log('[RouteNetworkMapbox] Route features created:', routeFeatures.length);
+
     map.current.addSource('routes', {
       type: 'geojson',
       data: {
@@ -343,8 +351,8 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       source: 'routes',
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': ['get', 'width'],
-        'line-opacity': 0.7,
+        'line-width': 3,
+        'line-opacity': 0.85,
       },
     });
 
