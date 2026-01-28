@@ -293,38 +293,14 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       // Create a lookup map from airports state (includes API-fetched airports)
       const airportLookup = new Map(airports.map(a => [a.code, a]));
 
-      // Group routes by pair to calculate offsets for overlapping routes
-      const routeGroups = new Map<string, number>();
-      routes.forEach(route => {
-        // Create a normalized key (alphabetically sorted) to group A→B and B→A together
-        const sortedKey = [route.from, route.to].sort().join('-');
-        routeGroups.set(sortedKey, (routeGroups.get(sortedKey) || 0) + 1);
-      });
+      // Sort routes by performance (best first) so worst performance renders on top
+      const sortedRoutes = [...routes].sort((a, b) => b.avgPerformance - a.avgPerformance);
 
-      // Track how many routes we've drawn for each pair to calculate offset
-      const routeOffsets = new Map<string, number>();
-
-      // Add routes as lines with slight offsets for overlapping routes
-      const routeFeatures = routes.map((route, index) => {
+      // Add routes as lines - all on the same path, sorted so worst (red) renders on top
+      const routeFeatures = sortedRoutes.map((route, index) => {
         const from = airportLookup.get(route.from);
         const to = airportLookup.get(route.to);
         if (!from || !to) return null;
-
-        const sortedKey = [route.from, route.to].sort().join('-');
-        const totalInGroup = routeGroups.get(sortedKey) || 1;
-        const currentOffset = routeOffsets.get(sortedKey) || 0;
-        routeOffsets.set(sortedKey, currentOffset + 1);
-
-        // Calculate perpendicular offset for overlapping routes
-        // Offset increases with each route in the same pair
-        const offsetAmount = totalInGroup > 1 ? (currentOffset - (totalInGroup - 1) / 2) * 0.3 : 0;
-        
-        // Calculate perpendicular direction
-        const dx = to.lng - from.lng;
-        const dy = to.lat - from.lat;
-        const length = Math.sqrt(dx * dx + dy * dy);
-        const perpX = length > 0 ? -dy / length * offsetAmount : 0;
-        const perpY = length > 0 ? dx / length * offsetAmount : 0;
 
         return {
           type: 'Feature' as const,
@@ -339,10 +315,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
           },
           geometry: {
             type: 'LineString' as const,
-            coordinates: [
-              [from.lng + perpX, from.lat + perpY], 
-              [to.lng + perpX, to.lat + perpY]
-            ],
+            coordinates: [[from.lng, from.lat], [to.lng, to.lat]],
           },
         };
       }).filter(Boolean);
