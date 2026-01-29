@@ -17,7 +17,19 @@ export interface DutySegment {
   block_hours: number;
 }
 
-// Strategic sleep estimator output
+// Sleep block from strategic sleep estimator
+export interface SleepBlockResponse {
+  sleep_start_time: string;
+  sleep_end_time: string;
+  sleep_start_iso: string;
+  sleep_end_iso: string;
+  sleep_type: 'main' | 'nap';
+  duration_hours: number;
+  effective_hours: number;
+  quality_factor: number;
+}
+
+// Strategic sleep estimator output (SleepQualityResponse from backend)
 export interface SleepEstimate {
   total_sleep_hours: number;
   effective_sleep_hours: number;
@@ -36,12 +48,14 @@ export interface SleepEstimate {
     | 'afternoon_nap';
   confidence: number;
   warnings: string[];
-  // Sleep timing (HH:mm in home base timezone)
-  sleep_start_time?: string;
-  sleep_end_time?: string;
-  // ISO timestamps for precise date/time positioning
-  sleep_start_iso?: string;
-  sleep_end_iso?: string;
+  // Sleep blocks array (detailed sleep periods)
+  sleep_blocks?: SleepBlockResponse[];
+  // Sleep timing (HH:mm in home base timezone) - optional top-level convenience fields
+  sleep_start_time?: string | null;
+  sleep_end_time?: string | null;
+  // ISO timestamps for precise date/time positioning - optional top-level convenience fields
+  sleep_start_iso?: string | null;
+  sleep_end_iso?: string | null;
 }
 
 export interface Duty {
