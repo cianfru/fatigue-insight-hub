@@ -87,6 +87,9 @@ export interface DutyAnalysis {
     sleepStrategy: 'anchor' | 'split' | 'nap' | 'extended' | 'restricted' | 'recovery' | 'normal';
     confidence: number;
     warnings: string[];
+    // Sleep timing (HH:mm in home base timezone)
+    sleepStartTime?: string;
+    sleepEndTime?: string;
   };
 }
 

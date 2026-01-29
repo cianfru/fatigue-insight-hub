@@ -282,16 +282,16 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     return bars;
   }, [duties, daysInMonth]);
 
-  // Calculate sleep/rest period bars showing recovery
+  // Calculate sleep/rest period bars showing recovery using backend timing
   const sleepBars = useMemo(() => {
     const bars: SleepBar[] = [];
     
-    // Standard sleep window (can span midnight)
-    const SLEEP_START = 23; // 23:00
-    const SLEEP_END = 7;    // 07:00
+    // Helper to parse HH:mm to decimal hours
+    const parseTime = (timeStr: string): number => {
+      const [h, m] = timeStr.split(':').map(Number);
+      return h + (m || 0) / 60;
+    };
     
-    // Visualize the standard night window exactly as requested: 23:00–07:00.
-    // We anchor it to each duty day because that's where we already have `sleepEstimate`.
     duties.forEach((duty) => {
       const dayOfMonth = duty.date.getDate();
       const sleepEstimate = duty.sleepEstimate;
@@ -299,34 +299,114 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       if (!sleepEstimate) return;
 
       const recoveryScore = getRecoveryScore(sleepEstimate);
-
-      // 23:00–24:00 on previous day
-      if (dayOfMonth > 1) {
-        bars.push({
-          dayIndex: dayOfMonth - 1,
-          startHour: SLEEP_START,
-          endHour: 24,
-          recoveryScore,
-          effectiveSleep: sleepEstimate.effectiveSleepHours,
-          sleepEfficiency: sleepEstimate.sleepEfficiency,
-          sleepStrategy: sleepEstimate.sleepStrategy,
-          isPreDuty: true,
-          relatedDuty: duty,
-        });
+      
+      // Use backend-provided sleep times if available
+      const sleepStart = sleepEstimate.sleepStartTime ? parseTime(sleepEstimate.sleepStartTime) : null;
+      const sleepEnd = sleepEstimate.sleepEndTime ? parseTime(sleepEstimate.sleepEndTime) : null;
+      
+      if (sleepStart !== null && sleepEnd !== null) {
+        // Backend provides actual sleep timing
+        if (sleepStart > sleepEnd) {
+          // Overnight sleep: spans midnight (e.g., 23:00 to 06:00)
+          // Part 1: sleepStart to 24:00 on previous day
+          if (dayOfMonth > 1) {
+            bars.push({
+              dayIndex: dayOfMonth - 1,
+              startHour: sleepStart,
+              endHour: 24,
+              recoveryScore,
+              effectiveSleep: sleepEstimate.effectiveSleepHours,
+              sleepEfficiency: sleepEstimate.sleepEfficiency,
+              sleepStrategy: sleepEstimate.sleepStrategy,
+              isPreDuty: true,
+              relatedDuty: duty,
+            });
+          }
+          // Part 2: 00:00 to sleepEnd on duty day
+          bars.push({
+            dayIndex: dayOfMonth,
+            startHour: 0,
+            endHour: sleepEnd,
+            recoveryScore,
+            effectiveSleep: sleepEstimate.effectiveSleepHours,
+            sleepEfficiency: sleepEstimate.sleepEfficiency,
+            sleepStrategy: sleepEstimate.sleepStrategy,
+            isPreDuty: true,
+            relatedDuty: duty,
+          });
+        } else {
+          // Same-day sleep (e.g., afternoon nap 14:00 to 16:00)
+          bars.push({
+            dayIndex: dayOfMonth,
+            startHour: sleepStart,
+            endHour: sleepEnd,
+            recoveryScore,
+            effectiveSleep: sleepEstimate.effectiveSleepHours,
+            sleepEfficiency: sleepEstimate.sleepEfficiency,
+            sleepStrategy: sleepEstimate.sleepStrategy,
+            isPreDuty: true,
+            relatedDuty: duty,
+          });
+        }
+      } else {
+        // Fallback: estimate sleep window from total hours if no timing provided
+        // Place sleep ending ~1.5h before duty start
+        if (duty.flightSegments.length > 0) {
+          const firstSeg = duty.flightSegments[0];
+          const [depH, depM] = firstSeg.departureTime.split(':').map(Number);
+          const dutyStart = depH + depM / 60;
+          const sleepDuration = sleepEstimate.totalSleepHours;
+          
+          // Estimate wake time as 1.5h before duty
+          const wakeTime = Math.max(0, dutyStart - 1.5);
+          // Estimate sleep start based on duration
+          let estimatedSleepStart = wakeTime - sleepDuration;
+          
+          if (estimatedSleepStart < 0) {
+            // Sleep started previous day
+            estimatedSleepStart += 24;
+            if (dayOfMonth > 1) {
+              bars.push({
+                dayIndex: dayOfMonth - 1,
+                startHour: estimatedSleepStart,
+                endHour: 24,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+              });
+            }
+            if (wakeTime > 0) {
+              bars.push({
+                dayIndex: dayOfMonth,
+                startHour: 0,
+                endHour: wakeTime,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+              });
+            }
+          } else {
+            // Same-day sleep
+            bars.push({
+              dayIndex: dayOfMonth,
+              startHour: estimatedSleepStart,
+              endHour: wakeTime,
+              recoveryScore,
+              effectiveSleep: sleepEstimate.effectiveSleepHours,
+              sleepEfficiency: sleepEstimate.sleepEfficiency,
+              sleepStrategy: sleepEstimate.sleepStrategy,
+              isPreDuty: true,
+              relatedDuty: duty,
+            });
+          }
+        }
       }
-
-      // 00:00–07:00 on duty day
-      bars.push({
-        dayIndex: dayOfMonth,
-        startHour: 0,
-        endHour: SLEEP_END,
-        recoveryScore,
-        effectiveSleep: sleepEstimate.effectiveSleepHours,
-        sleepEfficiency: sleepEstimate.sleepEfficiency,
-        sleepStrategy: sleepEstimate.sleepStrategy,
-        isPreDuty: true,
-        relatedDuty: duty,
-      });
     });
     
     return bars;
