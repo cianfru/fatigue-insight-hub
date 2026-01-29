@@ -108,15 +108,48 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
     return bars;
   }, [duties, daysInMonth]);
 
-  // Check for WOCL exposure and FLIP violations
+  // Check for WOCL exposure, FLIP violations, and sleep recovery
   const getDayWarnings = (dayOfMonth: number) => {
     const duty = duties.find(d => d.date.getDate() === dayOfMonth);
-    if (!duty) return { wocl: false, flip: null };
+    if (!duty) return { wocl: false, flip: null, sleepRecovery: null };
+    
+    // Calculate recovery score from strategic sleep estimator
+    const sleepEstimate = duty.sleepEstimate;
+    let recoveryScore: number | null = null;
+    if (sleepEstimate) {
+      const baseScore = (sleepEstimate.effectiveSleepHours / 8) * 100;
+      const efficiencyBonus = sleepEstimate.sleepEfficiency * 20;
+      const woclPenalty = sleepEstimate.woclOverlapHours * 5;
+      recoveryScore = Math.min(100, Math.max(0, baseScore + efficiencyBonus - woclPenalty));
+    }
     
     return {
       wocl: duty.woclExposure > 2,
       flip: duty.priorSleep < 20 ? Math.round(duty.priorSleep) : null,
+      sleepRecovery: recoveryScore,
+      sleepStrategy: sleepEstimate?.sleepStrategy,
+      effectiveSleep: sleepEstimate?.effectiveSleepHours,
     };
+  };
+  
+  const getRecoveryColor = (score: number): string => {
+    if (score >= 80) return 'text-success';
+    if (score >= 65) return 'text-success/80';
+    if (score >= 50) return 'text-warning';
+    if (score >= 35) return 'text-high';
+    return 'text-critical';
+  };
+  
+  const getStrategyIcon = (strategy: string) => {
+    switch (strategy) {
+      case 'anchor': return '⚓';
+      case 'split': return '✂️';
+      case 'nap': return '💤';
+      case 'extended': return '🛏️';
+      case 'restricted': return '⏰';
+      case 'recovery': return '🔋';
+      default: return '😴';
+    }
   };
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
@@ -151,11 +184,17 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
                     key={index}
                     className="relative flex h-7 items-center justify-end gap-1 pr-2 text-xs"
                   >
+                    {warnings.sleepRecovery !== null && (
+                      <span className={cn("text-[10px] font-medium", getRecoveryColor(warnings.sleepRecovery))}>
+                        {warnings.sleepStrategy && getStrategyIcon(warnings.sleepStrategy)}
+                        {Math.round(warnings.sleepRecovery)}%
+                      </span>
+                    )}
                     {warnings.wocl && (
-                      <span className="text-[10px] text-warning">⚠ 3× WOCL</span>
+                      <span className="text-[10px] text-warning">⚠ WOCL</span>
                     )}
                     {warnings.flip && (
-                      <span className="text-[10px] text-critical">⚠ FLIP {warnings.flip}h</span>
+                      <span className="text-[10px] text-critical">⚠ {warnings.flip}h</span>
                     )}
                     <span className="font-medium text-foreground">
                       {format(day, 'EEE d')}
@@ -212,18 +251,25 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
                     {/* Duty bars for this day with gradient showing performance decay */}
                     {dutyBars
                       .filter((bar) => bar.dayIndex === dayIndex + 1)
-                      .map((bar, barIndex) => (
-                        <div
-                          key={barIndex}
-                          className="absolute top-1 bottom-1 rounded-sm transition-all hover:ring-2 hover:ring-foreground/50 cursor-pointer"
-                          style={{
-                            left: `${(bar.startHour / 24) * 100}%`,
-                            width: `${((bar.endHour - bar.startHour) / 24) * 100}%`,
-                            background: `linear-gradient(to right, ${getPerformanceColor(bar.startPerformance)}, ${getPerformanceColor(bar.endPerformance)})`,
-                          }}
-                          title={`${format(bar.duty.date, 'MMM d')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ')} - Start: ${bar.startPerformance.toFixed(0)}% → End: ${bar.endPerformance.toFixed(0)}%`}
-                        />
-                      ))}
+                      .map((bar, barIndex) => {
+                        const sleepEstimate = bar.duty.sleepEstimate;
+                        const sleepInfo = sleepEstimate 
+                          ? ` | Sleep: ${sleepEstimate.effectiveSleepHours.toFixed(1)}h (${(sleepEstimate.sleepEfficiency * 100).toFixed(0)}% eff) ${getStrategyIcon(sleepEstimate.sleepStrategy)}`
+                          : '';
+                        
+                        return (
+                          <div
+                            key={barIndex}
+                            className="absolute top-1 bottom-1 rounded-sm transition-all hover:ring-2 hover:ring-foreground/50 cursor-pointer"
+                            style={{
+                              left: `${(bar.startHour / 24) * 100}%`,
+                              width: `${((bar.endHour - bar.startHour) / 24) * 100}%`,
+                              background: `linear-gradient(to right, ${getPerformanceColor(bar.startPerformance)}, ${getPerformanceColor(bar.endPerformance)})`,
+                            }}
+                            title={`${format(bar.duty.date, 'MMM d')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ')} - Start: ${bar.startPerformance.toFixed(0)}% → End: ${bar.endPerformance.toFixed(0)}%${sleepInfo}`}
+                          />
+                        );
+                      })}
                   </div>
                 ))}
               </div>
