@@ -148,6 +148,8 @@ const Index = () => {
             sleepStrategy: duty.sleep_estimate.sleep_strategy,
             confidence: duty.sleep_estimate.confidence,
             warnings: duty.sleep_estimate.warnings,
+            sleepStartTime: duty.sleep_estimate.sleep_start_time,
+            sleepEndTime: duty.sleep_estimate.sleep_end_time,
           } : undefined,
           flightSegments: duty.segments.map(seg => ({
             flightNumber: seg.flight_number,

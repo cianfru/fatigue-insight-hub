@@ -26,6 +26,9 @@ export interface SleepEstimate {
   sleep_strategy: 'anchor' | 'split' | 'nap' | 'extended' | 'restricted' | 'recovery' | 'normal';
   confidence: number;
   warnings: string[];
+  // Sleep timing (HH:mm in home base timezone)
+  sleep_start_time?: string;
+  sleep_end_time?: string;
 }
 
 export interface Duty {
