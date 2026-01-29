@@ -121,6 +121,25 @@ const Index = () => {
           criticalRiskDuties: result.critical_risk_duties,
           maxSleepDebt: result.max_sleep_debt,
         },
+        // Transform rest_days_sleep array
+        restDaysSleep: result.rest_days_sleep?.map(restDay => ({
+          date: parseISO(restDay.date),
+          sleepBlocks: restDay.sleep_blocks.map(block => ({
+            sleepStartTime: block.sleep_start_time,
+            sleepEndTime: block.sleep_end_time,
+            sleepStartIso: block.sleep_start_iso,
+            sleepEndIso: block.sleep_end_iso,
+            sleepType: block.sleep_type,
+            durationHours: block.duration_hours,
+            effectiveHours: block.effective_hours,
+            qualityFactor: block.quality_factor,
+          })),
+          totalSleepHours: restDay.total_sleep_hours,
+          effectiveSleepHours: restDay.effective_sleep_hours,
+          sleepEfficiency: restDay.sleep_efficiency,
+          strategyType: restDay.strategy_type,
+          confidence: restDay.confidence,
+        })),
         duties: result.duties.map(duty => ({
           date: parseISO(duty.date),
           dayOfWeek: format(parseISO(duty.date), 'EEE'),
@@ -284,6 +303,7 @@ const Index = () => {
                   pilotId={settings.pilotId}
                   onDutySelect={handleDutySelect}
                   selectedDuty={selectedDuty}
+                  restDaysSleep={analysisResults.restDaysSleep}
                 />
 
                 {/* Section 6: Export Options */}

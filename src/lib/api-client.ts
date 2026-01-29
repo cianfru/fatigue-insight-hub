@@ -74,6 +74,29 @@ export interface Duty {
   used_discretion?: boolean;
 }
 
+// Rest day sleep block from backend
+export interface RestDaySleepBlock {
+  sleep_start_time: string;
+  sleep_end_time: string;
+  sleep_start_iso: string;
+  sleep_end_iso: string;
+  sleep_type: 'main' | 'nap';
+  duration_hours: number;
+  effective_hours: number;
+  quality_factor: number;
+}
+
+// Rest day sleep entry from backend
+export interface RestDaySleep {
+  date: string;
+  sleep_blocks: RestDaySleepBlock[];
+  total_sleep_hours: number;
+  effective_sleep_hours: number;
+  sleep_efficiency: number;
+  strategy_type: 'recovery' | 'normal';
+  confidence: number;
+}
+
 export interface AnalysisResult {
   analysis_id: string;
   roster_id: string;
@@ -99,6 +122,7 @@ export interface AnalysisResult {
   worst_performance: number;
   
   duties: Duty[];
+  rest_days_sleep?: RestDaySleep[];
 }
 
 export interface Statistics {
