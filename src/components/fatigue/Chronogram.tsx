@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Info, AlertTriangle } from 'lucide-react';
+import { Info, AlertTriangle, Battery } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,22 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { DutyAnalysis, DutyStatistics } from '@/types/fatigue';
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+
+// Helper to calculate recovery score from sleep estimate
+const getRecoveryScore = (estimate: NonNullable<DutyAnalysis['sleepEstimate']>): number => {
+  const baseScore = (estimate.effectiveSleepHours / 8) * 100;
+  const efficiencyBonus = estimate.sleepEfficiency * 20;
+  const woclPenalty = estimate.woclOverlapHours * 5;
+  return Math.min(100, Math.max(0, baseScore + efficiencyBonus - woclPenalty));
+};
+
+const getRecoveryColor = (score: number): string => {
+  if (score >= 80) return 'hsl(120, 70%, 45%)';
+  if (score >= 65) return 'hsl(90, 70%, 50%)';
+  if (score >= 50) return 'hsl(55, 90%, 55%)';
+  if (score >= 35) return 'hsl(25, 95%, 50%)';
+  return 'hsl(0, 80%, 50%)';
+};
 
 interface ChronogramProps {
   duties: DutyAnalysis[];
@@ -666,6 +682,38 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           bar.duty.overallRisk === 'CRITICAL' && "text-critical"
                                         )}>{bar.duty.overallRisk}</span>
                                       </div>
+                                      
+                                      {/* Sleep Recovery Section */}
+                                      {bar.duty.sleepEstimate && (
+                                        <div className="border-t border-border pt-2 mt-2">
+                                          <span className="text-muted-foreground font-medium flex items-center gap-1">
+                                            <Battery className="h-3 w-3" />
+                                            Sleep Recovery
+                                          </span>
+                                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                                            <span className="text-muted-foreground">Recovery Score:</span>
+                                            <span 
+                                              className="font-medium"
+                                              style={{ color: getRecoveryColor(getRecoveryScore(bar.duty.sleepEstimate)) }}
+                                            >
+                                              {Math.round(getRecoveryScore(bar.duty.sleepEstimate))}%
+                                            </span>
+                                            <span className="text-muted-foreground">Effective Sleep:</span>
+                                            <span>{bar.duty.sleepEstimate.effectiveSleepHours.toFixed(1)}h</span>
+                                            <span className="text-muted-foreground">Efficiency:</span>
+                                            <span>{Math.round(bar.duty.sleepEstimate.sleepEfficiency * 100)}%</span>
+                                            <span className="text-muted-foreground">Strategy:</span>
+                                            <span className="capitalize">{bar.duty.sleepEstimate.sleepStrategy}</span>
+                                            {bar.duty.sleepEstimate.warnings.length > 0 && (
+                                              <>
+                                                <span className="text-muted-foreground col-span-2 text-warning text-[10px] mt-1">
+                                                  ⚠️ {bar.duty.sleepEstimate.warnings[0]}
+                                                </span>
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   </TooltipContent>
                                 </Tooltip>
