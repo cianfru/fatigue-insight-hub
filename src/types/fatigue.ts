@@ -84,7 +84,17 @@ export interface DutyAnalysis {
     effectiveSleepHours: number;
     sleepEfficiency: number;
     woclOverlapHours: number;
-    sleepStrategy: 'anchor' | 'split' | 'nap' | 'extended' | 'restricted' | 'recovery' | 'normal';
+    sleepStrategy:
+      | 'anchor'
+      | 'split'
+      | 'nap'
+      | 'extended'
+      | 'restricted'
+      | 'recovery'
+      | 'normal'
+      // Additional backend strategies
+      | 'early_bedtime'
+      | 'afternoon_nap';
     confidence: number;
     warnings: string[];
     // Sleep timing (HH:mm in home base timezone)

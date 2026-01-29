@@ -23,7 +23,17 @@ export interface SleepEstimate {
   effective_sleep_hours: number;
   sleep_efficiency: number;
   wocl_overlap_hours: number;
-  sleep_strategy: 'anchor' | 'split' | 'nap' | 'extended' | 'restricted' | 'recovery' | 'normal';
+  sleep_strategy:
+    | 'anchor'
+    | 'split'
+    | 'nap'
+    | 'extended'
+    | 'restricted'
+    | 'recovery'
+    | 'normal'
+    // Additional backend strategies
+    | 'early_bedtime'
+    | 'afternoon_nap';
   confidence: number;
   warnings: string[];
   // Sleep timing (HH:mm in home base timezone)
@@ -50,6 +60,8 @@ export interface Duty {
   
   // Strategic sleep estimator fields
   sleep_estimate?: SleepEstimate;
+  // Backend currently returns this key
+  sleep_quality?: SleepEstimate;
   
   risk_level: 'low' | 'moderate' | 'high' | 'critical' | 'extreme' | 'unknown';
   is_reportable: boolean;
