@@ -365,16 +365,19 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
       const recoveryScore = getRecoveryScore(sleepEstimate);
       
-      // PREFER ISO timestamps if available (accurate date info)
-      const sleepStartIso = sleepEstimate.sleepStartIso ? parseIsoTimestamp(sleepEstimate.sleepStartIso) : null;
-      const sleepEndIso = sleepEstimate.sleepEndIso ? parseIsoTimestamp(sleepEstimate.sleepEndIso) : null;
+      // PREFER pre-computed day/hour values if available (timezone-safe from backend)
+      const hasPrecomputed = 
+        sleepEstimate.sleepStartDay != null && 
+        sleepEstimate.sleepStartHour != null && 
+        sleepEstimate.sleepEndDay != null && 
+        sleepEstimate.sleepEndHour != null;
       
-      if (sleepStartIso && sleepEndIso) {
-        // Use ISO timestamps for precise day placement
-        const startDay = sleepStartIso.dayOfMonth;
-        const endDay = sleepEndIso.dayOfMonth;
-        const startHour = sleepStartIso.hour;
-        const endHour = sleepEndIso.hour;
+      if (hasPrecomputed) {
+        // Use backend-computed day/hour values directly (no timezone conversion needed)
+        const startDay = sleepEstimate.sleepStartDay!;
+        const endDay = sleepEstimate.sleepEndDay!;
+        const startHour = sleepEstimate.sleepStartHour!;
+        const endHour = sleepEstimate.sleepEndHour!;
         
         if (startDay === endDay) {
           // Same-day sleep (e.g., afternoon nap)
@@ -421,30 +424,23 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           }
         }
       } else {
-        // FALLBACK: Use HH:mm times (legacy behavior - may be inaccurate for overnight)
-        const sleepStart = sleepEstimate.sleepStartTime ? parseTime(sleepEstimate.sleepStartTime) : null;
-        const sleepEnd = sleepEstimate.sleepEndTime ? parseTime(sleepEstimate.sleepEndTime) : null;
+        // FALLBACK: Parse ISO timestamps (legacy behavior)
+        const sleepStartIso = sleepEstimate.sleepStartIso ? parseIsoTimestamp(sleepEstimate.sleepStartIso) : null;
+        const sleepEndIso = sleepEstimate.sleepEndIso ? parseIsoTimestamp(sleepEstimate.sleepEndIso) : null;
         
-        if (sleepStart !== null && sleepEnd !== null) {
-          if (sleepStart > sleepEnd) {
-            // Assume overnight sleep: spans midnight
-            if (dutyDayOfMonth > 1) {
-              bars.push({
-                dayIndex: dutyDayOfMonth - 1,
-                startHour: sleepStart,
-                endHour: 24,
-                recoveryScore,
-                effectiveSleep: sleepEstimate.effectiveSleepHours,
-                sleepEfficiency: sleepEstimate.sleepEfficiency,
-                sleepStrategy: sleepEstimate.sleepStrategy,
-                isPreDuty: true,
-                relatedDuty: duty,
-              });
-            }
+        if (sleepStartIso && sleepEndIso) {
+          // Use ISO timestamps for precise day placement
+          const startDay = sleepStartIso.dayOfMonth;
+          const endDay = sleepEndIso.dayOfMonth;
+          const startHour = sleepStartIso.hour;
+          const endHour = sleepEndIso.hour;
+          
+          if (startDay === endDay) {
+            // Same-day sleep (e.g., afternoon nap)
             bars.push({
-              dayIndex: dutyDayOfMonth,
-              startHour: 0,
-              endHour: sleepEnd,
+              dayIndex: startDay,
+              startHour,
+              endHour,
               recoveryScore,
               effectiveSleep: sleepEstimate.effectiveSleepHours,
               sleepEfficiency: sleepEstimate.sleepEfficiency,
@@ -453,36 +449,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               relatedDuty: duty,
             });
           } else {
-            // Same-day sleep
-            bars.push({
-              dayIndex: dutyDayOfMonth,
-              startHour: sleepStart,
-              endHour: sleepEnd,
-              recoveryScore,
-              effectiveSleep: sleepEstimate.effectiveSleepHours,
-              sleepEfficiency: sleepEstimate.sleepEfficiency,
-              sleepStrategy: sleepEstimate.sleepStrategy,
-              isPreDuty: true,
-              relatedDuty: duty,
-            });
-          }
-        } else if (duty.flightSegments.length > 0) {
-          // Fallback: estimate sleep window from total hours
-          const firstSeg = duty.flightSegments[0];
-          const [depH, depM] = firstSeg.departureTime.split(':').map(Number);
-          const dutyStart = depH + depM / 60;
-          const sleepDuration = sleepEstimate.totalSleepHours;
-          
-          // Estimate wake time as 1.5h before duty
-          const wakeTime = Math.max(0, dutyStart - 1.5);
-          let estimatedSleepStart = wakeTime - sleepDuration;
-          
-          if (estimatedSleepStart < 0) {
-            estimatedSleepStart += 24;
-            if (dutyDayOfMonth > 1) {
+            // Overnight sleep: crosses midnight into different day
+            // Part 1: startHour to 24:00 on start day
+            if (startDay >= 1 && startDay <= daysInMonth) {
               bars.push({
-                dayIndex: dutyDayOfMonth - 1,
-                startHour: estimatedSleepStart,
+                dayIndex: startDay,
+                startHour,
                 endHour: 24,
                 recoveryScore,
                 effectiveSleep: sleepEstimate.effectiveSleepHours,
@@ -492,10 +464,110 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 relatedDuty: duty,
               });
             }
-            if (wakeTime > 0) {
+            // Part 2: 00:00 to endHour on end day
+            if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
+              bars.push({
+                dayIndex: endDay,
+                startHour: 0,
+                endHour,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+              });
+            }
+          }
+        } else {
+          // FALLBACK: Use HH:mm times (legacy behavior - may be inaccurate for overnight)
+          const sleepStart = sleepEstimate.sleepStartTime ? parseTime(sleepEstimate.sleepStartTime) : null;
+          const sleepEnd = sleepEstimate.sleepEndTime ? parseTime(sleepEstimate.sleepEndTime) : null;
+          
+          if (sleepStart !== null && sleepEnd !== null) {
+            if (sleepStart > sleepEnd) {
+              // Assume overnight sleep: spans midnight
+              if (dutyDayOfMonth > 1) {
+                bars.push({
+                  dayIndex: dutyDayOfMonth - 1,
+                  startHour: sleepStart,
+                  endHour: 24,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                });
+              }
               bars.push({
                 dayIndex: dutyDayOfMonth,
                 startHour: 0,
+                endHour: sleepEnd,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+              });
+            } else {
+              // Same-day sleep
+              bars.push({
+                dayIndex: dutyDayOfMonth,
+                startHour: sleepStart,
+                endHour: sleepEnd,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+              });
+            }
+          } else if (duty.flightSegments.length > 0) {
+            // Fallback: estimate sleep window from total hours
+            const firstSeg = duty.flightSegments[0];
+            const [depH, depM] = firstSeg.departureTime.split(':').map(Number);
+            const dutyStart = depH + depM / 60;
+            const sleepDuration = sleepEstimate.totalSleepHours;
+            
+            // Estimate wake time as 1.5h before duty
+            const wakeTime = Math.max(0, dutyStart - 1.5);
+            let estimatedSleepStart = wakeTime - sleepDuration;
+            
+            if (estimatedSleepStart < 0) {
+              estimatedSleepStart += 24;
+              if (dutyDayOfMonth > 1) {
+                bars.push({
+                  dayIndex: dutyDayOfMonth - 1,
+                  startHour: estimatedSleepStart,
+                  endHour: 24,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                });
+              }
+              if (wakeTime > 0) {
+                bars.push({
+                  dayIndex: dutyDayOfMonth,
+                  startHour: 0,
+                  endHour: wakeTime,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                });
+              }
+            } else {
+              bars.push({
+                dayIndex: dutyDayOfMonth,
+                startHour: estimatedSleepStart,
                 endHour: wakeTime,
                 recoveryScore,
                 effectiveSleep: sleepEstimate.effectiveSleepHours,
@@ -505,18 +577,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 relatedDuty: duty,
               });
             }
-          } else {
-            bars.push({
-              dayIndex: dutyDayOfMonth,
-              startHour: estimatedSleepStart,
-              endHour: wakeTime,
-              recoveryScore,
-              effectiveSleep: sleepEstimate.effectiveSleepHours,
-              sleepEfficiency: sleepEstimate.sleepEfficiency,
-              sleepStrategy: sleepEstimate.sleepStrategy,
-              isPreDuty: true,
-              relatedDuty: duty,
-            });
           }
         }
       }

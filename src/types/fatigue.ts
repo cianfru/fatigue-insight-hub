@@ -104,6 +104,11 @@ export interface DutyAnalysis {
     // ISO timestamps for precise date/time positioning
     sleepStartIso?: string;
     sleepEndIso?: string;
+    // Pre-computed day/hour values (timezone-safe - already converted by backend)
+    sleepStartDay?: number;   // Day of month (1-31)
+    sleepStartHour?: number;  // Hour (0-24, decimal)
+    sleepEndDay?: number;     // Day of month (1-31)
+    sleepEndHour?: number;    // Hour (0-24, decimal)
   };
 }
 

@@ -56,6 +56,11 @@ export interface SleepEstimate {
   // ISO timestamps for precise date/time positioning - optional top-level convenience fields
   sleep_start_iso?: string | null;
   sleep_end_iso?: string | null;
+  // Pre-computed day/hour values (timezone-safe - already converted by backend)
+  sleep_start_day?: number | null;   // Day of month (1-31)
+  sleep_start_hour?: number | null;  // Hour (0-24, decimal)
+  sleep_end_day?: number | null;     // Day of month (1-31)
+  sleep_end_hour?: number | null;    // Hour (0-24, decimal)
 }
 
 export interface Duty {
