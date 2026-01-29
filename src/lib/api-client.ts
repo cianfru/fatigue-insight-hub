@@ -39,6 +39,9 @@ export interface SleepEstimate {
   // Sleep timing (HH:mm in home base timezone)
   sleep_start_time?: string;
   sleep_end_time?: string;
+  // ISO timestamps for precise date/time positioning
+  sleep_start_iso?: string;
+  sleep_end_iso?: string;
 }
 
 export interface Duty {

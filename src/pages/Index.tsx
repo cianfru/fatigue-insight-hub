@@ -154,6 +154,9 @@ const Index = () => {
               warnings: sleep.warnings,
               sleepStartTime: sleep.sleep_start_time,
               sleepEndTime: sleep.sleep_end_time,
+              // ISO timestamps for precise positioning
+              sleepStartIso: sleep.sleep_start_iso,
+              sleepEndIso: sleep.sleep_end_iso,
             };
           })() : undefined,
           flightSegments: duty.segments.map(seg => ({
