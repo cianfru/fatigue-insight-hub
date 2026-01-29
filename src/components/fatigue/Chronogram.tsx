@@ -31,9 +31,12 @@ const getStrategyIcon = (strategy: string): string => {
     case 'anchor': return '⚓';
     case 'split': return '✂️';
     case 'nap': return '💤';
+    case 'afternoon_nap': return '☀️'; // Afternoon nap before night duty
+    case 'early_bedtime': return '🌙'; // Early bedtime for early report
     case 'extended': return '🛏️';
     case 'restricted': return '⏰';
     case 'recovery': return '🔋';
+    case 'normal': return '😴';
     default: return '😴';
   }
 };
@@ -142,17 +145,32 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     const flightSegs = duty.flightSegments;
     if (flightSegs.length === 0) return [];
     
-    // For overnight continuation, we only show segments that fall after midnight
+    // For overnight continuation, we show the portion of the duty after midnight
     if (isOvernightContinuation) {
-      // Find segments that are after midnight
-      flightSegs.forEach((seg, index) => {
+      flightSegs.forEach((seg) => {
         const [depH, depM] = seg.departureTime.split(':').map(Number);
         const [arrH, arrM] = seg.arrivalTime.split(':').map(Number);
         const depHour = depH + depM / 60;
         const arrHour = arrH + arrM / 60;
         
-        // If departure is before midnight but arrival is after, or both are low hours (after midnight)
-        if (arrHour < 12 && (index > 0 || depHour < 12)) {
+        // For overnight flights, arrival time is on the next day (after midnight)
+        // Include segments that either:
+        // 1. Depart before midnight and arrive after midnight (show arrival portion: 0 to arrHour)
+        // 2. Depart and arrive both after midnight (show full segment)
+        
+        if (arrHour < depHour) {
+          // This flight crosses midnight - show the portion from 00:00 to arrival
+          segments.push({
+            type: 'flight',
+            flightNumber: seg.flightNumber,
+            departure: seg.departure,
+            arrival: seg.arrival,
+            startHour: 0,
+            endHour: arrHour,
+            performance: seg.performance,
+          });
+        } else if (depHour < 12 && arrHour < 12) {
+          // Both times are in early morning (after midnight) - show full segment
           segments.push({
             type: 'flight',
             flightNumber: seg.flightNumber,
@@ -243,12 +261,17 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         const [endH, endM] = lastSegment.arrivalTime.split(':').map(Number);
         
         // FDP starts at check-in (before first departure)
-        const checkInHour = Math.max(0, startH + startM / 60 - CHECK_IN_MINUTES / 60);
-        let endHour = endH + endM / 60;
+        const startHour = startH + startM / 60;
+        const checkInHour = Math.max(0, startHour - CHECK_IN_MINUTES / 60);
+        const endHour = endH + endM / 60;
         
-        // Handle overnight duties
-        if (endHour < checkInHour || endHour < (startH + startM / 60)) {
-          // First bar: from check-in to midnight
+        // Detect overnight duty:
+        // 1. End time is before start time (e.g., depart 18:00, arrive 04:00)
+        // 2. Late departure (after 18:00) with early arrival (before 12:00) - night ops
+        const isOvernight = endHour < startHour || (startHour >= 18 && endHour < 12);
+        
+        if (isOvernight) {
+          // First bar: from check-in to midnight on departure day
           bars.push({
             dayIndex: dayOfMonth,
             startHour: checkInHour,
@@ -256,22 +279,24 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             duty,
             segments: calculateSegments(duty, false),
           });
-          // Second bar: from midnight to end (next day)
+          
+          // Second bar: from midnight to arrival on next day
           if (dayOfMonth < daysInMonth) {
             bars.push({
               dayIndex: dayOfMonth + 1,
               startHour: 0,
-              endHour,
+              endHour: endHour,
               duty,
               isOvernightContinuation: true,
               segments: calculateSegments(duty, true),
             });
           }
         } else {
+          // Same-day duty
           bars.push({
             dayIndex: dayOfMonth,
             startHour: checkInHour,
-            endHour,
+            endHour: endHour,
             duty,
             segments: calculateSegments(duty, false),
           });
