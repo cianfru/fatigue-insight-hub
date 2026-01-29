@@ -98,9 +98,12 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
       case 'anchor': return '⚓ Anchor Sleep';
       case 'split': return '✂️ Split Sleep';
       case 'nap': return '💤 Nap Strategy';
+      case 'afternoon_nap': return '☀️ Afternoon Nap'; // For night departures
+      case 'early_bedtime': return '🌙 Early Bedtime'; // For early reports
       case 'extended': return '🛏️ Extended Rest';
       case 'restricted': return '⏰ Restricted';
       case 'recovery': return '🔋 Recovery';
+      case 'normal': return '😴 Normal Sleep';
       default: return '😴 Normal Sleep';
     }
   };
