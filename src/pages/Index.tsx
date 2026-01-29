@@ -160,9 +160,17 @@ const Index = () => {
           usedDiscretion: duty.used_discretion,
           // Map strategic sleep estimator data
           // Backend currently provides this as `sleep_quality` (keeping `sleep_estimate` as fallback)
+          // ISO timestamps may be at top level OR nested in sleep_blocks[]
           sleepEstimate: (duty.sleep_quality ?? duty.sleep_estimate) ? (() => {
             const sleep = duty.sleep_quality ?? duty.sleep_estimate;
             if (!sleep) return undefined;
+            
+            // Extract ISO timestamps - check top level first, then fall back to first sleep_blocks entry
+            const sleepBlocks = (sleep as unknown as Record<string, unknown>).sleep_blocks as Array<{ sleep_start_iso?: string; sleep_end_iso?: string }> | undefined;
+            const firstBlock = sleepBlocks?.[0];
+            const sleepStartIso = sleep.sleep_start_iso ?? firstBlock?.sleep_start_iso;
+            const sleepEndIso = sleep.sleep_end_iso ?? firstBlock?.sleep_end_iso;
+            
             return {
               totalSleepHours: sleep.total_sleep_hours,
               effectiveSleepHours: sleep.effective_sleep_hours,
@@ -173,9 +181,9 @@ const Index = () => {
               warnings: sleep.warnings,
               sleepStartTime: sleep.sleep_start_time,
               sleepEndTime: sleep.sleep_end_time,
-              // ISO timestamps for precise positioning
-              sleepStartIso: sleep.sleep_start_iso,
-              sleepEndIso: sleep.sleep_end_iso,
+              // ISO timestamps for precise positioning (from top level or sleep_blocks)
+              sleepStartIso,
+              sleepEndIso,
             };
           })() : undefined,
           flightSegments: duty.segments.map(seg => ({
