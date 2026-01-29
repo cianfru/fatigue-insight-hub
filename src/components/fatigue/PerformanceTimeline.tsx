@@ -14,16 +14,26 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
   const monthEnd = endOfMonth(month);
   const allDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  // Create chart data with recovery simulation for off-duty days
+  // Create chart data with recovery simulation using strategic sleep estimator data
   const chartData = allDays.map((day, index) => {
     const duty = duties.find(d => isSameDay(d.date, day));
     
     if (duty) {
+      // Use strategic sleep estimator data if available
+      const sleepEstimate = duty.sleepEstimate;
+      const recoveryScore = sleepEstimate 
+        ? Math.min(100, (sleepEstimate.effectiveSleepHours / 8) * 100 * sleepEstimate.sleepEfficiency)
+        : null;
+      
       return {
         date: format(day, 'dd'),
         fullDate: format(day, 'MMM dd'),
         minPerformance: duty.minPerformance,
         avgPerformance: duty.avgPerformance,
+        recoveryScore,
+        effectiveSleep: sleepEstimate?.effectiveSleepHours,
+        sleepEfficiency: sleepEstimate?.sleepEfficiency,
+        sleepStrategy: sleepEstimate?.sleepStrategy,
         isDuty: true,
         dutyType: 'flight',
       };
@@ -39,23 +49,46 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
         ? Math.floor((day.getTime() - lastDuty.date.getTime()) / (1000 * 60 * 60 * 24))
         : 5;
       
-      // Recovery model: performance improves with rest
-      // Base recovery rate of ~8% per day, capped at 95%
+      // Use sleep estimate data for more accurate recovery modeling
+      const lastSleepEstimate = lastDuty?.sleepEstimate;
+      const baseSleepEfficiency = lastSleepEstimate?.sleepEfficiency || 0.8;
+      
+      // Recovery model enhanced with strategic sleep data
+      // Better sleep efficiency = faster recovery
       const baseRecovery = lastDuty ? lastDuty.avgPerformance : 85;
-      const recoveryRate = 8;
+      const recoveryRate = 6 + (baseSleepEfficiency * 4); // 6-10% per day based on sleep quality
       const recoveredPerformance = Math.min(95, baseRecovery + (daysSinceLastDuty * recoveryRate));
       const minRecovered = Math.min(92, (lastDuty?.minPerformance || 80) + (daysSinceLastDuty * recoveryRate));
+      
+      // Recovery score improves with rest days
+      const recoveryScore = Math.min(100, 60 + (daysSinceLastDuty * 10));
       
       return {
         date: format(day, 'dd'),
         fullDate: format(day, 'MMM dd'),
         minPerformance: minRecovered,
         avgPerformance: recoveredPerformance,
+        recoveryScore,
+        effectiveSleep: 7 + Math.min(1, daysSinceLastDuty * 0.2), // Estimate ~7-8h for rest days
+        sleepEfficiency: Math.min(0.95, 0.8 + daysSinceLastDuty * 0.03),
+        sleepStrategy: 'recovery' as const,
         isDuty: false,
         dutyType: 'rest',
       };
     }
   });
+
+  const getStrategyLabel = (strategy: string) => {
+    switch (strategy) {
+      case 'anchor': return '⚓ Anchor Sleep';
+      case 'split': return '✂️ Split Sleep';
+      case 'nap': return '💤 Nap Strategy';
+      case 'extended': return '🛏️ Extended Rest';
+      case 'restricted': return '⏰ Restricted';
+      case 'recovery': return '🔋 Recovery';
+      default: return '😴 Normal Sleep';
+    }
+  };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -75,6 +108,32 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
               <span className="text-muted-foreground">Min Performance: </span>
               <span className="font-medium text-critical">{data.minPerformance.toFixed(1)}%</span>
             </p>
+            {data.recoveryScore !== null && (
+              <>
+                <div className="border-t border-border/50 my-1.5 pt-1.5">
+                  <p className="text-xs font-medium text-success">
+                    🔋 Recovery Score: {data.recoveryScore.toFixed(0)}%
+                  </p>
+                </div>
+                {data.effectiveSleep && (
+                  <p className="text-xs">
+                    <span className="text-muted-foreground">Effective Sleep: </span>
+                    <span className="font-medium">{data.effectiveSleep.toFixed(1)}h</span>
+                  </p>
+                )}
+                {data.sleepEfficiency && (
+                  <p className="text-xs">
+                    <span className="text-muted-foreground">Sleep Efficiency: </span>
+                    <span className="font-medium">{(data.sleepEfficiency * 100).toFixed(0)}%</span>
+                  </p>
+                )}
+                {data.sleepStrategy && (
+                  <p className="text-xs text-muted-foreground">
+                    {getStrategyLabel(data.sleepStrategy)}
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </div>
       );
