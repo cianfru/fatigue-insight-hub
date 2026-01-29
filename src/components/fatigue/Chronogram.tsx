@@ -25,6 +25,18 @@ const getRecoveryColor = (score: number): string => {
   return 'hsl(0, 80%, 50%)';
 };
 
+const getStrategyIcon = (strategy: string): string => {
+  switch (strategy) {
+    case 'anchor': return '⚓';
+    case 'split': return '✂️';
+    case 'nap': return '💤';
+    case 'extended': return '🛏️';
+    case 'restricted': return '⏰';
+    case 'recovery': return '🔋';
+    default: return '😴';
+  }
+};
+
 interface ChronogramProps {
   duties: DutyAnalysis[];
   statistics: DutyStatistics;
@@ -579,6 +591,29 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                             </div>
                                           );
                                         })}
+                                      {/* Sleep Recovery Badge - visible on bar */}
+                                      {bar.duty.sleepEstimate && !bar.isOvernightContinuation && (
+                                        (() => {
+                                          const recoveryScore = getRecoveryScore(bar.duty.sleepEstimate);
+                                          const barWidthPercent = ((bar.endHour - bar.startHour) / 24) * 100;
+                                          // Only show if bar is wide enough (>10% of timeline)
+                                          if (barWidthPercent < 10) return null;
+                                          return (
+                                            <div 
+                                              className="absolute right-0.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1 py-0.5 rounded bg-background/80 backdrop-blur-sm border border-border/50 shadow-sm"
+                                              style={{ fontSize: '9px' }}
+                                            >
+                                              <span>{getStrategyIcon(bar.duty.sleepEstimate.sleepStrategy)}</span>
+                                              <span 
+                                                className="font-semibold"
+                                                style={{ color: getRecoveryColor(recoveryScore) }}
+                                              >
+                                                {Math.round(recoveryScore)}%
+                                              </span>
+                                            </div>
+                                          );
+                                        })()
+                                      )}
                                       {/* Discretion warning indicator */}
                                       {usedDiscretion && (
                                         <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-critical flex items-center justify-center">
