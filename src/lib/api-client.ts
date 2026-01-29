@@ -100,18 +100,14 @@ export interface Statistics {
 export async function analyzeRoster(
   file: File,
   pilotId: string,
-  month: string,
   homeBase: string,
-  homeTimezone: string,
   configPreset: string = 'default'
 ): Promise<AnalysisResult> {
   
   const formData = new FormData();
   formData.append('file', file);
   formData.append('pilot_id', pilotId);
-  formData.append('month', month);
   formData.append('home_base', homeBase);
-  formData.append('home_timezone', homeTimezone);
   formData.append('config_preset', configPreset);
   
   const response = await fetch(`${API_BASE_URL}/api/analyze`, {

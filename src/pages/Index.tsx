@@ -93,9 +93,7 @@ const Index = () => {
       const result = await analyzeRoster(
         actualFileObject,
         settings.pilotId,
-        format(settings.selectedMonth, 'yyyy-MM'),
         settings.homeBase,
-        'Asia/Qatar', // TODO: Make dynamic based on homeBase
         settings.configPreset
       );
       
