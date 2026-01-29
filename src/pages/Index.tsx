@@ -172,6 +172,13 @@ const Index = () => {
             const sleepStartIso = sleep.sleep_start_iso ?? firstBlock?.sleep_start_iso;
             const sleepEndIso = sleep.sleep_end_iso ?? firstBlock?.sleep_end_iso;
             
+            // Extract pre-computed day/hour values from backend (timezone-safe)
+            const sleepRecord = sleep as unknown as Record<string, unknown>;
+            const sleepStartDay = sleepRecord.sleep_start_day as number | undefined;
+            const sleepStartHour = sleepRecord.sleep_start_hour as number | undefined;
+            const sleepEndDay = sleepRecord.sleep_end_day as number | undefined;
+            const sleepEndHour = sleepRecord.sleep_end_hour as number | undefined;
+            
             return {
               totalSleepHours: sleep.total_sleep_hours,
               effectiveSleepHours: sleep.effective_sleep_hours,
@@ -185,6 +192,11 @@ const Index = () => {
               // ISO timestamps for precise positioning (from top level or sleep_blocks)
               sleepStartIso,
               sleepEndIso,
+              // Pre-computed day/hour values (timezone-safe)
+              sleepStartDay,
+              sleepStartHour,
+              sleepEndDay,
+              sleepEndHour,
             };
           })() : undefined,
           flightSegments: duty.segments.map(seg => ({
