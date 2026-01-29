@@ -17,6 +17,17 @@ export interface DutySegment {
   block_hours: number;
 }
 
+// Strategic sleep estimator output
+export interface SleepEstimate {
+  total_sleep_hours: number;
+  effective_sleep_hours: number;
+  sleep_efficiency: number;
+  wocl_overlap_hours: number;
+  sleep_strategy: 'anchor' | 'split' | 'nap' | 'extended' | 'restricted' | 'recovery' | 'normal';
+  confidence: number;
+  warnings: string[];
+}
+
 export interface Duty {
   duty_id: string;
   date: string;
@@ -33,6 +44,9 @@ export interface Duty {
   sleep_debt: number;
   wocl_hours: number;
   prior_sleep: number;
+  
+  // Strategic sleep estimator fields
+  sleep_estimate?: SleepEstimate;
   
   risk_level: 'low' | 'moderate' | 'high' | 'critical' | 'extreme' | 'unknown';
   is_reportable: boolean;

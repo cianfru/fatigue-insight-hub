@@ -1,4 +1,4 @@
-import { AlertTriangle, Plane, Clock, Moon, BedDouble, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Plane, Clock, Moon, ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -6,6 +6,7 @@ import { DutyAnalysis } from '@/types/fatigue';
 import { format } from 'date-fns';
 import { useState } from 'react';
 import { PriorSleepIndicator } from './PriorSleepIndicator';
+import { SleepRecoveryIndicator } from './SleepRecoveryIndicator';
 
 interface DutyDetailsProps {
   duty: DutyAnalysis;
@@ -106,6 +107,13 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
         <div className="pt-2">
           <PriorSleepIndicator duty={duty} variant="detailed" />
         </div>
+
+        {/* Sleep Recovery Indicator - Strategic Sleep Estimator */}
+        {duty.sleepEstimate && (
+          <div className="pt-2">
+            <SleepRecoveryIndicator duty={duty} variant="detailed" />
+          </div>
+        )}
 
         {/* Flight Segments */}
         <div className="space-y-3">

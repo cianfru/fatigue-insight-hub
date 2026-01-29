@@ -77,6 +77,17 @@ export interface DutyAnalysis {
   phasePerformance?: FlightPhasePerformance[];
   sleepQuality?: 'poor' | 'fair' | 'good' | 'excellent';
   sleepEnvironment?: 'home' | 'layover';
+  
+  // Strategic sleep estimator fields
+  sleepEstimate?: {
+    totalSleepHours: number;
+    effectiveSleepHours: number;
+    sleepEfficiency: number;
+    woclOverlapHours: number;
+    sleepStrategy: 'anchor' | 'split' | 'nap' | 'extended' | 'restricted' | 'recovery' | 'normal';
+    confidence: number;
+    warnings: string[];
+  };
 }
 
 export interface AnalysisResults {

@@ -141,6 +141,16 @@ const Index = () => {
           maxFdpHours: duty.max_fdp_hours,
           extendedFdpHours: duty.extended_fdp_hours,
           usedDiscretion: duty.used_discretion,
+          // Map strategic sleep estimator data
+          sleepEstimate: duty.sleep_estimate ? {
+            totalSleepHours: duty.sleep_estimate.total_sleep_hours,
+            effectiveSleepHours: duty.sleep_estimate.effective_sleep_hours,
+            sleepEfficiency: duty.sleep_estimate.sleep_efficiency,
+            woclOverlapHours: duty.sleep_estimate.wocl_overlap_hours,
+            sleepStrategy: duty.sleep_estimate.sleep_strategy,
+            confidence: duty.sleep_estimate.confidence,
+            warnings: duty.sleep_estimate.warnings,
+          } : undefined,
           flightSegments: duty.segments.map(seg => ({
             flightNumber: seg.flight_number,
             departure: seg.departure,
