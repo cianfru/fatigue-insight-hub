@@ -910,30 +910,108 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       )}
                                     </div>
                                   </TooltipTrigger>
-                                  <TooltipContent side="top" className="max-w-xs p-2">
-                                    <div className="space-y-1 text-xs">
-                                      <div className="font-semibold flex items-center gap-1">
-                                        {bar.isPreDuty ? '🛏️ Pre-Duty Sleep' : '🔋 Recovery Sleep'}
-                                        <span className="text-muted-foreground font-normal">
-                                          ({bar.startHour.toFixed(0).padStart(2, '0')}:00 - {bar.endHour.toFixed(0).padStart(2, '0')}:00)
-                                        </span>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                                        <span className="text-muted-foreground">Recovery Score:</span>
-                                        <span className={cn("font-medium", classes.text)}>
+                                  <TooltipContent side="top" className="max-w-sm p-3">
+                                    <div className="space-y-2 text-xs">
+                                      {/* Header */}
+                                      <div className="flex items-center justify-between border-b border-border pb-2">
+                                        <div className="font-semibold flex items-center gap-1.5">
+                                          <span className="text-base">{bar.isPreDuty ? '🛏️' : '🔋'}</span>
+                                          <span>{bar.isPreDuty ? 'Pre-Duty Sleep' : 'Recovery Sleep'}</span>
+                                        </div>
+                                        <div className={cn("text-lg font-bold", classes.text)}>
                                           {Math.round(bar.recoveryScore)}%
-                                        </span>
-                                        <span className="text-muted-foreground">Effective Sleep:</span>
-                                        <span>{bar.effectiveSleep.toFixed(1)}h</span>
-                                        <span className="text-muted-foreground">Efficiency:</span>
-                                        <span>{Math.round(bar.sleepEfficiency * 100)}%</span>
-                                        <span className="text-muted-foreground">Strategy:</span>
-                                        <span className="capitalize">{getStrategyIcon(bar.sleepStrategy)} {bar.sleepStrategy}</span>
+                                        </div>
                                       </div>
+                                      
+                                      {/* Sleep Timing */}
+                                      <div className="flex items-center justify-between text-muted-foreground">
+                                        <span>Sleep Window</span>
+                                        <span className="font-mono font-medium text-foreground">
+                                          {bar.startHour.toFixed(0).padStart(2, '0')}:00 → {bar.endHour.toFixed(0).padStart(2, '0')}:00
+                                        </span>
+                                      </div>
+                                      
+                                      {/* Recovery Score Breakdown */}
+                                      <div className="bg-secondary/30 rounded-lg p-2 space-y-1.5">
+                                        <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                                          Recovery Score Breakdown
+                                        </div>
+                                        
+                                        {/* Base Score from Sleep */}
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-muted-foreground">⏱️</span>
+                                            <span>Effective Sleep</span>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-muted-foreground">{bar.effectiveSleep.toFixed(1)}h / 8h</span>
+                                            <span className={cn(
+                                              "font-mono font-medium min-w-[40px] text-right",
+                                              bar.effectiveSleep >= 7 ? "text-success" : 
+                                              bar.effectiveSleep >= 5 ? "text-warning" : "text-critical"
+                                            )}>
+                                              +{Math.round((bar.effectiveSleep / 8) * 100)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Efficiency Bonus */}
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-muted-foreground">✨</span>
+                                            <span>Sleep Quality</span>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-muted-foreground">{Math.round(bar.sleepEfficiency * 100)}% efficiency</span>
+                                            <span className={cn(
+                                              "font-mono font-medium min-w-[40px] text-right",
+                                              bar.sleepEfficiency >= 0.9 ? "text-success" : 
+                                              bar.sleepEfficiency >= 0.7 ? "text-warning" : "text-high"
+                                            )}>
+                                              +{Math.round(bar.sleepEfficiency * 20)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* WOCL Penalty (only for pre-duty sleep with WOCL data) */}
+                                        {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.woclOverlapHours > 0 && (
+                                          <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-muted-foreground">🌙</span>
+                                              <span>WOCL Overlap</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-muted-foreground">{bar.relatedDuty.sleepEstimate.woclOverlapHours.toFixed(1)}h</span>
+                                              <span className="font-mono font-medium text-critical min-w-[40px] text-right">
+                                                -{Math.round(bar.relatedDuty.sleepEstimate.woclOverlapHours * 5)}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Divider & Total */}
+                                        <div className="border-t border-border/50 pt-1.5 flex items-center justify-between font-medium">
+                                          <span>Total Score</span>
+                                          <span className={cn("font-mono", classes.text)}>
+                                            = {Math.round(bar.recoveryScore)}%
+                                          </span>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Strategy Badge */}
+                                      <div className="flex items-center justify-between pt-1">
+                                        <span className="text-muted-foreground">Strategy</span>
+                                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-secondary/50">
+                                          <span>{getStrategyIcon(bar.sleepStrategy)}</span>
+                                          <span className="capitalize font-medium">{bar.sleepStrategy.replace('_', ' ')}</span>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Footer Context */}
                                       <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/50">
                                         {bar.isPreDuty 
-                                          ? `Pre-duty rest for ${format(bar.relatedDuty.date, 'MMM d')} duty`
-                                          : `Rest day recovery on ${format(bar.relatedDuty.date, 'MMM d')}`
+                                          ? `Rest before ${format(bar.relatedDuty.date, 'EEEE, MMM d')} duty`
+                                          : `Rest day recovery • ${format(bar.relatedDuty.date, 'EEEE, MMM d')}`
                                         }
                                       </div>
                                     </div>
