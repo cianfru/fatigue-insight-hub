@@ -140,17 +140,22 @@ const Index = () => {
           extendedFdpHours: duty.extended_fdp_hours,
           usedDiscretion: duty.used_discretion,
           // Map strategic sleep estimator data
-          sleepEstimate: duty.sleep_estimate ? {
-            totalSleepHours: duty.sleep_estimate.total_sleep_hours,
-            effectiveSleepHours: duty.sleep_estimate.effective_sleep_hours,
-            sleepEfficiency: duty.sleep_estimate.sleep_efficiency,
-            woclOverlapHours: duty.sleep_estimate.wocl_overlap_hours,
-            sleepStrategy: duty.sleep_estimate.sleep_strategy,
-            confidence: duty.sleep_estimate.confidence,
-            warnings: duty.sleep_estimate.warnings,
-            sleepStartTime: duty.sleep_estimate.sleep_start_time,
-            sleepEndTime: duty.sleep_estimate.sleep_end_time,
-          } : undefined,
+          // Backend currently provides this as `sleep_quality` (keeping `sleep_estimate` as fallback)
+          sleepEstimate: (duty.sleep_quality ?? duty.sleep_estimate) ? (() => {
+            const sleep = duty.sleep_quality ?? duty.sleep_estimate;
+            if (!sleep) return undefined;
+            return {
+              totalSleepHours: sleep.total_sleep_hours,
+              effectiveSleepHours: sleep.effective_sleep_hours,
+              sleepEfficiency: sleep.sleep_efficiency,
+              woclOverlapHours: sleep.wocl_overlap_hours,
+              sleepStrategy: sleep.sleep_strategy,
+              confidence: sleep.confidence,
+              warnings: sleep.warnings,
+              sleepStartTime: sleep.sleep_start_time,
+              sleepEndTime: sleep.sleep_end_time,
+            };
+          })() : undefined,
           flightSegments: duty.segments.map(seg => ({
             flightNumber: seg.flight_number,
             departure: seg.departure,
