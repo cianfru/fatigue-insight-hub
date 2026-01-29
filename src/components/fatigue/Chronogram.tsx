@@ -310,7 +310,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
   }, [duties, daysInMonth]);
 
   // Calculate sleep/rest period bars showing recovery using backend timing
-  // IMPORTANT: Clamp sleep end times so they never overlap with duty start (check-in)
+  // STRICT MODE: Render exactly what the backend returns (no clamping)
   const sleepBars = useMemo(() => {
     const bars: SleepBar[] = [];
     
@@ -318,16 +318,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     const parseTime = (timeStr: string): number => {
       const [h, m] = timeStr.split(':').map(Number);
       return h + (m || 0) / 60;
-    };
-    
-    // Helper to get duty check-in time (report time) for a specific day
-    const getDutyCheckInForDay = (dayIndex: number): number | null => {
-      const duty = duties.find(d => d.date.getDate() === dayIndex);
-      if (!duty || duty.flightSegments.length === 0) return null;
-      const firstSeg = duty.flightSegments[0];
-      const [depH, depM] = firstSeg.departureTime.split(':').map(Number);
-      // Check-in is 60 min before departure
-      return Math.max(0, depH + depM / 60 - CHECK_IN_MINUTES / 60);
     };
     
     duties.forEach((duty) => {
@@ -338,15 +328,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
       const recoveryScore = getRecoveryScore(sleepEstimate);
       
-      // Get the duty check-in time to prevent overlap
-      const dutyCheckIn = getDutyCheckInForDay(dayOfMonth);
-      
       // Use backend-provided sleep times if available
       const sleepStart = sleepEstimate.sleepStartTime ? parseTime(sleepEstimate.sleepStartTime) : null;
-      let sleepEnd = sleepEstimate.sleepEndTime ? parseTime(sleepEstimate.sleepEndTime) : null;
+      const sleepEnd = sleepEstimate.sleepEndTime ? parseTime(sleepEstimate.sleepEndTime) : null;
       
       if (sleepStart !== null && sleepEnd !== null) {
-        // Backend provides actual sleep timing
+        // Backend provides actual sleep timing - render exactly as provided
         if (sleepStart > sleepEnd) {
           // Overnight sleep: spans midnight (e.g., 23:00 to 06:00)
           
@@ -366,49 +353,30 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           }
           
           // Part 2: 00:00 to sleepEnd on duty day
-          // CLAMP: ensure sleepEnd doesn't overlap duty check-in
-          let clampedEnd = sleepEnd;
-          if (dutyCheckIn !== null && sleepEnd >= dutyCheckIn) {
-            // Clamp to 30 min before check-in to show a gap
-            clampedEnd = Math.max(0, dutyCheckIn - 0.5);
-          }
-          
-          if (clampedEnd > 0) {
-            bars.push({
-              dayIndex: dayOfMonth,
-              startHour: 0,
-              endHour: clampedEnd,
-              recoveryScore,
-              effectiveSleep: sleepEstimate.effectiveSleepHours,
-              sleepEfficiency: sleepEstimate.sleepEfficiency,
-              sleepStrategy: sleepEstimate.sleepStrategy,
-              isPreDuty: true,
-              relatedDuty: duty,
-            });
-          }
+          bars.push({
+            dayIndex: dayOfMonth,
+            startHour: 0,
+            endHour: sleepEnd,
+            recoveryScore,
+            effectiveSleep: sleepEstimate.effectiveSleepHours,
+            sleepEfficiency: sleepEstimate.sleepEfficiency,
+            sleepStrategy: sleepEstimate.sleepStrategy,
+            isPreDuty: true,
+            relatedDuty: duty,
+          });
         } else {
           // Same-day sleep (e.g., afternoon nap 14:00 to 16:00)
-          // CLAMP: ensure sleepEnd doesn't overlap duty check-in
-          let clampedEnd = sleepEnd;
-          if (dutyCheckIn !== null && sleepEnd >= dutyCheckIn) {
-            // Clamp to 30 min before check-in to show a gap
-            clampedEnd = Math.max(sleepStart + 0.5, dutyCheckIn - 0.5);
-          }
-          
-          // Only add if we have a valid window
-          if (clampedEnd > sleepStart) {
-            bars.push({
-              dayIndex: dayOfMonth,
-              startHour: sleepStart,
-              endHour: clampedEnd,
-              recoveryScore,
-              effectiveSleep: sleepEstimate.effectiveSleepHours,
-              sleepEfficiency: sleepEstimate.sleepEfficiency,
-              sleepStrategy: sleepEstimate.sleepStrategy,
-              isPreDuty: true,
-              relatedDuty: duty,
-            });
-          }
+          bars.push({
+            dayIndex: dayOfMonth,
+            startHour: sleepStart,
+            endHour: sleepEnd,
+            recoveryScore,
+            effectiveSleep: sleepEstimate.effectiveSleepHours,
+            sleepEfficiency: sleepEstimate.sleepEfficiency,
+            sleepStrategy: sleepEstimate.sleepStrategy,
+            isPreDuty: true,
+            relatedDuty: duty,
+          });
         }
       } else {
         // Fallback: estimate sleep window from total hours if no timing provided
