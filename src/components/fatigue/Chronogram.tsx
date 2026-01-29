@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DutyAnalysis, DutyStatistics } from '@/types/fatigue';
+import { DutyAnalysis, DutyStatistics, RestDaySleep } from '@/types/fatigue';
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -51,6 +51,7 @@ interface ChronogramProps {
   pilotAircraft?: string;
   onDutySelect: (duty: DutyAnalysis) => void;
   selectedDuty: DutyAnalysis | null;
+  restDaysSleep?: RestDaySleep[];
 }
 
 type DisplayMode = 'heatmap' | 'timeline' | 'combined';
@@ -103,7 +104,7 @@ const getPerformanceColor = (performance: number): string => {
   return 'hsl(0, 80%, 50%)'; // Red
 };
 
-export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty }: ChronogramProps) {
+export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep }: ChronogramProps) {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('heatmap');
   const [infoOpen, setInfoOpen] = useState(false);
 
@@ -499,8 +500,108 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       }
     });
     
+    // Add rest day sleep bars (from separate rest_days_sleep array)
+    if (restDaysSleep) {
+      restDaysSleep.forEach((restDay) => {
+        restDay.sleepBlocks.forEach((block) => {
+          // Calculate recovery score for rest day sleep
+          const baseScore = (block.effectiveHours / 8) * 100;
+          const efficiencyBonus = block.qualityFactor * 20;
+          const recoveryScore = Math.min(100, Math.max(0, baseScore + efficiencyBonus));
+          
+          // Use ISO timestamps for accurate positioning
+          const parseIso = (isoStr: string): { dayOfMonth: number; hour: number } | null => {
+            try {
+              const date = new Date(isoStr);
+              if (isNaN(date.getTime())) return null;
+              return {
+                dayOfMonth: date.getDate(),
+                hour: date.getHours() + date.getMinutes() / 60,
+              };
+            } catch {
+              return null;
+            }
+          };
+          
+          const sleepStartIso = parseIso(block.sleepStartIso);
+          const sleepEndIso = parseIso(block.sleepEndIso);
+          
+          if (sleepStartIso && sleepEndIso) {
+            const startDay = sleepStartIso.dayOfMonth;
+            const endDay = sleepEndIso.dayOfMonth;
+            const startHour = sleepStartIso.hour;
+            const endHour = sleepEndIso.hour;
+            
+            // Create a pseudo-duty for tooltip display purposes
+            const pseudoDuty: DutyAnalysis = {
+              date: restDay.date,
+              dayOfWeek: format(restDay.date, 'EEE'),
+              dutyHours: 0,
+              sectors: 0,
+              minPerformance: 100,
+              avgPerformance: 100,
+              landingPerformance: 100,
+              sleepDebt: 0,
+              woclExposure: 0,
+              priorSleep: restDay.totalSleepHours,
+              overallRisk: 'LOW',
+              minPerformanceRisk: 'LOW',
+              landingRisk: 'LOW',
+              smsReportable: false,
+              flightSegments: [],
+            };
+            
+            if (startDay === endDay) {
+              // Same-day sleep
+              bars.push({
+                dayIndex: startDay,
+                startHour,
+                endHour,
+                recoveryScore,
+                effectiveSleep: block.effectiveHours,
+                sleepEfficiency: block.qualityFactor,
+                sleepStrategy: restDay.strategyType,
+                isPreDuty: false,
+                relatedDuty: pseudoDuty,
+              });
+            } else {
+              // Overnight sleep: crosses midnight
+              // Part 1: startHour to 24:00 on start day
+              if (startDay >= 1 && startDay <= daysInMonth) {
+                bars.push({
+                  dayIndex: startDay,
+                  startHour,
+                  endHour: 24,
+                  recoveryScore,
+                  effectiveSleep: block.effectiveHours,
+                  sleepEfficiency: block.qualityFactor,
+                  sleepStrategy: restDay.strategyType,
+                  isPreDuty: false,
+                  relatedDuty: pseudoDuty,
+                });
+              }
+              // Part 2: 00:00 to endHour on end day
+              if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
+                bars.push({
+                  dayIndex: endDay,
+                  startHour: 0,
+                  endHour,
+                  recoveryScore,
+                  effectiveSleep: block.effectiveHours,
+                  sleepEfficiency: block.qualityFactor,
+                  sleepStrategy: restDay.strategyType,
+                  isPreDuty: false,
+                  relatedDuty: pseudoDuty,
+                });
+              }
+            }
+          }
+        });
+      });
+    }
+    
     return bars;
-  }, [duties]);
+  }, [duties, restDaysSleep, daysInMonth]);
 
   // Get duty warnings based on actual duty data
   const getDayWarnings = (dayOfMonth: number) => {
@@ -812,7 +913,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                   <TooltipContent side="top" className="max-w-xs p-2">
                                     <div className="space-y-1 text-xs">
                                       <div className="font-semibold flex items-center gap-1">
-                                        🛏️ Sleep Period
+                                        {bar.isPreDuty ? '🛏️ Pre-Duty Sleep' : '🔋 Recovery Sleep'}
                                         <span className="text-muted-foreground font-normal">
                                           ({bar.startHour.toFixed(0).padStart(2, '0')}:00 - {bar.endHour.toFixed(0).padStart(2, '0')}:00)
                                         </span>
@@ -830,7 +931,10 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         <span className="capitalize">{getStrategyIcon(bar.sleepStrategy)} {bar.sleepStrategy}</span>
                                       </div>
                                       <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/50">
-                                        Pre-duty rest for {format(bar.relatedDuty.date, 'MMM d')} duty
+                                        {bar.isPreDuty 
+                                          ? `Pre-duty rest for ${format(bar.relatedDuty.date, 'MMM d')} duty`
+                                          : `Rest day recovery on ${format(bar.relatedDuty.date, 'MMM d')}`
+                                        }
                                       </div>
                                     </div>
                                   </TooltipContent>

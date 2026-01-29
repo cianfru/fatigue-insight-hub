@@ -106,6 +106,29 @@ export interface DutyAnalysis {
   };
 }
 
+// Rest day sleep block (transformed from backend)
+export interface RestDaySleepBlock {
+  sleepStartTime: string;
+  sleepEndTime: string;
+  sleepStartIso: string;
+  sleepEndIso: string;
+  sleepType: 'main' | 'nap';
+  durationHours: number;
+  effectiveHours: number;
+  qualityFactor: number;
+}
+
+// Rest day sleep (transformed from backend)
+export interface RestDaySleep {
+  date: Date;
+  sleepBlocks: RestDaySleepBlock[];
+  totalSleepHours: number;
+  effectiveSleepHours: number;
+  sleepEfficiency: number;
+  strategyType: 'recovery' | 'normal';
+  confidence: number;
+}
+
 export interface AnalysisResults {
   statistics: DutyStatistics;
   duties: DutyAnalysis[];
@@ -116,4 +139,6 @@ export interface AnalysisResults {
   pilotName?: string;
   pilotBase?: string;
   pilotAircraft?: string;
+  // Rest day sleep data
+  restDaysSleep?: RestDaySleep[];
 }
