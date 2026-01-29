@@ -350,7 +350,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       }
     };
     
-    duties.forEach((duty) => {
+    duties.forEach((duty, dutyIndex) => {
       const dutyDayOfMonth = duty.date.getDate();
       const sleepEstimate = duty.sleepEstimate;
 
@@ -361,6 +361,17 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       // PREFER ISO timestamps if available (accurate date info)
       const sleepStartIso = sleepEstimate.sleepStartIso ? parseIsoTimestamp(sleepEstimate.sleepStartIso) : null;
       const sleepEndIso = sleepEstimate.sleepEndIso ? parseIsoTimestamp(sleepEstimate.sleepEndIso) : null;
+      
+      // Debug logging for first few duties
+      if (dutyIndex < 3) {
+        console.log(`[Chronogram] Duty ${dutyIndex + 1} (day ${dutyDayOfMonth}):`, {
+          rawSleepStartIso: sleepEstimate.sleepStartIso,
+          rawSleepEndIso: sleepEstimate.sleepEndIso,
+          parsedStart: sleepStartIso,
+          parsedEnd: sleepEndIso,
+          fallbackTimes: { start: sleepEstimate.sleepStartTime, end: sleepEstimate.sleepEndTime },
+        });
+      }
       
       if (sleepStartIso && sleepEndIso) {
         // Use ISO timestamps for precise day placement
@@ -524,11 +535,24 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           const efficiencyBonus = block.qualityFactor * 20;
           const recoveryScore = Math.min(100, Math.max(0, baseScore + efficiencyBonus));
           
-          // Use ISO timestamps for accurate positioning
+          // Use ISO timestamps for accurate positioning.
+          // IMPORTANT: Parse directly from ISO string to avoid browser timezone conversion.
           const parseIso = (isoStr: string): { dayOfMonth: number; hour: number } | null => {
+            if (!isoStr) return null;
+
+            // Fast-path for standard ISO strings: YYYY-MM-DDTHH:mm...
+            const m = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+            if (m) {
+              const dayOfMonth = Number(m[3]);
+              const hour = Number(m[4]) + Number(m[5]) / 60;
+              if (!Number.isFinite(dayOfMonth) || !Number.isFinite(hour)) return null;
+              return { dayOfMonth, hour };
+            }
+
+            // Fallback for unexpected formats
             try {
               const date = new Date(isoStr);
-              if (isNaN(date.getTime())) return null;
+              if (Number.isNaN(date.getTime())) return null;
               return {
                 dayOfMonth: date.getDate(),
                 hour: date.getHours() + date.getMinutes() / 60,
