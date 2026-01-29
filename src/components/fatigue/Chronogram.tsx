@@ -17,12 +17,13 @@ const getRecoveryScore = (estimate: NonNullable<DutyAnalysis['sleepEstimate']>):
   return Math.min(100, Math.max(0, baseScore + efficiencyBonus - woclPenalty));
 };
 
-const getRecoveryColor = (score: number): string => {
-  if (score >= 80) return 'hsl(120, 70%, 45%)';
-  if (score >= 65) return 'hsl(90, 70%, 50%)';
-  if (score >= 50) return 'hsl(55, 90%, 55%)';
-  if (score >= 35) return 'hsl(25, 95%, 50%)';
-  return 'hsl(0, 80%, 50%)';
+const getRecoveryClasses = (score: number): { border: string; bg: string; text: string } => {
+  // Use semantic design tokens (no hard-coded Tailwind colors).
+  if (score >= 80) return { border: 'border-success', bg: 'bg-success/10', text: 'text-success' };
+  if (score >= 65) return { border: 'border-success/70', bg: 'bg-success/10', text: 'text-success/80' };
+  if (score >= 50) return { border: 'border-warning', bg: 'bg-warning/10', text: 'text-warning' };
+  if (score >= 35) return { border: 'border-high', bg: 'bg-high/10', text: 'text-high' };
+  return { border: 'border-critical', bg: 'bg-critical/10', text: 'text-critical' };
 };
 
 const getStrategyIcon = (strategy: string): string => {
@@ -289,90 +290,43 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     const SLEEP_START = 23; // 23:00
     const SLEEP_END = 7;    // 07:00
     
+    // Visualize the standard night window exactly as requested: 23:00–07:00.
+    // We anchor it to each duty day because that's where we already have `sleepEstimate`.
     duties.forEach((duty) => {
       const dayOfMonth = duty.date.getDate();
       const sleepEstimate = duty.sleepEstimate;
-      
+
       if (!sleepEstimate) return;
-      
-      // Calculate recovery score
-      const baseScore = (sleepEstimate.effectiveSleepHours / 8) * 100;
-      const efficiencyBonus = sleepEstimate.sleepEfficiency * 20;
-      const woclPenalty = sleepEstimate.woclOverlapHours * 5;
-      const recoveryScore = Math.min(100, Math.max(0, baseScore + efficiencyBonus - woclPenalty));
-      
-      // Get duty start time
-      if (duty.flightSegments.length > 0) {
-        const firstSegment = duty.flightSegments[0];
-        const [startH, startM] = firstSegment.departureTime.split(':').map(Number);
-        const dutyStartHour = startH + startM / 60;
-        
-        // If duty starts in the morning (after 06:00), show sleep bar from 23:00 previous night to duty start
-        if (dutyStartHour >= 6) {
-          // Sleep bar on the previous night (23:00-24:00)
-          if (dayOfMonth > 1) {
-            bars.push({
-              dayIndex: dayOfMonth - 1,
-              startHour: SLEEP_START,
-              endHour: 24,
-              recoveryScore,
-              effectiveSleep: sleepEstimate.effectiveSleepHours,
-              sleepEfficiency: sleepEstimate.sleepEfficiency,
-              sleepStrategy: sleepEstimate.sleepStrategy,
-              isPreDuty: true,
-              relatedDuty: duty,
-            });
-          }
-          
-          // Sleep bar on duty day (00:00 to wake-up, ~1h before duty)
-          const wakeUpHour = Math.max(0, dutyStartHour - 1.5); // Wake up ~1.5h before duty
-          if (wakeUpHour > 0) {
-            bars.push({
-              dayIndex: dayOfMonth,
-              startHour: 0,
-              endHour: Math.min(wakeUpHour, SLEEP_END),
-              recoveryScore,
-              effectiveSleep: sleepEstimate.effectiveSleepHours,
-              sleepEfficiency: sleepEstimate.sleepEfficiency,
-              sleepStrategy: sleepEstimate.sleepStrategy,
-              isPreDuty: true,
-              relatedDuty: duty,
-            });
-          }
-        } else if (dutyStartHour < 6) {
-          // Early morning duty - limited sleep, show what's available
-          // Sleep from 23:00 previous night to close to duty start
-          if (dayOfMonth > 1 && dutyStartHour > 0) {
-            bars.push({
-              dayIndex: dayOfMonth - 1,
-              startHour: SLEEP_START,
-              endHour: 24,
-              recoveryScore,
-              effectiveSleep: sleepEstimate.effectiveSleepHours,
-              sleepEfficiency: sleepEstimate.sleepEfficiency,
-              sleepStrategy: sleepEstimate.sleepStrategy,
-              isPreDuty: true,
-              relatedDuty: duty,
-            });
-          }
-          
-          // Early morning portion if any time before duty
-          const sleepEndOnDutyDay = Math.max(0, dutyStartHour - 1);
-          if (sleepEndOnDutyDay > 0) {
-            bars.push({
-              dayIndex: dayOfMonth,
-              startHour: 0,
-              endHour: sleepEndOnDutyDay,
-              recoveryScore,
-              effectiveSleep: sleepEstimate.effectiveSleepHours,
-              sleepEfficiency: sleepEstimate.sleepEfficiency,
-              sleepStrategy: sleepEstimate.sleepStrategy,
-              isPreDuty: true,
-              relatedDuty: duty,
-            });
-          }
-        }
+
+      const recoveryScore = getRecoveryScore(sleepEstimate);
+
+      // 23:00–24:00 on previous day
+      if (dayOfMonth > 1) {
+        bars.push({
+          dayIndex: dayOfMonth - 1,
+          startHour: SLEEP_START,
+          endHour: 24,
+          recoveryScore,
+          effectiveSleep: sleepEstimate.effectiveSleepHours,
+          sleepEfficiency: sleepEstimate.sleepEfficiency,
+          sleepStrategy: sleepEstimate.sleepStrategy,
+          isPreDuty: true,
+          relatedDuty: duty,
+        });
       }
+
+      // 00:00–07:00 on duty day
+      bars.push({
+        dayIndex: dayOfMonth,
+        startHour: 0,
+        endHour: SLEEP_END,
+        recoveryScore,
+        effectiveSleep: sleepEstimate.effectiveSleepHours,
+        sleepEfficiency: sleepEstimate.sleepEfficiency,
+        sleepStrategy: sleepEstimate.sleepStrategy,
+        isPreDuty: true,
+        relatedDuty: duty,
+      });
     });
     
     return bars;
@@ -656,24 +610,28 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                           .filter((bar) => bar.dayIndex === dayNum)
                           .map((bar, barIndex) => {
                             const barWidth = ((bar.endHour - bar.startHour) / 24) * 100;
+                             const classes = getRecoveryClasses(bar.recoveryScore);
                             return (
                               <TooltipProvider key={`sleep-${barIndex}`} delayDuration={100}>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <div
-                                      className="absolute top-1.5 bottom-1.5 rounded-sm flex items-center justify-end px-1 border border-dashed cursor-default"
+                                      className={cn(
+                                        "absolute z-0 rounded-sm flex items-center justify-end px-1 border border-dashed cursor-default",
+                                        classes.border,
+                                        classes.bg
+                                      )}
                                       style={{
+                                        top: 2,
+                                        height: 10,
                                         left: `${(bar.startHour / 24) * 100}%`,
                                         width: `${Math.max(barWidth, 1)}%`,
-                                        backgroundColor: `${getRecoveryColor(bar.recoveryScore)}15`,
-                                        borderColor: getRecoveryColor(bar.recoveryScore),
                                       }}
                                     >
                                       {/* Show recovery info if bar is wide enough */}
                                       {barWidth > 6 && (
                                         <div 
-                                          className="flex items-center gap-0.5 text-[8px] font-medium"
-                                          style={{ color: getRecoveryColor(bar.recoveryScore) }}
+                                          className={cn("flex items-center gap-0.5 text-[8px] font-medium", classes.text)}
                                         >
                                           <span>{getStrategyIcon(bar.sleepStrategy)}</span>
                                           <span>{Math.round(bar.recoveryScore)}%</span>
@@ -691,7 +649,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       </div>
                                       <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                                         <span className="text-muted-foreground">Recovery Score:</span>
-                                        <span className="font-medium" style={{ color: getRecoveryColor(bar.recoveryScore) }}>
+                                        <span className={cn("font-medium", classes.text)}>
                                           {Math.round(bar.recoveryScore)}%
                                         </span>
                                         <span className="text-muted-foreground">Effective Sleep:</span>
@@ -726,11 +684,13 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                     <button
                                       onClick={() => onDutySelect(bar.duty)}
                                       className={cn(
-                                        "absolute top-1 bottom-1 rounded-sm transition-all hover:ring-2 cursor-pointer overflow-hidden flex",
+                                        "absolute z-10 rounded-sm transition-all hover:ring-2 cursor-pointer overflow-hidden flex",
                                         selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground",
                                         usedDiscretion ? "ring-2 ring-critical hover:ring-critical/80" : "hover:ring-foreground"
                                       )}
                                       style={{
+                                        top: 14,
+                                        height: 12,
                                         left: `${(bar.startHour / 24) * 100}%`,
                                         width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
                                         background: displayMode === 'timeline' ? 'hsl(var(--primary))' : undefined,
@@ -775,6 +735,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       {bar.duty.sleepEstimate && !bar.isOvernightContinuation && (
                                         (() => {
                                           const recoveryScore = getRecoveryScore(bar.duty.sleepEstimate);
+                                          const classes = getRecoveryClasses(recoveryScore);
                                           const barWidthPercent = ((bar.endHour - bar.startHour) / 24) * 100;
                                           // Only show if bar is wide enough (>10% of timeline)
                                           if (barWidthPercent < 10) return null;
@@ -784,10 +745,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                               style={{ fontSize: '9px' }}
                                             >
                                               <span>{getStrategyIcon(bar.duty.sleepEstimate.sleepStrategy)}</span>
-                                              <span 
-                                                className="font-semibold"
-                                                style={{ color: getRecoveryColor(recoveryScore) }}
-                                              >
+                                              <span className={cn("font-semibold", classes.text)}>
                                                 {Math.round(recoveryScore)}%
                                               </span>
                                             </div>
@@ -907,12 +865,15 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           </span>
                                           <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
                                             <span className="text-muted-foreground">Recovery Score:</span>
-                                            <span 
-                                              className="font-medium"
-                                              style={{ color: getRecoveryColor(getRecoveryScore(bar.duty.sleepEstimate)) }}
-                                            >
-                                              {Math.round(getRecoveryScore(bar.duty.sleepEstimate))}%
-                                            </span>
+                                            {(() => {
+                                              const score = getRecoveryScore(bar.duty.sleepEstimate);
+                                              const classes = getRecoveryClasses(score);
+                                              return (
+                                                <span className={cn("font-medium", classes.text)}>
+                                                  {Math.round(score)}%
+                                                </span>
+                                              );
+                                            })()}
                                             <span className="text-muted-foreground">Effective Sleep:</span>
                                             <span>{bar.duty.sleepEstimate.effectiveSleepHours.toFixed(1)}h</span>
                                             <span className="text-muted-foreground">Efficiency:</span>
