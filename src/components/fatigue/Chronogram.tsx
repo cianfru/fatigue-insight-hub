@@ -265,23 +265,25 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         const checkInHour = Math.max(0, startHour - CHECK_IN_MINUTES / 60);
         const endHour = endH + endM / 60;
         
-        // Detect overnight duty:
-        // 1. End time is before start time (e.g., depart 18:00, arrive 04:00)
-        // 2. Late departure (after 18:00) with early arrival (before 12:00) - night ops
-        const isOvernight = endHour < startHour || (startHour >= 18 && endHour < 12);
+        // Detect overnight duty - FDP crosses midnight:
+        // 1. End time is numerically less than start time (e.g., depart 18:00, arrive 04:00)
+        // 2. Departure after 16:00 AND arrival before 10:00 (covers night ops)
+        // This ensures flights like 18:00→02:00 or 20:00→05:00 are properly split
+        const isOvernight = endHour < startHour || (startHour >= 16 && endHour < 10);
         
         if (isOvernight) {
-          // First bar: from check-in to midnight on departure day
+          // First bar: from check-in to midnight (24:00) on departure day
           bars.push({
             dayIndex: dayOfMonth,
             startHour: checkInHour,
-            endHour: 24,
+            endHour: 24, // Always ends at midnight for display
             duty,
             segments: calculateSegments(duty, false),
           });
           
-          // Second bar: from midnight to arrival on next day
-          if (dayOfMonth < daysInMonth) {
+          // Second bar: from midnight (00:00) to arrival on next day
+          // Only add if the duty actually continues past midnight
+          if (dayOfMonth < daysInMonth && endHour > 0) {
             bars.push({
               dayIndex: dayOfMonth + 1,
               startHour: 0,
@@ -292,7 +294,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             });
           }
         } else {
-          // Same-day duty
+          // Same-day duty - no overnight crossing
           bars.push({
             dayIndex: dayOfMonth,
             startHour: checkInHour,
