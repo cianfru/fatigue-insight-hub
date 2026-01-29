@@ -73,6 +73,18 @@ interface DutyBar {
   segments: FlightSegmentBar[]; // Individual flight segments
 }
 
+interface SleepBar {
+  dayIndex: number;
+  startHour: number;
+  endHour: number;
+  recoveryScore: number;
+  effectiveSleep: number;
+  sleepEfficiency: number;
+  sleepStrategy: string;
+  isPreDuty: boolean; // Sleep before the duty on this day
+  relatedDuty: DutyAnalysis;
+}
+
 // WOCL (Window of Circadian Low) is typically 02:00 - 06:00
 const WOCL_START = 2;
 const WOCL_END = 6;
@@ -269,6 +281,103 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     return bars;
   }, [duties, daysInMonth]);
 
+  // Calculate sleep/rest period bars showing recovery
+  const sleepBars = useMemo(() => {
+    const bars: SleepBar[] = [];
+    
+    // Standard sleep window (can span midnight)
+    const SLEEP_START = 23; // 23:00
+    const SLEEP_END = 7;    // 07:00
+    
+    duties.forEach((duty) => {
+      const dayOfMonth = duty.date.getDate();
+      const sleepEstimate = duty.sleepEstimate;
+      
+      if (!sleepEstimate) return;
+      
+      // Calculate recovery score
+      const baseScore = (sleepEstimate.effectiveSleepHours / 8) * 100;
+      const efficiencyBonus = sleepEstimate.sleepEfficiency * 20;
+      const woclPenalty = sleepEstimate.woclOverlapHours * 5;
+      const recoveryScore = Math.min(100, Math.max(0, baseScore + efficiencyBonus - woclPenalty));
+      
+      // Get duty start time
+      if (duty.flightSegments.length > 0) {
+        const firstSegment = duty.flightSegments[0];
+        const [startH, startM] = firstSegment.departureTime.split(':').map(Number);
+        const dutyStartHour = startH + startM / 60;
+        
+        // If duty starts in the morning (after 06:00), show sleep bar from 23:00 previous night to duty start
+        if (dutyStartHour >= 6) {
+          // Sleep bar on the previous night (23:00-24:00)
+          if (dayOfMonth > 1) {
+            bars.push({
+              dayIndex: dayOfMonth - 1,
+              startHour: SLEEP_START,
+              endHour: 24,
+              recoveryScore,
+              effectiveSleep: sleepEstimate.effectiveSleepHours,
+              sleepEfficiency: sleepEstimate.sleepEfficiency,
+              sleepStrategy: sleepEstimate.sleepStrategy,
+              isPreDuty: true,
+              relatedDuty: duty,
+            });
+          }
+          
+          // Sleep bar on duty day (00:00 to wake-up, ~1h before duty)
+          const wakeUpHour = Math.max(0, dutyStartHour - 1.5); // Wake up ~1.5h before duty
+          if (wakeUpHour > 0) {
+            bars.push({
+              dayIndex: dayOfMonth,
+              startHour: 0,
+              endHour: Math.min(wakeUpHour, SLEEP_END),
+              recoveryScore,
+              effectiveSleep: sleepEstimate.effectiveSleepHours,
+              sleepEfficiency: sleepEstimate.sleepEfficiency,
+              sleepStrategy: sleepEstimate.sleepStrategy,
+              isPreDuty: true,
+              relatedDuty: duty,
+            });
+          }
+        } else if (dutyStartHour < 6) {
+          // Early morning duty - limited sleep, show what's available
+          // Sleep from 23:00 previous night to close to duty start
+          if (dayOfMonth > 1 && dutyStartHour > 0) {
+            bars.push({
+              dayIndex: dayOfMonth - 1,
+              startHour: SLEEP_START,
+              endHour: 24,
+              recoveryScore,
+              effectiveSleep: sleepEstimate.effectiveSleepHours,
+              sleepEfficiency: sleepEstimate.sleepEfficiency,
+              sleepStrategy: sleepEstimate.sleepStrategy,
+              isPreDuty: true,
+              relatedDuty: duty,
+            });
+          }
+          
+          // Early morning portion if any time before duty
+          const sleepEndOnDutyDay = Math.max(0, dutyStartHour - 1);
+          if (sleepEndOnDutyDay > 0) {
+            bars.push({
+              dayIndex: dayOfMonth,
+              startHour: 0,
+              endHour: sleepEndOnDutyDay,
+              recoveryScore,
+              effectiveSleep: sleepEstimate.effectiveSleepHours,
+              sleepEfficiency: sleepEstimate.sleepEfficiency,
+              sleepStrategy: sleepEstimate.sleepStrategy,
+              isPreDuty: true,
+              relatedDuty: duty,
+            });
+          }
+        }
+      }
+    });
+    
+    return bars;
+  }, [duties]);
+
   // Get duty warnings based on actual duty data
   const getDayWarnings = (dayOfMonth: number) => {
     const duty = duties.find(d => d.date.getDate() === dayOfMonth);
@@ -403,7 +512,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             </div>
             
             {/* Legend */}
-            <div className="mb-4 flex items-center justify-center gap-6 text-xs flex-wrap">
+            <div className="mb-4 flex items-center justify-center gap-4 text-xs flex-wrap">
               <span className="flex items-center gap-2">
                 <span className="h-4 w-8 rounded bg-wocl/30" />
                 WOCL
@@ -420,6 +529,17 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               <span className="flex items-center gap-1">
                 <span className="h-3 w-6 rounded bg-muted opacity-50" />
                 Ground
+              </span>
+              <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
+              <span className="flex items-center gap-1">
+                <span 
+                  className="h-3 w-6 rounded border border-dashed" 
+                  style={{ 
+                    backgroundColor: 'hsl(120, 70%, 45%, 0.15)',
+                    borderColor: 'hsl(120, 70%, 45%)'
+                  }} 
+                />
+                🛏️ Sleep/Recovery
               </span>
               <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
               <span className="flex items-center gap-1">
@@ -531,6 +651,66 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                         key={dayNum}
                         className="relative h-7 border-b border-border/20"
                       >
+                        {/* Sleep/Rest bars for this day showing recovery */}
+                        {sleepBars
+                          .filter((bar) => bar.dayIndex === dayNum)
+                          .map((bar, barIndex) => {
+                            const barWidth = ((bar.endHour - bar.startHour) / 24) * 100;
+                            return (
+                              <TooltipProvider key={`sleep-${barIndex}`} delayDuration={100}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div
+                                      className="absolute top-1.5 bottom-1.5 rounded-sm flex items-center justify-end px-1 border border-dashed cursor-default"
+                                      style={{
+                                        left: `${(bar.startHour / 24) * 100}%`,
+                                        width: `${Math.max(barWidth, 1)}%`,
+                                        backgroundColor: `${getRecoveryColor(bar.recoveryScore)}15`,
+                                        borderColor: getRecoveryColor(bar.recoveryScore),
+                                      }}
+                                    >
+                                      {/* Show recovery info if bar is wide enough */}
+                                      {barWidth > 6 && (
+                                        <div 
+                                          className="flex items-center gap-0.5 text-[8px] font-medium"
+                                          style={{ color: getRecoveryColor(bar.recoveryScore) }}
+                                        >
+                                          <span>{getStrategyIcon(bar.sleepStrategy)}</span>
+                                          <span>{Math.round(bar.recoveryScore)}%</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-xs p-2">
+                                    <div className="space-y-1 text-xs">
+                                      <div className="font-semibold flex items-center gap-1">
+                                        🛏️ Sleep Period
+                                        <span className="text-muted-foreground font-normal">
+                                          ({bar.startHour.toFixed(0).padStart(2, '0')}:00 - {bar.endHour.toFixed(0).padStart(2, '0')}:00)
+                                        </span>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                                        <span className="text-muted-foreground">Recovery Score:</span>
+                                        <span className="font-medium" style={{ color: getRecoveryColor(bar.recoveryScore) }}>
+                                          {Math.round(bar.recoveryScore)}%
+                                        </span>
+                                        <span className="text-muted-foreground">Effective Sleep:</span>
+                                        <span>{bar.effectiveSleep.toFixed(1)}h</span>
+                                        <span className="text-muted-foreground">Efficiency:</span>
+                                        <span>{Math.round(bar.sleepEfficiency * 100)}%</span>
+                                        <span className="text-muted-foreground">Strategy:</span>
+                                        <span className="capitalize">{getStrategyIcon(bar.sleepStrategy)} {bar.sleepStrategy}</span>
+                                      </div>
+                                      <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/50">
+                                        Pre-duty rest for {format(bar.relatedDuty.date, 'MMM d')} duty
+                                      </div>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            );
+                          })}
+
                         {/* Duty bars for this day with flight phase segments */}
                         {dutyBars
                           .filter((bar) => bar.dayIndex === dayNum)
