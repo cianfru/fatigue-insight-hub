@@ -51,6 +51,7 @@ export interface FlightPhasePerformance {
 
 export interface DutyAnalysis {
   date: Date;
+  dateString?: string; // Raw YYYY-MM-DD from backend for timezone-safe day extraction
   dayOfWeek: string;
   dutyHours: number;
   sectors: number;

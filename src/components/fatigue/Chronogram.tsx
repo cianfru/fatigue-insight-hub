@@ -251,7 +251,11 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     const bars: DutyBar[] = [];
     
     duties.forEach((duty) => {
-      const dayOfMonth = duty.date.getDate();
+      // Extract day-of-month from dateString (YYYY-MM-DD) to avoid timezone issues
+      // Fallback to Date.getDate() if dateString not available
+      const dayOfMonth = duty.dateString 
+        ? Number(duty.dateString.split('-')[2]) 
+        : duty.date.getDate();
       
       // Calculate start and end times from flight segments
       if (duty.flightSegments.length > 0) {
@@ -350,8 +354,11 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       }
     };
     
-    duties.forEach((duty, dutyIndex) => {
-      const dutyDayOfMonth = duty.date.getDate();
+    duties.forEach((duty) => {
+      // Extract day-of-month from dateString to avoid timezone issues
+      const dutyDayOfMonth = duty.dateString 
+        ? Number(duty.dateString.split('-')[2]) 
+        : duty.date.getDate();
       const sleepEstimate = duty.sleepEstimate;
 
       if (!sleepEstimate) return;
@@ -361,17 +368,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       // PREFER ISO timestamps if available (accurate date info)
       const sleepStartIso = sleepEstimate.sleepStartIso ? parseIsoTimestamp(sleepEstimate.sleepStartIso) : null;
       const sleepEndIso = sleepEstimate.sleepEndIso ? parseIsoTimestamp(sleepEstimate.sleepEndIso) : null;
-      
-      // Debug logging for first few duties
-      if (dutyIndex < 3) {
-        console.log(`[Chronogram] Duty ${dutyIndex + 1} (day ${dutyDayOfMonth}):`, {
-          rawSleepStartIso: sleepEstimate.sleepStartIso,
-          rawSleepEndIso: sleepEstimate.sleepEndIso,
-          parsedStart: sleepStartIso,
-          parsedEnd: sleepEndIso,
-          fallbackTimes: { start: sleepEstimate.sleepStartTime, end: sleepEstimate.sleepEndTime },
-        });
-      }
       
       if (sleepStartIso && sleepEndIso) {
         // Use ISO timestamps for precise day placement

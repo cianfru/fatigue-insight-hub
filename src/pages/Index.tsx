@@ -142,6 +142,7 @@ const Index = () => {
         })),
         duties: result.duties.map(duty => ({
           date: parseISO(duty.date),
+          dateString: duty.date, // Keep raw YYYY-MM-DD for timezone-safe parsing
           dayOfWeek: format(parseISO(duty.date), 'EEE'),
           dutyHours: duty.duty_hours,
           sectors: duty.sectors,
