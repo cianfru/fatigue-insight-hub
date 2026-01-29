@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DutyAnalysis } from '@/types/fatigue';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
@@ -90,11 +91,11 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
     }
   };
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = forwardRef<HTMLDivElement, any>(({ active, payload }: any, ref) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="rounded-lg border border-border bg-card p-3 shadow-lg">
+        <div ref={ref} className="rounded-lg border border-border bg-card p-3 shadow-lg">
           <p className="text-sm font-medium text-foreground">{data.fullDate}</p>
           <p className="text-xs text-muted-foreground mb-2">
             {data.isDuty ? '✈️ Flight Duty' : '🛏️ Rest Day'}
@@ -139,7 +140,8 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
       );
     }
     return null;
-  };
+  });
+  CustomTooltip.displayName = 'PerformanceTimelineTooltip';
 
   return (
     <Card variant="glass">
@@ -190,7 +192,7 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
                 tickFormatter={(value) => `${value}%`}
                 ticks={[40, 50, 60, 70, 80, 90, 100]}
               />
-              <Tooltip content={<CustomTooltip />} />
+               <Tooltip content={<CustomTooltip />} />
               <ReferenceLine
                 y={50}
                 stroke="hsl(var(--critical))"
