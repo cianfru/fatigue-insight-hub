@@ -321,11 +321,26 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       return h + (m || 0) / 60;
     };
     
-    // Helper to extract day-of-month and hour from ISO timestamp
+    // Helper to extract day-of-month and hour from ISO timestamp.
+    // IMPORTANT: Do NOT use `new Date(iso)` here because it converts to the browser's local timezone,
+    // which can shift sleep blocks onto the wrong day/hour and create visual overlap.
+    // We intentionally parse the date/time *as written in the ISO string*.
     const parseIsoTimestamp = (isoStr: string): { dayOfMonth: number; hour: number } | null => {
+      if (!isoStr) return null;
+
+      // Fast-path for standard ISO strings: YYYY-MM-DDTHH:mm...
+      const m = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+      if (m) {
+        const dayOfMonth = Number(m[3]);
+        const hour = Number(m[4]) + Number(m[5]) / 60;
+        if (!Number.isFinite(dayOfMonth) || !Number.isFinite(hour)) return null;
+        return { dayOfMonth, hour };
+      }
+
+      // Fallback for unexpected formats
       try {
         const date = new Date(isoStr);
-        if (isNaN(date.getTime())) return null;
+        if (Number.isNaN(date.getTime())) return null;
         return {
           dayOfMonth: date.getDate(),
           hour: date.getHours() + date.getMinutes() / 60,
