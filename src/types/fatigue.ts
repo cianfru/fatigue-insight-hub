@@ -100,6 +100,9 @@ export interface DutyAnalysis {
     // Sleep timing (HH:mm in home base timezone)
     sleepStartTime?: string;
     sleepEndTime?: string;
+    // ISO timestamps for precise date/time positioning
+    sleepStartIso?: string;
+    sleepEndIso?: string;
   };
 }
 
