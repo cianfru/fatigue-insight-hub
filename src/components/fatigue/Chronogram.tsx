@@ -969,25 +969,26 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                         key={dayNum}
                         className="relative h-7 border-b border-border/20"
                       >
-                        {/* Sleep/Rest bars for this day showing recovery */}
+                        {/* Sleep/Rest bars for this day showing recovery - SEPARATE LANE at top */}
                         {sleepBars
                           .filter((bar) => bar.dayIndex === dayNum)
                           .map((bar, barIndex) => {
                             const barWidth = ((bar.endHour - bar.startHour) / 24) * 100;
-                             const classes = getRecoveryClasses(bar.recoveryScore);
+                            const classes = getRecoveryClasses(bar.recoveryScore);
                             return (
-                              <TooltipProvider key={`sleep-${barIndex}`} delayDuration={100}>
+                              <TooltipProvider key={`sleep-${barIndex}`} delayDuration={0}>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <div
+                                    <button
+                                      type="button"
                                       className={cn(
-                                        "absolute z-0 rounded-sm flex items-center justify-end px-1 border border-dashed cursor-default",
+                                        "absolute z-20 rounded-sm flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
                                         classes.border,
                                         classes.bg
                                       )}
                                       style={{
-                                        top: 2,
-                                        height: 10,
+                                        top: 1,
+                                        height: 11,
                                         left: `${(bar.startHour / 24) * 100}%`,
                                         width: `${Math.max(barWidth, 1)}%`,
                                       }}
@@ -1001,7 +1002,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           <span>{Math.round(bar.recoveryScore)}%</span>
                                         </div>
                                       )}
-                                    </div>
+                                    </button>
                                   </TooltipTrigger>
                                   <TooltipContent side="top" className="max-w-sm p-3">
                                     <div className="space-y-2 text-xs">
@@ -1114,7 +1115,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                             );
                           })}
 
-                        {/* Duty bars for this day with flight phase segments */}
+                        {/* Duty bars for this day with flight phase segments - SEPARATE LANE at bottom */}
                         {dutyBars
                           .filter((bar) => bar.dayIndex === dayNum)
                           .map((bar, barIndex) => {
@@ -1134,8 +1135,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         usedDiscretion ? "ring-2 ring-critical hover:ring-critical/80" : "hover:ring-foreground"
                                       )}
                                       style={{
-                                        top: 14,
-                                        height: 12,
+                                        top: 13,
+                                        height: 13,
                                         left: `${(bar.startHour / 24) * 100}%`,
                                         width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
                                         background: displayMode === 'timeline' ? 'hsl(var(--primary))' : undefined,
