@@ -6,7 +6,7 @@ import { WelcomePage } from '@/components/fatigue/WelcomePage';
 import { DashboardContent } from '@/components/fatigue/DashboardContent';
 import { MathematicalModelPage } from '@/components/fatigue/MathematicalModelPage';
 import { FatigueSciencePage } from '@/components/fatigue/FatigueSciencePage';
-import { ComponentReferencePage } from '@/components/fatigue/ComponentReferencePage';
+
 import { ResearchReferencesPage } from '@/components/fatigue/ResearchReferencesPage';
 import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { mockAnalysisResults } from '@/data/mockAnalysisData';
@@ -215,51 +215,45 @@ const Index = () => {
       <Header theme={settings.theme} onThemeChange={(theme) => handleSettingsChange({ theme })} />
       
       {/* Main Navigation Tabs */}
-      <Tabs defaultValue="welcome" className="flex flex-1 flex-col">
+      <Tabs defaultValue="overview" className="flex flex-1 flex-col">
         <div className="border-b border-border bg-card/30 backdrop-blur-sm">
           <div className="px-6">
             <TabsList className="h-12 w-full justify-start gap-1 rounded-none border-0 bg-transparent p-0">
               <TabsTrigger 
-                value="welcome" 
+                value="overview" 
                 className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
-                🏠 Welcome
+                Overview
               </TabsTrigger>
               <TabsTrigger 
                 value="dashboard" 
                 className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
-                📊 Dashboard
+                Dashboard
               </TabsTrigger>
               <TabsTrigger 
                 value="model" 
                 className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
-                📐 Mathematical Model
+                Model
               </TabsTrigger>
               <TabsTrigger 
                 value="science" 
                 className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
-                🧠 Fatigue Science
-              </TabsTrigger>
-              <TabsTrigger 
-                value="reference" 
-                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-              >
-                📚 Component Reference
+                Science
               </TabsTrigger>
               <TabsTrigger 
                 value="research" 
                 className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
-                🔬 Research &amp; References
+                References
               </TabsTrigger>
             </TabsList>
           </div>
         </div>
 
-        <TabsContent value="welcome" className="flex-1 mt-0">
+        <TabsContent value="overview" className="flex-1 mt-0">
           <WelcomePage />
         </TabsContent>
 
@@ -286,10 +280,6 @@ const Index = () => {
 
         <TabsContent value="science" className="flex-1 mt-0">
           <FatigueSciencePage />
-        </TabsContent>
-
-        <TabsContent value="reference" className="flex-1 mt-0">
-          <ComponentReferencePage />
         </TabsContent>
 
         <TabsContent value="research" className="flex-1 mt-0">
