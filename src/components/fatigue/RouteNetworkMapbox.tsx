@@ -232,30 +232,80 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
     fetchAirports();
   }, [allAirportCodes]);
 
-  // Get map style based on theme
+  // Get map style based on theme - use satellite-streets for terrain
   const getMapStyle = (currentTheme: 'dark' | 'light') => {
     return currentTheme === 'dark' 
-      ? 'mapbox://styles/mapbox/dark-v11'
-      : 'mapbox://styles/mapbox/light-v11';
+      ? 'mapbox://styles/mapbox/satellite-streets-v12'
+      : 'mapbox://styles/mapbox/outdoors-v12';
   };
 
-  // Get fog settings based on theme
+  // Get fog/atmosphere settings based on theme
   const getFogSettings = (currentTheme: 'dark' | 'light') => {
     return currentTheme === 'dark' 
       ? {
-          color: 'hsl(220, 30%, 5%)',
-          'high-color': 'hsl(220, 50%, 10%)',
-          'horizon-blend': 0.1,
-          'space-color': 'hsl(220, 30%, 3%)',
-          'star-intensity': 0.3,
+          'range': [0.5, 10],
+          'color': 'hsl(220, 40%, 8%)',
+          'high-color': 'hsl(220, 60%, 15%)',
+          'horizon-blend': 0.03,
+          'space-color': 'hsl(220, 50%, 2%)',
+          'star-intensity': 0.6,
         }
       : {
-          color: 'hsl(210, 40%, 96%)',
-          'high-color': 'hsl(210, 60%, 85%)',
-          'horizon-blend': 0.08,
-          'space-color': 'hsl(210, 50%, 92%)',
+          'range': [0.5, 10],
+          'color': 'hsl(200, 30%, 85%)',
+          'high-color': 'hsl(210, 80%, 70%)',
+          'horizon-blend': 0.05,
+          'space-color': 'hsl(210, 60%, 92%)',
           'star-intensity': 0,
         };
+  };
+
+  // Add 3D terrain and sky layer
+  const addTerrainAndSky = (currentTheme: 'dark' | 'light') => {
+    if (!map.current) return;
+
+    // Add terrain source if not exists
+    if (!map.current.getSource('mapbox-dem')) {
+      map.current.addSource('mapbox-dem', {
+        type: 'raster-dem',
+        url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+        tileSize: 512,
+        maxzoom: 14,
+      });
+    }
+
+    // Enable 3D terrain
+    map.current.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
+
+    // Remove existing sky layer
+    if (map.current.getLayer('sky')) {
+      map.current.removeLayer('sky');
+    }
+
+    // Add custom sky layer based on theme
+    if (currentTheme === 'dark') {
+      map.current.addLayer({
+        id: 'sky',
+        type: 'sky',
+        paint: {
+          'sky-type': 'atmosphere',
+          'sky-atmosphere-sun': [0.0, 90.0],
+          'sky-atmosphere-sun-intensity': 5,
+          'sky-atmosphere-color': 'hsl(220, 60%, 8%)',
+        },
+      });
+    } else {
+      map.current.addLayer({
+        id: 'sky',
+        type: 'sky',
+        paint: {
+          'sky-type': 'atmosphere',
+          'sky-atmosphere-sun': [0.0, 0.0],
+          'sky-atmosphere-sun-intensity': 15,
+          'sky-atmosphere-color': 'hsl(210, 80%, 70%)',
+        },
+      });
+    }
   };
 
   // Initialize map
@@ -284,8 +334,9 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       setMapLoaded(true);
       setStyleReady(true);
       
-      // Add atmosphere and fog
+      // Add atmosphere, fog, terrain, and sky
       map.current?.setFog(getFogSettings(theme) as any);
+      addTerrainAndSky(theme);
     });
 
     // Cleanup
@@ -312,6 +363,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       if (!map.current) return;
       if (map.current.isStyleLoaded()) {
         map.current.setFog(getFogSettings(theme) as any);
+        addTerrainAndSky(theme);
         setStyleReady(true);
       }
     };
