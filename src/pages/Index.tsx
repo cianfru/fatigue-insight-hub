@@ -1,19 +1,13 @@
 import { useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Header } from '@/components/fatigue/Header';
 import { Footer } from '@/components/fatigue/Footer';
-import { SettingsSidebar } from '@/components/fatigue/SettingsSidebar';
-import { StatisticsCards } from '@/components/fatigue/StatisticsCards';
-import { Chronogram } from '@/components/fatigue/Chronogram';
-import { PerformanceTimeline } from '@/components/fatigue/PerformanceTimeline';
-import { RouteNetworkMapbox } from '@/components/fatigue/RouteNetworkMapbox';
-import { ExportOptions } from '@/components/fatigue/ExportOptions';
-import { PinchEventAlerts } from '@/components/fatigue/PinchEventAlerts';
-import { BodyClockDriftChart } from '@/components/fatigue/BodyClockDriftChart';
-import { SleepDebtTrendChart } from '@/components/fatigue/SleepDebtTrendChart';
-import { DutyDetailsDrawer } from '@/components/fatigue/DutyDetailsDrawer';
+import { WelcomePage } from '@/components/fatigue/WelcomePage';
+import { DashboardContent } from '@/components/fatigue/DashboardContent';
+import { MathematicalModelPage } from '@/components/fatigue/MathematicalModelPage';
+import { FatigueSciencePage } from '@/components/fatigue/FatigueSciencePage';
+import { ComponentReferencePage } from '@/components/fatigue/ComponentReferencePage';
+import { ResearchReferencesPage } from '@/components/fatigue/ResearchReferencesPage';
 import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { mockAnalysisResults } from '@/data/mockAnalysisData';
 import { useTheme } from '@/hooks/useTheme';
@@ -25,12 +19,8 @@ const Index = () => {
   const { theme, setTheme } = useTheme();
 
   const isoToHHmm = (iso: string) => {
-    // Backend returns ISO timestamps like "2026-02-03T04:45:00+00:00".
-    // Chronogram expects "HH:mm".
     if (!iso) return '';
-    // Fast-path for ISO strings.
     if (iso.length >= 16 && iso.includes('T')) return iso.slice(11, 16);
-    // Fallback for other formats.
     try {
       return format(parseISO(iso), 'HH:mm');
     } catch {
@@ -101,15 +91,13 @@ const Index = () => {
       console.log('First duty segments:', result.duties[0]?.segments);
       console.log('Sample segment times:', result.duties[0]?.segments[0]?.departure_time, result.duties[0]?.segments[0]?.arrival_time);
       
-      // Derive actual month from the first duty in the response
       const analysisMonth = result.duties.length > 0 
         ? parseISO(result.duties[0].date) 
         : settings.selectedMonth;
       
-      // Convert API response to match frontend types
       setAnalysisResults({
         generatedAt: new Date(),
-        month: analysisMonth, // Store the actual month from the data
+        month: analysisMonth,
         pilotId: result.pilot_id || undefined,
         pilotName: result.pilot_name || undefined,
         pilotBase: result.pilot_base || undefined,
@@ -121,7 +109,6 @@ const Index = () => {
           criticalRiskDuties: result.critical_risk_duties,
           maxSleepDebt: result.max_sleep_debt,
         },
-        // Transform rest_days_sleep array
         restDaysSleep: result.rest_days_sleep?.map(restDay => ({
           date: parseISO(restDay.date),
           sleepBlocks: restDay.sleep_blocks.map(block => ({
@@ -142,7 +129,7 @@ const Index = () => {
         })),
         duties: result.duties.map(duty => ({
           date: parseISO(duty.date),
-          dateString: duty.date, // Keep raw YYYY-MM-DD for timezone-safe parsing
+          dateString: duty.date,
           dayOfWeek: format(parseISO(duty.date), 'EEE'),
           dutyHours: duty.duty_hours,
           sectors: duty.sectors,
@@ -159,20 +146,15 @@ const Index = () => {
           maxFdpHours: duty.max_fdp_hours,
           extendedFdpHours: duty.extended_fdp_hours,
           usedDiscretion: duty.used_discretion,
-          // Map strategic sleep estimator data
-          // Backend currently provides this as `sleep_quality` (keeping `sleep_estimate` as fallback)
-          // ISO timestamps may be at top level OR nested in sleep_blocks[]
           sleepEstimate: (duty.sleep_quality ?? duty.sleep_estimate) ? (() => {
             const sleep = duty.sleep_quality ?? duty.sleep_estimate;
             if (!sleep) return undefined;
             
-            // Extract ISO timestamps - check top level first, then fall back to first sleep_blocks entry
             const sleepBlocks = (sleep as unknown as Record<string, unknown>).sleep_blocks as Array<{ sleep_start_iso?: string; sleep_end_iso?: string }> | undefined;
             const firstBlock = sleepBlocks?.[0];
             const sleepStartIso = sleep.sleep_start_iso ?? firstBlock?.sleep_start_iso;
             const sleepEndIso = sleep.sleep_end_iso ?? firstBlock?.sleep_end_iso;
             
-            // Extract pre-computed day/hour values from backend (timezone-safe)
             const sleepRecord = sleep as unknown as Record<string, unknown>;
             const sleepStartDay = sleepRecord.sleep_start_day as number | undefined;
             const sleepStartHour = sleepRecord.sleep_start_hour as number | undefined;
@@ -189,10 +171,8 @@ const Index = () => {
               warnings: sleep.warnings,
               sleepStartTime: sleep.sleep_start_time,
               sleepEndTime: sleep.sleep_end_time,
-              // ISO timestamps for precise positioning (from top level or sleep_blocks)
               sleepStartIso,
               sleepEndIso,
-              // Pre-computed day/hour values (timezone-safe)
               sleepStartDay,
               sleepStartHour,
               sleepEndDay,
@@ -203,8 +183,8 @@ const Index = () => {
             flightNumber: seg.flight_number,
             departure: seg.departure,
             arrival: seg.arrival,
-            departureTime: seg.departure_time_local,  // Already in HH:mm format, home base timezone
-            arrivalTime: seg.arrival_time_local,      // Already in HH:mm format, home base timezone
+            departureTime: seg.departure_time_local,
+            arrivalTime: seg.arrival_time_local,
             performance: duty.avg_performance,
           })),
         })),
@@ -216,7 +196,6 @@ const Index = () => {
       console.error('Analysis failed:', error);
       toast.error('Analysis failed: ' + (error as Error).message);
       
-      // Fallback to mock data for demo purposes
       setAnalysisResults({
         ...mockAnalysisResults,
         month: settings.selectedMonth,
@@ -235,137 +214,88 @@ const Index = () => {
     <div className="flex min-h-screen flex-col bg-background">
       <Header theme={settings.theme} onThemeChange={(theme) => handleSettingsChange({ theme })} />
       
-      <div className="flex flex-1">
-        {/* Settings Sidebar with Upload */}
-        <SettingsSidebar 
-          settings={settings} 
-          onSettingsChange={handleSettingsChange}
-          uploadedFile={uploadedFile}
-          onFileUpload={handleFileUpload}
-          onRemoveFile={handleRemoveFile}
-          onRunAnalysis={handleRunAnalysis}
-          isAnalyzing={isAnalyzing}
-          hasResults={!!analysisResults}
-          pilotInfo={analysisResults ? {
-            name: analysisResults.pilotName,
-            id: analysisResults.pilotId,
-            base: analysisResults.pilotBase || settings.homeBase,
-            aircraft: analysisResults.pilotAircraft,
-          } : undefined}
-        />
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="mx-auto max-w-6xl space-y-6">
-            {/* Analysis Results */}
-            {analysisResults && (
-              <div className="space-y-6 animate-fade-in">
-                {/* Section 1: Overview - Summary Statistics */}
-                <Card variant="glass">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <span className="text-primary">📊</span>
-                      Overview - Summary Statistics
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <StatisticsCards statistics={analysisResults.statistics} />
-
-                    {/* Critical Warning */}
-                    {analysisResults.statistics.criticalRiskDuties > 0 && (
-                      <div className="mt-4 flex items-start gap-3 rounded-lg border border-critical/50 bg-critical/10 p-4">
-                        <AlertTriangle className="h-5 w-5 flex-shrink-0 text-critical" />
-                        <div>
-                          <p className="font-medium text-critical">
-                            CRITICAL: {analysisResults.statistics.criticalRiskDuties} duties with critical risk detected
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            SMS reporting required per EASA ORO.FTL.120
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Section 2: Pinch Event Alerts */}
-                <PinchEventAlerts duties={analysisResults.duties} />
-
-                {/* Section 3: Route Network Map */}
-                <RouteNetworkMapbox duties={analysisResults.duties} homeBase={settings.homeBase} theme={settings.theme} />
-
-                {/* Section 4: Analytics Tabs - Performance Timeline, Body Clock Drift, Sleep Debt Trend */}
-                <Tabs defaultValue="performance" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="performance">Performance Timeline</TabsTrigger>
-                    <TabsTrigger value="circadian">Body Clock Drift</TabsTrigger>
-                    <TabsTrigger value="sleepdebt">Sleep Debt Trend</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="performance" className="mt-4">
-                    <PerformanceTimeline duties={analysisResults.duties} month={analysisResults.month} />
-                  </TabsContent>
-                  <TabsContent value="circadian" className="mt-4">
-                    <BodyClockDriftChart 
-                      duties={analysisResults.duties} 
-                      month={analysisResults.month} 
-                      homeBase={settings.homeBase}
-                    />
-                  </TabsContent>
-                  <TabsContent value="sleepdebt" className="mt-4">
-                    <SleepDebtTrendChart duties={analysisResults.duties} month={analysisResults.month} />
-                  </TabsContent>
-                </Tabs>
-
-                {/* Section 5: Monthly Chronogram */}
-                <Chronogram
-                  duties={analysisResults.duties}
-                  statistics={analysisResults.statistics}
-                  month={analysisResults.month}
-                  pilotId={settings.pilotId}
-                  onDutySelect={handleDutySelect}
-                  selectedDuty={selectedDuty}
-                  restDaysSleep={analysisResults.restDaysSleep}
-                />
-
-                {/* Section 6: Export Options */}
-                <ExportOptions />
-              </div>
-            )}
-
-            {/* Empty state when no results */}
-            {!analysisResults && uploadedFile && (
-              <Card variant="glass" className="p-12 text-center">
-                <div className="space-y-4">
-                  <span className="text-6xl">📊</span>
-                  <h3 className="text-xl font-semibold">Ready to Analyze</h3>
-                  <p className="text-muted-foreground">
-                    Click "Run Analysis" in the sidebar to generate your fatigue analysis.
-                  </p>
-                </div>
-              </Card>
-            )}
-
-            {!uploadedFile && (
-              <Card variant="glass" className="p-12 text-center">
-                <div className="space-y-4">
-                  <span className="text-6xl">📄</span>
-                  <h3 className="text-xl font-semibold">No Roster Uploaded</h3>
-                  <p className="text-muted-foreground">
-                    Upload a roster file using the sidebar to get started.
-                  </p>
-                </div>
-              </Card>
-            )}
+      {/* Main Navigation Tabs */}
+      <Tabs defaultValue="welcome" className="flex flex-1 flex-col">
+        <div className="border-b border-border bg-card/30 backdrop-blur-sm">
+          <div className="px-6">
+            <TabsList className="h-12 w-full justify-start gap-1 rounded-none border-0 bg-transparent p-0">
+              <TabsTrigger 
+                value="welcome" 
+                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              >
+                🏠 Welcome
+              </TabsTrigger>
+              <TabsTrigger 
+                value="dashboard" 
+                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              >
+                📊 Dashboard
+              </TabsTrigger>
+              <TabsTrigger 
+                value="model" 
+                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              >
+                📐 Mathematical Model
+              </TabsTrigger>
+              <TabsTrigger 
+                value="science" 
+                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              >
+                🧠 Fatigue Science
+              </TabsTrigger>
+              <TabsTrigger 
+                value="reference" 
+                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              >
+                📚 Component Reference
+              </TabsTrigger>
+              <TabsTrigger 
+                value="research" 
+                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              >
+                🔬 Research &amp; References
+              </TabsTrigger>
+            </TabsList>
           </div>
-        </main>
-      </div>
+        </div>
 
-      {/* Duty Details Drawer */}
-      <DutyDetailsDrawer 
-        duty={selectedDuty} 
-        open={drawerOpen} 
-        onOpenChange={setDrawerOpen} 
-      />
+        <TabsContent value="welcome" className="flex-1 mt-0">
+          <WelcomePage />
+        </TabsContent>
+
+        <TabsContent value="dashboard" className="flex-1 mt-0">
+          <DashboardContent
+            settings={settings}
+            onSettingsChange={handleSettingsChange}
+            uploadedFile={uploadedFile}
+            onFileUpload={handleFileUpload}
+            onRemoveFile={handleRemoveFile}
+            onRunAnalysis={handleRunAnalysis}
+            isAnalyzing={isAnalyzing}
+            analysisResults={analysisResults}
+            selectedDuty={selectedDuty}
+            onDutySelect={handleDutySelect}
+            drawerOpen={drawerOpen}
+            onDrawerOpenChange={setDrawerOpen}
+          />
+        </TabsContent>
+
+        <TabsContent value="model" className="flex-1 mt-0">
+          <MathematicalModelPage />
+        </TabsContent>
+
+        <TabsContent value="science" className="flex-1 mt-0">
+          <FatigueSciencePage />
+        </TabsContent>
+
+        <TabsContent value="reference" className="flex-1 mt-0">
+          <ComponentReferencePage />
+        </TabsContent>
+
+        <TabsContent value="research" className="flex-1 mt-0">
+          <ResearchReferencesPage />
+        </TabsContent>
+      </Tabs>
 
       <Footer />
     </div>
