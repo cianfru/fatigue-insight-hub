@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DutyAnalysis, DutyStatistics, RestDaySleep } from '@/types/fatigue';
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -976,36 +977,35 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                             const barWidth = ((bar.endHour - bar.startHour) / 24) * 100;
                             const classes = getRecoveryClasses(bar.recoveryScore);
                             return (
-                              <TooltipProvider key={`sleep-${barIndex}`} delayDuration={0}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className={cn(
-                                        "absolute z-20 rounded-sm flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
-                                        classes.border,
-                                        classes.bg
-                                      )}
-                                      style={{
-                                        top: 1,
-                                        height: 11,
-                                        left: `${(bar.startHour / 24) * 100}%`,
-                                        width: `${Math.max(barWidth, 1)}%`,
-                                      }}
-                                    >
-                                      {/* Show recovery info if bar is wide enough */}
-                                      {barWidth > 6 && (
-                                        <div 
-                                          className={cn("flex items-center gap-0.5 text-[8px] font-medium", classes.text)}
-                                        >
-                                          <span>{getStrategyIcon(bar.sleepStrategy)}</span>
-                                          <span>{Math.round(bar.recoveryScore)}%</span>
-                                        </div>
-                                      )}
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top" className="max-w-sm p-3">
-                                    <div className="space-y-2 text-xs">
+                              <Popover key={`sleep-${barIndex}`}>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    className={cn(
+                                      "absolute z-20 rounded-sm flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
+                                      classes.border,
+                                      classes.bg
+                                    )}
+                                    style={{
+                                      top: 1,
+                                      height: 11,
+                                      left: `${(bar.startHour / 24) * 100}%`,
+                                      width: `${Math.max(barWidth, 1)}%`,
+                                    }}
+                                  >
+                                    {/* Show recovery info if bar is wide enough */}
+                                    {barWidth > 6 && (
+                                      <div className={cn("flex items-center gap-0.5 text-[8px] font-medium", classes.text)}>
+                                        <span>{getStrategyIcon(bar.sleepStrategy)}</span>
+                                        <span>{Math.round(bar.recoveryScore)}%</span>
+                                      </div>
+                                    )}
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent align="start" side="top" className="max-w-sm p-3">
+                                  <div className="space-y-2 text-xs">
                                       {/* Header */}
                                       <div className="flex items-center justify-between border-b border-border pb-2">
                                         <div className="font-semibold flex items-center gap-1.5">
@@ -1108,10 +1108,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           : `Rest day recovery • ${format(bar.relatedDuty.date, 'EEEE, MMM d')}`
                                         }
                                       </div>
-                                    </div>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                             );
                           })}
 
