@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,9 +43,11 @@ const getRouteColor = (performance: number): string => {
   return '#ef4444'; // critical
 };
 
+
 export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }: RouteNetworkMapboxProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const animationRef = useRef<number | null>(null);
   const [activeRegion, setActiveRegion] = useState('World');
   const [hoveredAirport, setHoveredAirport] = useState<string | null>(null);
   const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
@@ -310,8 +312,14 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       
       console.log('[RouteNetworkMapbox] Adding routes:', routes.length, 'airports:', airports.length);
 
+      // Stop any existing animation
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+
       // Remove existing layers first, then sources (order matters!)
-      const layerIds = ['airport-labels', 'airports', 'routes'];
+      const layerIds = ['airport-labels', 'airports', 'routes-animated', 'routes'];
       const sourceIds = ['airports', 'routes'];
       
       layerIds.forEach(id => {
@@ -366,14 +374,29 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         },
       });
 
+      // Base route layer (static, subtle glow effect)
       map.current.addLayer({
         id: 'routes',
         type: 'line',
         source: 'routes',
         paint: {
           'line-color': ['get', 'color'],
-          'line-width': 3,
-          'line-opacity': 0.85,
+          'line-width': 4,
+          'line-opacity': 0.3,
+          'line-blur': 3,
+        },
+      });
+
+      // Animated flowing line layer - uses dash pattern animated via useEffect
+      map.current.addLayer({
+        id: 'routes-animated',
+        type: 'line',
+        source: 'routes',
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 2,
+          'line-opacity': 0.9,
+          'line-dasharray': [0, 4, 3], // Initial dash pattern, animated in useEffect
         },
       });
 
@@ -477,10 +500,70 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
 
     // Cleanup
     return () => {
-      // Remove event listeners if component unmounts
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
     };
 
   }, [mapLoaded, styleReady, routes, airports, homeBase]);
+
+  // Animate the flowing lines with smooth dash shifting
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !styleReady) return;
+    
+    let dashArraySeq = [
+      [0, 4, 3],
+      [0.5, 4, 2.5],
+      [1, 4, 2],
+      [1.5, 4, 1.5],
+      [2, 4, 1],
+      [2.5, 4, 0.5],
+      [3, 4, 0],
+      [0, 0.5, 3, 3.5],
+      [0, 1, 3, 3],
+      [0, 1.5, 3, 2.5],
+      [0, 2, 3, 2],
+      [0, 2.5, 3, 1.5],
+      [0, 3, 3, 1],
+      [0, 3.5, 3, 0.5],
+    ];
+    
+    let step = 0;
+    
+    const animateFlow = () => {
+      if (!map.current?.getLayer('routes-animated')) {
+        animationRef.current = requestAnimationFrame(animateFlow);
+        return;
+      }
+      
+      step = (step + 1) % dashArraySeq.length;
+      
+      try {
+        map.current.setPaintProperty(
+          'routes-animated',
+          'line-dasharray',
+          dashArraySeq[step]
+        );
+      } catch (e) {
+        // Layer might not exist yet, continue animation
+      }
+      
+      // Slower animation for smoother flow (~20fps)
+      setTimeout(() => {
+        animationRef.current = requestAnimationFrame(animateFlow);
+      }, 50);
+    };
+    
+    animationRef.current = requestAnimationFrame(animateFlow);
+    
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+  }, [mapLoaded, styleReady]);
 
   const handleZoomIn = () => {
     map.current?.zoomIn();
