@@ -34,7 +34,7 @@ export function WelcomePage() {
       {/* Hero Section */}
       <Card variant="glass" className="text-center">
         <CardHeader className="pb-4">
-          <CardTitle className="text-4xl font-bold tracking-tight">Fatigue Insight Hub</CardTitle>
+          <CardTitle className="text-4xl font-bold tracking-tight">Aerowake</CardTitle>
           <p className="text-xl text-muted-foreground mt-3">
             Your Evidence-Based Aviation Fatigue Analysis Tool
           </p>
@@ -58,7 +58,7 @@ export function WelcomePage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <p className="text-muted-foreground leading-relaxed">
-            <strong>Fatigue Insight Hub</strong> is a scientifically-validated aviation fatigue analysis platform 
+            <strong>Aerowake</strong> is a scientifically-validated aviation fatigue analysis platform 
             that helps pilots, safety managers, and aviation professionals understand and quantify pilot fatigue 
             using biomathematical modeling.
           </p>
@@ -403,7 +403,7 @@ export function WelcomePage() {
               <div>
                 <h4 className="font-medium mb-2">Transparent Development</h4>
                 <div className="bg-muted/50 rounded-lg p-3 font-mono text-sm">
-                  <p>GitHub Repository: github.com/cianfru/fatigue-insight-hub</p>
+                  <p>GitHub Repository: github.com/cianfru/aerowake</p>
                   <p>Backend: github.com/cianfru/fatigue-tool</p>
                 </div>
                 <p className="text-sm text-muted-foreground mt-2">
@@ -570,7 +570,7 @@ export function WelcomePage() {
                 title="Preventing Fatigue Before It Happens"
                 scenario="You receive next month's roster"
                 steps={[
-                  "Upload roster to Fatigue Insight Hub",
+                  "Upload roster to Aerowake",
                   "Monthly heatmap shows Day 23 in RED (critical risk)",
                   "Detailed view: Night departure after only 4.5h effective sleep",
                   "Export SMS report with scientific evidence",
@@ -850,7 +850,7 @@ export function WelcomePage() {
             <Heart className="h-5 w-5 text-primary" />
           </div>
           <p className="text-lg font-medium">
-            Thank you for using Fatigue Insight Hub
+            Thank you for using Aerowake
           </p>
           <p className="text-muted-foreground mt-2">
             Contributing to aviation safety through education and awareness.
