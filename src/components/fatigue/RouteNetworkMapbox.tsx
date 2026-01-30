@@ -491,17 +491,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         },
       });
 
-      // Find the first symbol layer to insert routes below labels but above terrain
-      const layers = map.current.getStyle().layers;
-      let firstSymbolId: string | undefined;
-      for (const layer of layers) {
-        if (layer.type === 'symbol') {
-          firstSymbolId = layer.id;
-          break;
-        }
-      }
-
-      // Base route layer (static, subtle glow effect)
+      // Base route layer (static, subtle glow effect) - add without beforeId to ensure on top
       map.current.addLayer({
         id: 'routes',
         type: 'line',
@@ -512,11 +502,11 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         },
         paint: {
           'line-color': ['get', 'color'],
-          'line-width': 5,
-          'line-opacity': 0.4,
-          'line-blur': 2,
+          'line-width': 6,
+          'line-opacity': 0.5,
+          'line-blur': 3,
         },
-      }, firstSymbolId);
+      });
 
       // Animated flowing line layer - uses dash pattern animated via useEffect
       map.current.addLayer({
@@ -529,11 +519,11 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         },
         paint: {
           'line-color': ['get', 'color'],
-          'line-width': 2.5,
-          'line-opacity': 0.95,
+          'line-width': 3,
+          'line-opacity': 1,
           'line-dasharray': [0, 4, 3], // Initial dash pattern, animated in useEffect
         },
-      }, firstSymbolId);
+      });
 
       // Add airports as circles
       const airportFeatures = airports.map(airport => ({
@@ -564,11 +554,11 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         type: 'circle',
         source: 'airports',
         paint: {
-          'circle-radius': ['case', ['get', 'isHomeBase'], 10, 6],
-          'circle-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 95%, 55%)', 'hsl(0, 0%, 95%)'],
-          'circle-stroke-width': 2,
-          'circle-stroke-color': 'hsl(220, 50%, 15%)',
-          'circle-opacity': 0.95,
+          'circle-radius': ['case', ['get', 'isHomeBase'], 12, 7],
+          'circle-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 95%, 55%)', 'hsl(0, 0%, 100%)'],
+          'circle-stroke-width': 3,
+          'circle-stroke-color': 'hsl(220, 40%, 20%)',
+          'circle-opacity': 1,
         },
       });
 
@@ -579,15 +569,15 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         source: 'airports',
         layout: {
           'text-field': ['get', 'code'],
-          'text-size': ['case', ['get', 'isHomeBase'], 13, 11],
-          'text-offset': [0, -1.4],
+          'text-size': ['case', ['get', 'isHomeBase'], 14, 12],
+          'text-offset': [0, -1.5],
           'text-anchor': 'bottom',
           'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
         },
         paint: {
-          'text-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 95%, 70%)', 'hsl(0, 0%, 95%)'],
-          'text-halo-color': 'hsl(220, 50%, 8%)',
-          'text-halo-width': 1.5,
+          'text-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 95%, 80%)', 'hsl(0, 0%, 100%)'],
+          'text-halo-color': 'hsl(220, 40%, 10%)',
+          'text-halo-width': 2,
         },
       });
 
