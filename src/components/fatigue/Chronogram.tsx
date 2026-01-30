@@ -806,13 +806,11 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               {pilotName && (
                 <h2 className="text-lg font-semibold text-foreground">{pilotName}</h2>
               )}
-              <div className="text-sm text-muted-foreground">
-                {pilotBase && pilotAircraft ? (
-                  <span>{pilotBase} | {pilotAircraft}</span>
-                ) : (
-                  <span>Pilot: {pilotId}</span>
-                )}
-              </div>
+              {(pilotBase || pilotAircraft) && (
+                <div className="text-sm text-muted-foreground">
+                  <span>{[pilotBase, pilotAircraft].filter(Boolean).join(' | ')}</span>
+                </div>
+              )}
               <div className="mt-1 text-sm font-medium">
                 {format(month, 'MMMM yyyy')} - High-Resolution Duty Timeline
               </div>
