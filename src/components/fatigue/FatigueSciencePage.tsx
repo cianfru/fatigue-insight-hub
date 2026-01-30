@@ -15,6 +15,7 @@ import {
   Code,
   Info
 } from 'lucide-react';
+import { SleepEfficiencyChart } from './charts';
 
 export function FatigueSciencePage() {
   return (
@@ -402,6 +403,9 @@ const woclPenalty = 1.0 - (woclOverlap * 0.05);  // -5% per hour`}
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+
+      {/* Interactive Sleep Quality Calculator */}
+      <SleepEfficiencyChart />
 
       {/* Final Calculation */}
       <Card variant="glass">
