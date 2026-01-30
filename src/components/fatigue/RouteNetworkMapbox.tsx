@@ -43,6 +43,63 @@ const getRouteColor = (performance: number): string => {
   return '#ef4444'; // critical
 };
 
+/**
+ * Generate a curved arc between two points.
+ * Arc height varies based on performance (worse performance = higher arc).
+ * This creates visual separation for overlapping routes.
+ */
+const generateArcCoordinates = (
+  from: { lng: number; lat: number },
+  to: { lng: number; lat: number },
+  performance: number,
+  segments: number = 50
+): [number, number][] => {
+  const coordinates: [number, number][] = [];
+  
+  // Calculate arc height based on performance (inverse: lower performance = higher arc)
+  // Performance 100 = minimal arc, Performance 0 = maximum arc
+  const baseArcHeight = 0.15; // Minimum arc curvature
+  const maxArcHeight = 0.45; // Maximum arc curvature for worst performance
+  const performanceFactor = 1 - (performance / 100);
+  const arcHeight = baseArcHeight + (maxArcHeight - baseArcHeight) * performanceFactor;
+  
+  // Calculate the midpoint and perpendicular offset for the arc
+  const midLng = (from.lng + to.lng) / 2;
+  const midLat = (from.lat + to.lat) / 2;
+  
+  // Calculate perpendicular direction for the arc bulge
+  const dx = to.lng - from.lng;
+  const dy = to.lat - from.lat;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  
+  // Perpendicular vector (rotated 90 degrees)
+  const perpX = -dy / distance;
+  const perpY = dx / distance;
+  
+  // Arc control point offset (perpendicular to the route)
+  const arcOffset = distance * arcHeight;
+  const controlLng = midLng + perpX * arcOffset;
+  const controlLat = midLat + perpY * arcOffset;
+  
+  // Generate curved path using quadratic bezier interpolation
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    
+    // Quadratic bezier: B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
+    const oneMinusT = 1 - t;
+    const lng = oneMinusT * oneMinusT * from.lng + 
+                2 * oneMinusT * t * controlLng + 
+                t * t * to.lng;
+    const lat = oneMinusT * oneMinusT * from.lat + 
+                2 * oneMinusT * t * controlLat + 
+                t * t * to.lat;
+    
+    coordinates.push([lng, lat]);
+  }
+  
+  return coordinates;
+};
+
 
 export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }: RouteNetworkMapboxProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -340,11 +397,19 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       // Sort routes by performance (best first) so worst performance renders on top
       const sortedRoutes = [...routes].sort((a, b) => b.avgPerformance - a.avgPerformance);
 
-      // Add routes as lines - all on the same path, sorted so worst (red) renders on top
+      // Add routes as curved arcs - height based on risk level
       const routeFeatures = sortedRoutes.map((route, index) => {
         const from = airportLookup.get(route.from);
         const to = airportLookup.get(route.to);
         if (!from || !to) return null;
+
+        // Generate curved arc coordinates
+        const arcCoordinates = generateArcCoordinates(
+          { lng: from.lng, lat: from.lat },
+          { lng: to.lng, lat: to.lat },
+          route.avgPerformance,
+          40 // Number of segments for smooth curve
+        );
 
         return {
           type: 'Feature' as const,
@@ -359,7 +424,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
           },
           geometry: {
             type: 'LineString' as const,
-            coordinates: [[from.lng, from.lat], [to.lng, to.lat]],
+            coordinates: arcCoordinates,
           },
         };
       }).filter(Boolean);
