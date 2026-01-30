@@ -232,11 +232,11 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
     fetchAirports();
   }, [allAirportCodes]);
 
-  // Get map style based on theme - use satellite-streets for terrain
+  // Get map style based on theme - navigation-night for dark, light minimal for light
   const getMapStyle = (currentTheme: 'dark' | 'light') => {
     return currentTheme === 'dark' 
-      ? 'mapbox://styles/mapbox/satellite-streets-v12'
-      : 'mapbox://styles/mapbox/outdoors-v12';
+      ? 'mapbox://styles/mapbox/navigation-night-v1'
+      : 'mapbox://styles/mapbox/light-v11';
   };
 
   // Get fog/atmosphere settings based on theme
