@@ -14,6 +14,12 @@ import {
   AlertTriangle,
   Info
 } from 'lucide-react';
+import { 
+  ProcessSChart, 
+  ProcessCChart, 
+  SleepInertiaChart, 
+  CombinedPerformanceChart 
+} from './charts';
 
 export function MathematicalModelPage() {
   return (
@@ -175,6 +181,14 @@ export function MathematicalModelPage() {
               Journal of Biological Rhythms, 14(6), 559-570
             </p>
           </div>
+
+          <Separator />
+
+          {/* Interactive Chart */}
+          <div>
+            <h4 className="font-semibold mb-4">Interactive Visualization</h4>
+            <ProcessSChart />
+          </div>
         </CardContent>
       </Card>
 
@@ -287,6 +301,14 @@ export function MathematicalModelPage() {
               performance due purely to circadian phase.
             </p>
           </div>
+
+          <Separator />
+
+          {/* Interactive Chart */}
+          <div>
+            <h4 className="font-semibold mb-4">Interactive Visualization</h4>
+            <ProcessCChart />
+          </div>
         </CardContent>
       </Card>
 
@@ -359,6 +381,14 @@ export function MathematicalModelPage() {
             <p className="text-muted-foreground">
               Tassi P, Muzet A (2000). <em>Sleep inertia.</em> Sleep Medicine Reviews, 4(4), 341-353
             </p>
+          </div>
+
+          <Separator />
+
+          {/* Interactive Chart */}
+          <div>
+            <h4 className="font-semibold mb-4">Interactive Visualization</h4>
+            <SleepInertiaChart />
           </div>
         </CardContent>
       </Card>
@@ -475,6 +505,14 @@ export function MathematicalModelPage() {
                 <li>Equivalent to ~0.06% BAC impairment</li>
               </ol>
             </div>
+          </div>
+
+          <Separator />
+
+          {/* Interactive Chart */}
+          <div>
+            <h4 className="font-semibold mb-4">Interactive Model Visualization</h4>
+            <CombinedPerformanceChart />
           </div>
         </CardContent>
       </Card>
