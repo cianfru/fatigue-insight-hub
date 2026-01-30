@@ -491,31 +491,49 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         },
       });
 
+      // Find the first symbol layer to insert routes below labels but above terrain
+      const layers = map.current.getStyle().layers;
+      let firstSymbolId: string | undefined;
+      for (const layer of layers) {
+        if (layer.type === 'symbol') {
+          firstSymbolId = layer.id;
+          break;
+        }
+      }
+
       // Base route layer (static, subtle glow effect)
       map.current.addLayer({
         id: 'routes',
         type: 'line',
         source: 'routes',
+        layout: {
+          'line-cap': 'round',
+          'line-join': 'round',
+        },
         paint: {
           'line-color': ['get', 'color'],
-          'line-width': 4,
-          'line-opacity': 0.3,
-          'line-blur': 3,
+          'line-width': 5,
+          'line-opacity': 0.4,
+          'line-blur': 2,
         },
-      });
+      }, firstSymbolId);
 
       // Animated flowing line layer - uses dash pattern animated via useEffect
       map.current.addLayer({
         id: 'routes-animated',
         type: 'line',
         source: 'routes',
+        layout: {
+          'line-cap': 'round',
+          'line-join': 'round',
+        },
         paint: {
           'line-color': ['get', 'color'],
-          'line-width': 2,
-          'line-opacity': 0.9,
+          'line-width': 2.5,
+          'line-opacity': 0.95,
           'line-dasharray': [0, 4, 3], // Initial dash pattern, animated in useEffect
         },
-      });
+      }, firstSymbolId);
 
       // Add airports as circles
       const airportFeatures = airports.map(airport => ({
@@ -540,33 +558,36 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         },
       });
 
+      // Airport circles - add on top of routes
       map.current.addLayer({
         id: 'airports',
         type: 'circle',
         source: 'airports',
         paint: {
-          'circle-radius': ['case', ['get', 'isHomeBase'], 8, 5],
-          'circle-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 90%, 60%)', 'hsl(0, 0%, 90%)'],
+          'circle-radius': ['case', ['get', 'isHomeBase'], 10, 6],
+          'circle-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 95%, 55%)', 'hsl(0, 0%, 95%)'],
           'circle-stroke-width': 2,
-          'circle-stroke-color': 'hsl(220, 30%, 10%)',
+          'circle-stroke-color': 'hsl(220, 50%, 15%)',
+          'circle-opacity': 0.95,
         },
       });
 
-      // Add airport labels
+      // Add airport labels on top
       map.current.addLayer({
         id: 'airport-labels',
         type: 'symbol',
         source: 'airports',
         layout: {
           'text-field': ['get', 'code'],
-          'text-size': ['case', ['get', 'isHomeBase'], 12, 10],
-          'text-offset': [0, -1.2],
+          'text-size': ['case', ['get', 'isHomeBase'], 13, 11],
+          'text-offset': [0, -1.4],
           'text-anchor': 'bottom',
+          'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
         },
         paint: {
-          'text-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 90%, 60%)', 'hsl(0, 0%, 80%)'],
-          'text-halo-color': 'hsl(220, 30%, 10%)',
-          'text-halo-width': 1,
+          'text-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 95%, 70%)', 'hsl(0, 0%, 95%)'],
+          'text-halo-color': 'hsl(220, 50%, 8%)',
+          'text-halo-width': 1.5,
         },
       });
 
