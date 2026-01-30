@@ -8,6 +8,7 @@ import { MathematicalModelPage } from '@/components/fatigue/MathematicalModelPag
 import { FatigueSciencePage } from '@/components/fatigue/FatigueSciencePage';
 
 import { ResearchReferencesPage } from '@/components/fatigue/ResearchReferencesPage';
+import { AboutPage } from '@/components/fatigue/AboutPage';
 import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { mockAnalysisResults } from '@/data/mockAnalysisData';
 import { useTheme } from '@/hooks/useTheme';
@@ -249,6 +250,12 @@ const Index = () => {
               >
                 References
               </TabsTrigger>
+              <TabsTrigger 
+                value="about" 
+                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              >
+                About
+              </TabsTrigger>
             </TabsList>
           </div>
         </div>
@@ -284,6 +291,10 @@ const Index = () => {
 
         <TabsContent value="research" className="flex-1 mt-0">
           <ResearchReferencesPage />
+        </TabsContent>
+
+        <TabsContent value="about" className="flex-1 mt-0">
+          <AboutPage />
         </TabsContent>
       </Tabs>
 
