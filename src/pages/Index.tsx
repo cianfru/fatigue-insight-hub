@@ -131,8 +131,6 @@ const Index = () => {
           totalDuties: result.total_duties,
           totalSectors: result.total_sectors,
           totalDutyHours: result.total_duty_hours,
-          // Use backend total_block_hours, otherwise compute from segment block_hours,
-          // otherwise last-resort compute from local off/on times.
           totalBlockHours:
             Number.isFinite(result.total_block_hours) && result.total_block_hours > 0
               ? result.total_block_hours
@@ -140,6 +138,10 @@ const Index = () => {
           highRiskDuties: result.high_risk_duties,
           criticalRiskDuties: result.critical_risk_duties,
           maxSleepDebt: result.max_sleep_debt,
+          totalPinchEvents: result.total_pinch_events || 0,
+          avgSleepPerNight: result.avg_sleep_per_night || 0,
+          worstPerformance: result.worst_performance || 0,
+          worstDutyId: result.worst_duty_id || undefined,
         },
         restDaysSleep: result.rest_days_sleep?.map(restDay => ({
           date: parseISO(restDay.date),

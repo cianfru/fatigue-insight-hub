@@ -23,6 +23,11 @@ export interface DutyStatistics {
   highRiskDuties: number;
   criticalRiskDuties: number;
   maxSleepDebt: number;
+  // Additional statistics from backend
+  totalPinchEvents: number;
+  avgSleepPerNight: number;
+  worstPerformance: number;
+  worstDutyId?: string;
 }
 
 export interface FlightSegment {
