@@ -106,7 +106,10 @@ const Index = () => {
           totalDuties: result.total_duties,
           totalSectors: result.total_sectors,
           totalDutyHours: result.total_duty_hours,
-          totalBlockHours: result.total_block_hours,
+          // Use backend total_block_hours, fallback to sum of duty blockHours if missing/invalid
+          totalBlockHours: Number.isFinite(result.total_block_hours) && result.total_block_hours > 0
+            ? result.total_block_hours
+            : result.duties.reduce((sum, d) => sum + d.segments.reduce((s, seg) => s + (seg.block_hours || 0), 0), 0),
           highRiskDuties: result.high_risk_duties,
           criticalRiskDuties: result.critical_risk_duties,
           maxSleepDebt: result.max_sleep_debt,
