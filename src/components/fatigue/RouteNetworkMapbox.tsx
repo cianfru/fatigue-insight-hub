@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,68 +43,9 @@ const getRouteColor = (performance: number): string => {
   return '#ef4444'; // critical
 };
 
-/**
- * Generate a curved arc between two points.
- * Arc height varies based on performance (worse performance = higher arc).
- * This creates visual separation for overlapping routes.
- */
-const generateArcCoordinates = (
-  from: { lng: number; lat: number },
-  to: { lng: number; lat: number },
-  performance: number,
-  segments: number = 50
-): [number, number][] => {
-  const coordinates: [number, number][] = [];
-  
-  // Calculate arc height based on performance (inverse: lower performance = higher arc)
-  // Performance 100 = minimal arc, Performance 0 = maximum arc
-  const baseArcHeight = 0.15; // Minimum arc curvature
-  const maxArcHeight = 0.45; // Maximum arc curvature for worst performance
-  const performanceFactor = 1 - (performance / 100);
-  const arcHeight = baseArcHeight + (maxArcHeight - baseArcHeight) * performanceFactor;
-  
-  // Calculate the midpoint and perpendicular offset for the arc
-  const midLng = (from.lng + to.lng) / 2;
-  const midLat = (from.lat + to.lat) / 2;
-  
-  // Calculate perpendicular direction for the arc bulge
-  const dx = to.lng - from.lng;
-  const dy = to.lat - from.lat;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  
-  // Perpendicular vector (rotated 90 degrees)
-  const perpX = -dy / distance;
-  const perpY = dx / distance;
-  
-  // Arc control point offset (perpendicular to the route)
-  const arcOffset = distance * arcHeight;
-  const controlLng = midLng + perpX * arcOffset;
-  const controlLat = midLat + perpY * arcOffset;
-  
-  // Generate curved path using quadratic bezier interpolation
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    
-    // Quadratic bezier: B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
-    const oneMinusT = 1 - t;
-    const lng = oneMinusT * oneMinusT * from.lng + 
-                2 * oneMinusT * t * controlLng + 
-                t * t * to.lng;
-    const lat = oneMinusT * oneMinusT * from.lat + 
-                2 * oneMinusT * t * controlLat + 
-                t * t * to.lat;
-    
-    coordinates.push([lng, lat]);
-  }
-  
-  return coordinates;
-};
-
-
 export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }: RouteNetworkMapboxProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
-  const animationRef = useRef<number | null>(null);
   const [activeRegion, setActiveRegion] = useState('World');
   const [hoveredAirport, setHoveredAirport] = useState<string | null>(null);
   const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
@@ -232,80 +173,30 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
     fetchAirports();
   }, [allAirportCodes]);
 
-  // Get map style based on theme - navigation-night for dark, light minimal for light
+  // Get map style based on theme
   const getMapStyle = (currentTheme: 'dark' | 'light') => {
     return currentTheme === 'dark' 
-      ? 'mapbox://styles/mapbox/navigation-night-v1'
+      ? 'mapbox://styles/mapbox/dark-v11'
       : 'mapbox://styles/mapbox/light-v11';
   };
 
-  // Get fog/atmosphere settings based on theme
+  // Get fog settings based on theme
   const getFogSettings = (currentTheme: 'dark' | 'light') => {
     return currentTheme === 'dark' 
       ? {
-          'range': [0.5, 10],
-          'color': 'hsl(220, 40%, 8%)',
-          'high-color': 'hsl(220, 60%, 15%)',
-          'horizon-blend': 0.03,
-          'space-color': 'hsl(220, 50%, 2%)',
-          'star-intensity': 0.6,
+          color: 'hsl(220, 30%, 5%)',
+          'high-color': 'hsl(220, 50%, 10%)',
+          'horizon-blend': 0.1,
+          'space-color': 'hsl(220, 30%, 3%)',
+          'star-intensity': 0.3,
         }
       : {
-          'range': [0.5, 10],
-          'color': 'hsl(200, 30%, 85%)',
-          'high-color': 'hsl(210, 80%, 70%)',
-          'horizon-blend': 0.05,
-          'space-color': 'hsl(210, 60%, 92%)',
+          color: 'hsl(210, 40%, 96%)',
+          'high-color': 'hsl(210, 60%, 85%)',
+          'horizon-blend': 0.08,
+          'space-color': 'hsl(210, 50%, 92%)',
           'star-intensity': 0,
         };
-  };
-
-  // Add 3D terrain and sky layer
-  const addTerrainAndSky = (currentTheme: 'dark' | 'light') => {
-    if (!map.current) return;
-
-    // Add terrain source if not exists
-    if (!map.current.getSource('mapbox-dem')) {
-      map.current.addSource('mapbox-dem', {
-        type: 'raster-dem',
-        url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
-        tileSize: 512,
-        maxzoom: 14,
-      });
-    }
-
-    // Enable 3D terrain
-    map.current.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
-
-    // Remove existing sky layer
-    if (map.current.getLayer('sky')) {
-      map.current.removeLayer('sky');
-    }
-
-    // Add custom sky layer based on theme
-    if (currentTheme === 'dark') {
-      map.current.addLayer({
-        id: 'sky',
-        type: 'sky',
-        paint: {
-          'sky-type': 'atmosphere',
-          'sky-atmosphere-sun': [0.0, 90.0],
-          'sky-atmosphere-sun-intensity': 5,
-          'sky-atmosphere-color': 'hsl(220, 60%, 8%)',
-        },
-      });
-    } else {
-      map.current.addLayer({
-        id: 'sky',
-        type: 'sky',
-        paint: {
-          'sky-type': 'atmosphere',
-          'sky-atmosphere-sun': [0.0, 0.0],
-          'sky-atmosphere-sun-intensity': 15,
-          'sky-atmosphere-color': 'hsl(210, 80%, 70%)',
-        },
-      });
-    }
   };
 
   // Initialize map
@@ -334,9 +225,8 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       setMapLoaded(true);
       setStyleReady(true);
       
-      // Add atmosphere, fog, terrain, and sky
+      // Add atmosphere and fog
       map.current?.setFog(getFogSettings(theme) as any);
-      addTerrainAndSky(theme);
     });
 
     // Cleanup
@@ -363,7 +253,6 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       if (!map.current) return;
       if (map.current.isStyleLoaded()) {
         map.current.setFog(getFogSettings(theme) as any);
-        addTerrainAndSky(theme);
         setStyleReady(true);
       }
     };
@@ -421,14 +310,8 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       
       console.log('[RouteNetworkMapbox] Adding routes:', routes.length, 'airports:', airports.length);
 
-      // Stop any existing animation
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
-
       // Remove existing layers first, then sources (order matters!)
-      const layerIds = ['airport-labels', 'airports', 'routes-animated', 'routes'];
+      const layerIds = ['airport-labels', 'airports', 'routes'];
       const sourceIds = ['airports', 'routes'];
       
       layerIds.forEach(id => {
@@ -449,19 +332,11 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
       // Sort routes by performance (best first) so worst performance renders on top
       const sortedRoutes = [...routes].sort((a, b) => b.avgPerformance - a.avgPerformance);
 
-      // Add routes as curved arcs - height based on risk level
+      // Add routes as lines - all on the same path, sorted so worst (red) renders on top
       const routeFeatures = sortedRoutes.map((route, index) => {
         const from = airportLookup.get(route.from);
         const to = airportLookup.get(route.to);
         if (!from || !to) return null;
-
-        // Generate curved arc coordinates
-        const arcCoordinates = generateArcCoordinates(
-          { lng: from.lng, lat: from.lat },
-          { lng: to.lng, lat: to.lat },
-          route.avgPerformance,
-          40 // Number of segments for smooth curve
-        );
 
         return {
           type: 'Feature' as const,
@@ -476,7 +351,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
           },
           geometry: {
             type: 'LineString' as const,
-            coordinates: arcCoordinates,
+            coordinates: [[from.lng, from.lat], [to.lng, to.lat]],
           },
         };
       }).filter(Boolean);
@@ -491,37 +366,14 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         },
       });
 
-      // Base route layer (static, subtle glow effect) - add without beforeId to ensure on top
       map.current.addLayer({
         id: 'routes',
         type: 'line',
         source: 'routes',
-        layout: {
-          'line-cap': 'round',
-          'line-join': 'round',
-        },
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': 6,
-          'line-opacity': 0.5,
-          'line-blur': 3,
-        },
-      });
-
-      // Animated flowing line layer - uses dash pattern animated via useEffect
-      map.current.addLayer({
-        id: 'routes-animated',
-        type: 'line',
-        source: 'routes',
-        layout: {
-          'line-cap': 'round',
-          'line-join': 'round',
-        },
         paint: {
           'line-color': ['get', 'color'],
           'line-width': 3,
-          'line-opacity': 1,
-          'line-dasharray': [0, 4, 3], // Initial dash pattern, animated in useEffect
+          'line-opacity': 0.85,
         },
       });
 
@@ -548,36 +400,33 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         },
       });
 
-      // Airport circles - add on top of routes
       map.current.addLayer({
         id: 'airports',
         type: 'circle',
         source: 'airports',
         paint: {
-          'circle-radius': ['case', ['get', 'isHomeBase'], 12, 7],
-          'circle-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 95%, 55%)', 'hsl(0, 0%, 100%)'],
-          'circle-stroke-width': 3,
-          'circle-stroke-color': 'hsl(220, 40%, 20%)',
-          'circle-opacity': 1,
+          'circle-radius': ['case', ['get', 'isHomeBase'], 8, 5],
+          'circle-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 90%, 60%)', 'hsl(0, 0%, 90%)'],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': 'hsl(220, 30%, 10%)',
         },
       });
 
-      // Add airport labels on top
+      // Add airport labels
       map.current.addLayer({
         id: 'airport-labels',
         type: 'symbol',
         source: 'airports',
         layout: {
           'text-field': ['get', 'code'],
-          'text-size': ['case', ['get', 'isHomeBase'], 14, 12],
-          'text-offset': [0, -1.5],
+          'text-size': ['case', ['get', 'isHomeBase'], 12, 10],
+          'text-offset': [0, -1.2],
           'text-anchor': 'bottom',
-          'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
         },
         paint: {
-          'text-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 95%, 80%)', 'hsl(0, 0%, 100%)'],
-          'text-halo-color': 'hsl(220, 40%, 10%)',
-          'text-halo-width': 2,
+          'text-color': ['case', ['get', 'isHomeBase'], 'hsl(200, 90%, 60%)', 'hsl(0, 0%, 80%)'],
+          'text-halo-color': 'hsl(220, 30%, 10%)',
+          'text-halo-width': 1,
         },
       });
 
@@ -628,70 +477,10 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
 
     // Cleanup
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
+      // Remove event listeners if component unmounts
     };
 
   }, [mapLoaded, styleReady, routes, airports, homeBase]);
-
-  // Animate the flowing lines with smooth dash shifting
-  useEffect(() => {
-    if (!map.current || !mapLoaded || !styleReady) return;
-    
-    let dashArraySeq = [
-      [0, 4, 3],
-      [0.5, 4, 2.5],
-      [1, 4, 2],
-      [1.5, 4, 1.5],
-      [2, 4, 1],
-      [2.5, 4, 0.5],
-      [3, 4, 0],
-      [0, 0.5, 3, 3.5],
-      [0, 1, 3, 3],
-      [0, 1.5, 3, 2.5],
-      [0, 2, 3, 2],
-      [0, 2.5, 3, 1.5],
-      [0, 3, 3, 1],
-      [0, 3.5, 3, 0.5],
-    ];
-    
-    let step = 0;
-    
-    const animateFlow = () => {
-      if (!map.current?.getLayer('routes-animated')) {
-        animationRef.current = requestAnimationFrame(animateFlow);
-        return;
-      }
-      
-      step = (step + 1) % dashArraySeq.length;
-      
-      try {
-        map.current.setPaintProperty(
-          'routes-animated',
-          'line-dasharray',
-          dashArraySeq[step]
-        );
-      } catch (e) {
-        // Layer might not exist yet, continue animation
-      }
-      
-      // Slower animation for smoother flow (~20fps)
-      setTimeout(() => {
-        animationRef.current = requestAnimationFrame(animateFlow);
-      }, 50);
-    };
-    
-    animationRef.current = requestAnimationFrame(animateFlow);
-    
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
-    };
-  }, [mapLoaded, styleReady]);
 
   const handleZoomIn = () => {
     map.current?.zoomIn();
