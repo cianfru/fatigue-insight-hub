@@ -58,47 +58,17 @@ interface ChronogramProps {
 type DisplayMode = 'heatmap' | 'timeline' | 'combined';
 
 // Default check-in time before first sector (EASA typically 60 min)
-// Used as fallback when report_time_utc is not available from the parser
+// Used as fallback when report_time_local is not available from the parser
 const DEFAULT_CHECK_IN_MINUTES = 60;
 
-// Calculate check-in offset in hours from reportTimeUtc and first departure time.
-// Both times should be in the SAME timezone (UTC) for correct calculation.
-// Returns the offset in hours, or undefined if unparseable.
-const getCheckInOffsetHours = (
-  reportTimeUtc: string | undefined,
-  firstDepartureUtc: string | undefined
-): number | undefined => {
-  if (!reportTimeUtc || !firstDepartureUtc) return undefined;
-  
-  // Parse time from ISO or HH:mm format
-  const parseTimeToMinutes = (timeStr: string): number | undefined => {
-    // ISO format: "2026-01-05T03:00:00Z" or "2026-01-05T03:00:00+00:00"
-    if (timeStr.includes('T')) {
-      const timePart = timeStr.split('T')[1];
-      if (timePart) {
-        const [h, m] = timePart.split(':').map(Number);
-        if (!isNaN(h) && !isNaN(m)) return h * 60 + m;
-      }
-    }
-    // Plain HH:mm format
-    const parts = timeStr.split(':').map(Number);
-    if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      return parts[0] * 60 + parts[1];
-    }
-    return undefined;
-  };
-  
-  const reportMinutes = parseTimeToMinutes(reportTimeUtc);
-  const departureMinutes = parseTimeToMinutes(firstDepartureUtc);
-  
-  if (reportMinutes === undefined || departureMinutes === undefined) return undefined;
-  
-  // Calculate offset (handle midnight crossing)
-  let offsetMinutes = departureMinutes - reportMinutes;
-  if (offsetMinutes < 0) offsetMinutes += 24 * 60; // Crossed midnight
-  if (offsetMinutes > 180) return undefined; // Sanity check: max 3 hours check-in
-  
-  return offsetMinutes / 60;
+// Parse HH:mm time string to decimal hours
+const parseTimeToHours = (timeStr: string | undefined): number | undefined => {
+  if (!timeStr) return undefined;
+  const parts = timeStr.split(':').map(Number);
+  if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return parts[0] + parts[1] / 60;
+  }
+  return undefined;
 };
 
 interface FlightSegmentBar {
@@ -244,9 +214,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     // Get first departure for check-in calculation
     const [firstDepH, firstDepM] = flightSegs[0].departureTime.split(':').map(Number);
     const firstDepHour = firstDepH + firstDepM / 60;
-    // Calculate check-in offset using UTC times, then apply to local departure
-    const checkInOffset = getCheckInOffsetHours(duty.reportTimeUtc, duty.firstDepartureUtc);
-    const checkInHour = Math.max(0, firstDepHour - (checkInOffset ?? DEFAULT_CHECK_IN_MINUTES / 60));
+    // Use reportTimeLocal directly when available, fall back to default offset from first departure
+    const reportHour = parseTimeToHours(duty.reportTimeLocal);
+    const checkInHour = Math.max(0, reportHour ?? (firstDepHour - DEFAULT_CHECK_IN_MINUTES / 60));
     
     // Add check-in segment
     segments.push({
@@ -341,9 +311,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         
         // FDP starts at check-in (before first departure)
         const startHour = startH + startM / 60;
-        // Calculate check-in offset using UTC times, then apply to local departure
-        const checkInOffset = getCheckInOffsetHours(duty.reportTimeUtc, duty.firstDepartureUtc);
-        const checkInHour = Math.max(0, startHour - (checkInOffset ?? DEFAULT_CHECK_IN_MINUTES / 60));
+        // Use reportTimeLocal directly when available, fall back to default offset from first departure
+        const reportHour = parseTimeToHours(duty.reportTimeLocal);
+        const checkInHour = Math.max(0, reportHour ?? (startHour - DEFAULT_CHECK_IN_MINUTES / 60));
         const endHour = endH + endM / 60;
         
         // Detect overnight duty - FDP crosses midnight:
