@@ -57,7 +57,8 @@ export interface DutyAnalysis {
   dateString?: string; // Raw YYYY-MM-DD from backend for timezone-safe day extraction
   dayOfWeek: string;
   reportTimeUtc?: string; // Raw report_time_utc from backend (ISO or HH:mm)
-  firstDepartureUtc?: string; // First segment departure_time (UTC) for check-in offset calculation
+  reportTimeLocal?: string; // Report time in home base timezone (HH:mm)
+  releaseTimeLocal?: string; // Release time in home base timezone (HH:mm)
   dutyHours: number;
   blockHours: number;
   sectors: number;
