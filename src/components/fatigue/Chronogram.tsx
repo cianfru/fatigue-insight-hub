@@ -171,19 +171,21 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     
     // For overnight continuation, we show the portion of the duty after midnight
     if (isOvernightContinuation) {
+      // Collect only after-midnight segments and add ground time between them
+      let lastEndHour = 0; // Track where the previous segment ended (starts at 00:00)
+
       flightSegs.forEach((seg) => {
         const [depH, depM] = seg.departureTime.split(':').map(Number);
         const [arrH, arrM] = seg.arrivalTime.split(':').map(Number);
         const depHour = depH + depM / 60;
         const arrHour = arrH + arrM / 60;
-        
-        // For overnight flights, arrival time is on the next day (after midnight)
-        // Include segments that either:
-        // 1. Depart before midnight and arrive after midnight (show arrival portion: 0 to arrHour)
-        // 2. Depart and arrive both after midnight (show full segment)
-        
+
         if (arrHour < depHour) {
-          // This flight crosses midnight - show the portion from 00:00 to arrival
+          // This flight crosses midnight — show the portion from 00:00 to arrival
+          // Add ground time gap if the continuation doesn't start right at 00:00
+          if (lastEndHour < arrHour && lastEndHour > 0.25) {
+            // There was a previous after-midnight segment; fill ground between them
+          }
           segments.push({
             type: 'flight',
             flightNumber: seg.flightNumber,
@@ -193,8 +195,18 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             endHour: arrHour,
             performance: seg.performance,
           });
+          lastEndHour = arrHour;
         } else if (depHour < 12 && arrHour < 12) {
-          // Both times are in early morning (after midnight) - show full segment
+          // Both times are in early morning (after midnight) — show full segment
+          // Add ground time from the previous after-midnight endpoint
+          if (depHour > lastEndHour + 0.25) {
+            segments.push({
+              type: 'ground',
+              startHour: lastEndHour,
+              endHour: depHour,
+              performance: duty.avgPerformance,
+            });
+          }
           segments.push({
             type: 'flight',
             flightNumber: seg.flightNumber,
@@ -204,6 +216,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             endHour: arrHour,
             performance: seg.performance,
           });
+          lastEndHour = arrHour;
         }
       });
       return segments;
@@ -225,28 +238,39 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     });
     
     // Add each flight segment
+    // Track midnight crossing so we stop adding segments for the departure-day bar
+    let passedMidnight = false;
+
     flightSegs.forEach((seg, index) => {
+      if (passedMidnight) return;
+
       const [depH, depM] = seg.departureTime.split(':').map(Number);
       const [arrH, arrM] = seg.arrivalTime.split(':').map(Number);
       const depHour = depH + depM / 60;
       let arrHour = arrH + arrM / 60;
-      
-      // Handle overnight: if arrival is before departure, it's the next day
-      if (arrHour < depHour) {
-        arrHour = 24; // Cap at midnight for this day's bar
-      }
-      
+
       // Add ground time between flights if there's a gap
       if (index > 0) {
         const prevSeg = flightSegs[index - 1];
         const [prevArrH, prevArrM] = prevSeg.arrivalTime.split(':').map(Number);
-        let prevArrHour = prevArrH + prevArrM / 60;
-        
-        // Skip ground time if previous flight was overnight
+        const prevArrHour = prevArrH + prevArrM / 60;
+
+        // Midnight crossed between consecutive segments
+        // (previous arrived in PM, this departs in AM next day)
         if (prevArrHour > depHour) {
-          prevArrHour = 0; // Reset for overnight continuation
+          // Fill remaining ground time up to midnight and stop
+          if (prevArrHour < 23.75) {
+            segments.push({
+              type: 'ground',
+              startHour: prevArrHour,
+              endHour: 24,
+              performance: duty.avgPerformance,
+            });
+          }
+          passedMidnight = true;
+          return;
         }
-        
+
         if (depHour > prevArrHour + 0.25) { // More than 15 min gap
           segments.push({
             type: 'ground',
@@ -256,7 +280,13 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           });
         }
       }
-      
+
+      // Handle overnight: if arrival is before departure, cap at midnight
+      if (arrHour < depHour) {
+        arrHour = 24; // Cap at midnight for this day's bar
+        passedMidnight = true;
+      }
+
       segments.push({
         type: 'flight',
         flightNumber: seg.flightNumber,
