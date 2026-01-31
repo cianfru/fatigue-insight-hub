@@ -28,6 +28,33 @@ const Index = () => {
       return iso;
     }
   };
+
+  // Convert a UTC HH:mm time to local HH:mm using an offset (in minutes).
+  // Handles wrap-around past midnight.
+  const utcToLocal = (utcTime: string, offsetMinutes: number): string => {
+    if (!utcTime) return '';
+    const [h, m] = utcTime.split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return utcTime;
+    let totalMin = h * 60 + m + offsetMinutes;
+    // Wrap around 24h
+    totalMin = ((totalMin % 1440) + 1440) % 1440;
+    const hh = Math.floor(totalMin / 60).toString().padStart(2, '0');
+    const mm = (totalMin % 60).toString().padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
+  // Derive timezone offset (in minutes) from a segment's UTC vs local times.
+  const getOffsetFromSegment = (depUtc: string, depLocal: string): number => {
+    if (!depUtc || !depLocal) return 0;
+    const [uh, um] = depUtc.split(':').map(Number);
+    const [lh, lm] = depLocal.split(':').map(Number);
+    if (Number.isNaN(uh) || Number.isNaN(um) || Number.isNaN(lh) || Number.isNaN(lm)) return 0;
+    let diff = (lh * 60 + lm) - (uh * 60 + um);
+    // Normalize to -720..+720 range
+    if (diff > 720) diff -= 1440;
+    if (diff < -720) diff += 1440;
+    return diff;
+  };
   
   const [settings, setSettings] = useState<PilotSettings>({
     pilotId: 'P12345',
@@ -130,13 +157,29 @@ const Index = () => {
           strategyType: restDay.strategy_type,
           confidence: restDay.confidence,
         })),
-        duties: result.duties.map(duty => ({
+        duties: result.duties.map(duty => {
+          // Derive home-base timezone offset from first segment's UTC vs local departure
+          const firstSeg = duty.segments[0];
+          const offsetMin = firstSeg
+            ? getOffsetFromSegment(firstSeg.departure_time, firstSeg.departure_time_local)
+            : 0;
+          // Convert report/release UTC times to home-base local
+          const reportTimeLocal = duty.report_time_utc
+            ? utcToLocal(duty.report_time_utc, offsetMin)
+            : undefined;
+          const releaseTimeLocal = duty.release_time_utc
+            ? utcToLocal(duty.release_time_utc, offsetMin)
+            : undefined;
+
+          return {
           date: parseISO(duty.date),
           dateString: duty.date,
           dayOfWeek: format(parseISO(duty.date), 'EEE'),
           dutyHours: duty.duty_hours,
           blockHours: duty.segments.reduce((sum, seg) => sum + (seg.block_hours || 0), 0),
           sectors: duty.sectors,
+          reportTimeLocal,
+          releaseTimeLocal,
           minPerformance: duty.min_performance,
           avgPerformance: duty.avg_performance,
           landingPerformance: duty.landing_performance || duty.min_performance,
@@ -192,7 +235,7 @@ const Index = () => {
             blockHours: seg.block_hours,
             performance: duty.avg_performance,
           })),
-        })),
+        };}),
       });
       
       toast.success('Analysis complete!');

@@ -146,7 +146,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     const segments: FlightSegmentBar[] = [];
     const flightSegs = duty.flightSegments;
     if (flightSegs.length === 0) return [];
-    
+
     // For overnight continuation, we show the portion of the duty after midnight
     if (isOvernightContinuation) {
       flightSegs.forEach((seg) => {
@@ -154,12 +154,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         const [arrH, arrM] = seg.arrivalTime.split(':').map(Number);
         const depHour = depH + depM / 60;
         const arrHour = arrH + arrM / 60;
-        
+
         // For overnight flights, arrival time is on the next day (after midnight)
         // Include segments that either:
         // 1. Depart before midnight and arrive after midnight (show arrival portion: 0 to arrHour)
         // 2. Depart and arrive both after midnight (show full segment)
-        
+
         if (arrHour < depHour) {
           // This flight crosses midnight - show the portion from 00:00 to arrival
           segments.push({
@@ -186,12 +186,27 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       });
       return segments;
     }
-    
-    // Get first departure for check-in calculation
+
+    // Use actual report time from parser if available, otherwise fall back to estimated check-in
     const [firstDepH, firstDepM] = flightSegs[0].departureTime.split(':').map(Number);
     const firstDepHour = firstDepH + firstDepM / 60;
-    const checkInHour = Math.max(0, firstDepHour - CHECK_IN_MINUTES / 60);
-    
+    let checkInHour: number;
+    if (duty.reportTimeLocal) {
+      const [rptH, rptM] = duty.reportTimeLocal.split(':').map(Number);
+      if (!Number.isNaN(rptH) && !Number.isNaN(rptM)) {
+        checkInHour = rptH + rptM / 60;
+        // Ensure check-in is before first departure (handle edge cases)
+        if (checkInHour > firstDepHour + 2) {
+          // Report time appears to be from previous day (e.g., RPT 23:00 for dep 01:00)
+          // Keep as-is, the overnight logic will handle it
+        }
+      } else {
+        checkInHour = Math.max(0, firstDepHour - CHECK_IN_MINUTES / 60);
+      }
+    } else {
+      checkInHour = Math.max(0, firstDepHour - CHECK_IN_MINUTES / 60);
+    }
+
     // Add check-in segment
     segments.push({
       type: 'checkin',
@@ -265,10 +280,20 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         
         const [startH, startM] = firstSegment.departureTime.split(':').map(Number);
         const [endH, endM] = lastSegment.arrivalTime.split(':').map(Number);
-        
-        // FDP starts at check-in (before first departure)
+
+        // FDP starts at report time (actual RPT from parser) or estimated check-in
         const startHour = startH + startM / 60;
-        const checkInHour = Math.max(0, startHour - CHECK_IN_MINUTES / 60);
+        let checkInHour: number;
+        if (duty.reportTimeLocal) {
+          const [rptH, rptM] = duty.reportTimeLocal.split(':').map(Number);
+          if (!Number.isNaN(rptH) && !Number.isNaN(rptM)) {
+            checkInHour = rptH + rptM / 60;
+          } else {
+            checkInHour = Math.max(0, startHour - CHECK_IN_MINUTES / 60);
+          }
+        } else {
+          checkInHour = Math.max(0, startHour - CHECK_IN_MINUTES / 60);
+        }
         const endHour = endH + endM / 60;
         
         // Detect overnight duty - FDP crosses midnight:

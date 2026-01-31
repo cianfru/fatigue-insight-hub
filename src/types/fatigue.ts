@@ -59,6 +59,8 @@ export interface DutyAnalysis {
   dutyHours: number;
   blockHours: number;
   sectors: number;
+  reportTimeLocal?: string; // HH:mm in home base timezone (from report_time_utc + offset)
+  releaseTimeLocal?: string; // HH:mm in home base timezone (from release_time_utc + offset)
   minPerformance: number;
   avgPerformance: number;
   landingPerformance: number;
