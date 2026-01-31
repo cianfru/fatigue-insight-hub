@@ -57,8 +57,30 @@ interface ChronogramProps {
 
 type DisplayMode = 'heatmap' | 'timeline' | 'combined';
 
-// Check-in time before first sector (EASA typically 60 min)
-const CHECK_IN_MINUTES = 60;
+// Default check-in time before first sector (EASA typically 60 min)
+// Used as fallback when report_time_utc is not available from the parser
+const DEFAULT_CHECK_IN_MINUTES = 60;
+
+// Extract check-in hour (decimal) from a duty's reportTimeUtc.
+// Returns undefined if the field is missing / unparseable so callers can
+// fall back to the default offset from first departure.
+const getReportHour = (reportTimeUtc: string | undefined): number | undefined => {
+  if (!reportTimeUtc) return undefined;
+  // ISO format: "2026-01-05T03:00:00Z" or "2026-01-05T03:00:00+00:00"
+  if (reportTimeUtc.includes('T')) {
+    const timePart = reportTimeUtc.split('T')[1]; // "03:00:00Z"
+    if (timePart) {
+      const [h, m] = timePart.split(':').map(Number);
+      if (!isNaN(h) && !isNaN(m)) return h + m / 60;
+    }
+  }
+  // Plain HH:mm format
+  const parts = reportTimeUtc.split(':').map(Number);
+  if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return parts[0] + parts[1] / 60;
+  }
+  return undefined;
+};
 
 interface FlightSegmentBar {
   type: 'checkin' | 'flight' | 'ground';
@@ -190,7 +212,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     // Get first departure for check-in calculation
     const [firstDepH, firstDepM] = flightSegs[0].departureTime.split(':').map(Number);
     const firstDepHour = firstDepH + firstDepM / 60;
-    const checkInHour = Math.max(0, firstDepHour - CHECK_IN_MINUTES / 60);
+    // Use actual report time from parser when available, fall back to default offset
+    const reportHour = getReportHour(duty.reportTimeUtc);
+    const checkInHour = Math.max(0, reportHour ?? (firstDepHour - DEFAULT_CHECK_IN_MINUTES / 60));
     
     // Add check-in segment
     segments.push({
@@ -268,7 +292,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         
         // FDP starts at check-in (before first departure)
         const startHour = startH + startM / 60;
-        const checkInHour = Math.max(0, startHour - CHECK_IN_MINUTES / 60);
+        // Use actual report time from parser when available, fall back to default offset
+        const rptHour = getReportHour(duty.reportTimeUtc);
+        const checkInHour = Math.max(0, rptHour ?? (startHour - DEFAULT_CHECK_IN_MINUTES / 60));
         const endHour = endH + endM / 60;
         
         // Detect overnight duty - FDP crosses midnight:
