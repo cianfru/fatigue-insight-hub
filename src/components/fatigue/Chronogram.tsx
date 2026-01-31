@@ -103,6 +103,9 @@ interface SleepBar {
   relatedDuty: DutyAnalysis;
   isOvernightStart?: boolean; // First part of overnight bar (ends at 24:00)
   isOvernightContinuation?: boolean; // Second part of overnight bar (starts at 00:00)
+  // Original full sleep window times (for display in tooltip)
+  originalStartHour?: number;
+  originalEndHour?: number;
 }
 
 // WOCL (Window of Circadian Low) is typically 02:00 - 06:00
@@ -457,6 +460,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               isPreDuty: true,
               relatedDuty: duty,
               isOvernightStart: true,
+              originalStartHour: startHour,
+              originalEndHour: endHour,
             });
           }
           // Part 2: 00:00 to endHour on end day
@@ -472,6 +477,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               isPreDuty: true,
               relatedDuty: duty,
               isOvernightContinuation: true,
+              originalStartHour: startHour,
+              originalEndHour: endHour,
             });
           }
         }
@@ -515,6 +522,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 isPreDuty: true,
                 relatedDuty: duty,
                 isOvernightStart: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
               });
             }
             // Part 2: 00:00 to endHour on end day
@@ -530,6 +539,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 isPreDuty: true,
                 relatedDuty: duty,
                 isOvernightContinuation: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
               });
             }
           }
@@ -729,6 +740,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                   isPreDuty: false,
                   relatedDuty: pseudoDuty,
                   isOvernightStart: true,
+                  originalStartHour: startHour,
+                  originalEndHour: endHour,
                 });
               }
               // Part 2: 00:00 to endHour on end day
@@ -744,6 +757,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                   isPreDuty: false,
                   relatedDuty: pseudoDuty,
                   isOvernightContinuation: true,
+                  originalStartHour: startHour,
+                  originalEndHour: endHour,
                 });
               }
             }
@@ -1084,11 +1099,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         </div>
                                       </div>
                                       
-                                      {/* Sleep Timing */}
+                                      {/* Sleep Timing - show full window for overnight sleep */}
                                       <div className="flex items-center justify-between text-muted-foreground">
                                         <span>Sleep Window</span>
                                         <span className="font-mono font-medium text-foreground">
-                                          {bar.startHour.toFixed(0).padStart(2, '0')}:00 → {bar.endHour.toFixed(0).padStart(2, '0')}:00
+                                          {(bar.originalStartHour ?? bar.startHour).toFixed(0).padStart(2, '0')}:00 → {(bar.originalEndHour ?? bar.endHour).toFixed(0).padStart(2, '0')}:00
+                                          {(bar.isOvernightStart || bar.isOvernightContinuation) && ' (+1d)'}
                                         </span>
                                       </div>
                                       
