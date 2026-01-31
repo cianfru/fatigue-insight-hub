@@ -1,4 +1,4 @@
-import { AlertTriangle, Plane, AlertCircle, Clock } from 'lucide-react';
+import { AlertTriangle, Plane, AlertCircle, Clock, Timer } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { DutyStatistics } from '@/types/fatigue';
 
@@ -19,6 +19,20 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
       label: 'Total Sectors',
       value: statistics.totalSectors,
       icon: Plane,
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
+    },
+    {
+      label: 'Duty Hours',
+      value: `${Math.floor(statistics.totalDutyHours)}:${String(Math.round((statistics.totalDutyHours % 1) * 60)).padStart(2, '0')}`,
+      icon: Timer,
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
+    },
+    {
+      label: 'Block Hours',
+      value: `${Math.floor(statistics.totalBlockHours)}:${String(Math.round((statistics.totalBlockHours % 1) * 60)).padStart(2, '0')}`,
+      icon: Timer,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
     },
@@ -49,7 +63,7 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-7">
       {stats.map((stat, index) => (
         <Card 
           key={stat.label} 
