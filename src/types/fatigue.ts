@@ -56,6 +56,7 @@ export interface DutyAnalysis {
   date: Date;
   dateString?: string; // Raw YYYY-MM-DD from backend for timezone-safe day extraction
   dayOfWeek: string;
+  reportTimeUtc?: string; // Raw report_time_utc from backend (ISO or HH:mm)
   dutyHours: number;
   blockHours: number;
   sectors: number;
