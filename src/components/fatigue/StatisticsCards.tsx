@@ -7,6 +7,14 @@ interface StatisticsCardsProps {
 }
 
 export function StatisticsCards({ statistics }: StatisticsCardsProps) {
+  // Format hours as HH:MM, handling edge cases like negative or invalid values
+  const formatHoursMinutes = (hours: number): string => {
+    if (!Number.isFinite(hours) || hours < 0) return '0:00';
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    return `${h}:${String(m).padStart(2, '0')}`;
+  };
+
   const stats = [
     {
       label: 'Total Duties',
@@ -24,14 +32,14 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
     },
     {
       label: 'Duty Hours',
-      value: `${Math.floor(statistics.totalDutyHours)}:${String(Math.round((statistics.totalDutyHours % 1) * 60)).padStart(2, '0')}`,
+      value: formatHoursMinutes(statistics.totalDutyHours),
       icon: Timer,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
     },
     {
       label: 'Block Hours',
-      value: `${Math.floor(statistics.totalBlockHours)}:${String(Math.round((statistics.totalBlockHours % 1) * 60)).padStart(2, '0')}`,
+      value: formatHoursMinutes(statistics.totalBlockHours),
       icon: Timer,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
