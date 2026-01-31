@@ -86,7 +86,8 @@ interface DutyBar {
   startHour: number; // FDP start (check-in time)
   endHour: number;
   duty: DutyAnalysis;
-  isOvernightContinuation?: boolean;
+  isOvernightStart?: boolean; // First part of overnight bar (ends at 24:00)
+  isOvernightContinuation?: boolean; // Second part of overnight bar (starts at 00:00)
   segments: FlightSegmentBar[]; // Individual flight segments
 }
 
@@ -100,6 +101,8 @@ interface SleepBar {
   sleepStrategy: string;
   isPreDuty: boolean; // Sleep before the duty on this day
   relatedDuty: DutyAnalysis;
+  isOvernightStart?: boolean; // First part of overnight bar (ends at 24:00)
+  isOvernightContinuation?: boolean; // Second part of overnight bar (starts at 00:00)
 }
 
 // WOCL (Window of Circadian Low) is typically 02:00 - 06:00
@@ -329,6 +332,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             startHour: checkInHour,
             endHour: 24, // Always ends at midnight for display
             duty,
+            isOvernightStart: true,
             segments: calculateSegments(duty, false),
           });
           
@@ -452,6 +456,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               sleepStrategy: sleepEstimate.sleepStrategy,
               isPreDuty: true,
               relatedDuty: duty,
+              isOvernightStart: true,
             });
           }
           // Part 2: 00:00 to endHour on end day
@@ -466,6 +471,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               sleepStrategy: sleepEstimate.sleepStrategy,
               isPreDuty: true,
               relatedDuty: duty,
+              isOvernightContinuation: true,
             });
           }
         }
@@ -508,6 +514,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 sleepStrategy: sleepEstimate.sleepStrategy,
                 isPreDuty: true,
                 relatedDuty: duty,
+                isOvernightStart: true,
               });
             }
             // Part 2: 00:00 to endHour on end day
@@ -522,6 +529,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 sleepStrategy: sleepEstimate.sleepStrategy,
                 isPreDuty: true,
                 relatedDuty: duty,
+                isOvernightContinuation: true,
               });
             }
           }
@@ -720,6 +728,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                   sleepStrategy: restDay.strategyType,
                   isPreDuty: false,
                   relatedDuty: pseudoDuty,
+                  isOvernightStart: true,
                 });
               }
               // Part 2: 00:00 to endHour on end day
@@ -734,6 +743,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                   sleepStrategy: restDay.strategyType,
                   isPreDuty: false,
                   relatedDuty: pseudoDuty,
+                  isOvernightContinuation: true,
                 });
               }
             }
@@ -1022,6 +1032,13 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                           .map((bar, barIndex) => {
                             const barWidth = ((bar.endHour - bar.startHour) / 24) * 100;
                             const classes = getRecoveryClasses(bar.recoveryScore);
+                            // Determine border radius based on overnight status
+                            // Start bars: rounded left, flat right; Continuation bars: flat left, rounded right
+                            const borderRadius = bar.isOvernightStart 
+                              ? '2px 0 0 2px' 
+                              : bar.isOvernightContinuation 
+                                ? '0 2px 2px 0' 
+                                : '2px';
                             return (
                               <Popover key={`sleep-${barIndex}`}>
                                 <PopoverTrigger asChild>
@@ -1030,7 +1047,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                     onClick={(e) => e.stopPropagation()}
                                     onPointerDown={(e) => e.stopPropagation()}
                                     className={cn(
-                                      "absolute z-20 rounded-sm flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
+                                      "absolute z-20 flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
                                       classes.border,
                                       classes.bg
                                     )}
@@ -1039,6 +1056,10 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       height: 11,
                                       left: `${(bar.startHour / 24) * 100}%`,
                                       width: `${Math.max(barWidth, 1)}%`,
+                                      borderRadius,
+                                      // Remove border on connected edges for visual continuity
+                                      borderRight: bar.isOvernightStart ? 'none' : undefined,
+                                      borderLeft: bar.isOvernightContinuation ? 'none' : undefined,
                                     }}
                                   >
                                     {/* Show recovery info if bar is wide enough */}
@@ -1167,6 +1188,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                             const usedDiscretion = bar.duty.usedDiscretion;
                             const maxFdp = bar.duty.maxFdpHours;
                             const actualFdp = bar.duty.actualFdpHours || bar.duty.dutyHours;
+                            // Determine border radius based on overnight status for visual continuity
+                            const borderRadius = bar.isOvernightStart 
+                              ? '2px 0 0 2px' 
+                              : bar.isOvernightContinuation 
+                                ? '0 2px 2px 0' 
+                                : '2px';
                             
                             return (
                               <TooltipProvider key={barIndex} delayDuration={100}>
@@ -1175,7 +1202,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                     <button
                                       onClick={() => onDutySelect(bar.duty)}
                                       className={cn(
-                                        "absolute z-10 rounded-sm transition-all hover:ring-2 cursor-pointer overflow-hidden flex",
+                                        "absolute z-10 transition-all hover:ring-2 cursor-pointer overflow-hidden flex",
                                         selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground",
                                         usedDiscretion ? "ring-2 ring-critical hover:ring-critical/80" : "hover:ring-foreground"
                                       )}
@@ -1185,6 +1212,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         left: `${(bar.startHour / 24) * 100}%`,
                                         width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
                                         background: displayMode === 'timeline' ? 'hsl(var(--primary))' : undefined,
+                                        borderRadius,
                                       }}
                                       >
                                         {/* Render individual flight segments */}
