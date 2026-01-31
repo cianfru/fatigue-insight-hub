@@ -134,6 +134,7 @@ const Index = () => {
           dateString: duty.date,
           dayOfWeek: format(parseISO(duty.date), 'EEE'),
           reportTimeUtc: duty.report_time_utc,
+          firstDepartureUtc: duty.segments[0]?.departure_time,
           dutyHours: duty.duty_hours,
           blockHours: duty.segments.reduce((sum, seg) => sum + (seg.block_hours || 0), 0),
           sectors: duty.sectors,
