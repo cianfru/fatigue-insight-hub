@@ -94,6 +94,31 @@ const Index = () => {
       const analysisMonth = result.duties.length > 0 
         ? parseISO(result.duties[0].date) 
         : settings.selectedMonth;
+
+      const parseHHmmToMinutes = (t: string | undefined): number | null => {
+        if (!t) return null;
+        const [h, m] = t.split(':').map(Number);
+        if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+        return h * 60 + m;
+      };
+
+      const computeSegmentBlockHours = (seg: { block_hours?: number; departure_time_local?: string; arrival_time_local?: string }) => {
+        if (typeof seg.block_hours === 'number' && Number.isFinite(seg.block_hours) && seg.block_hours > 0) return seg.block_hours;
+        const dep = parseHHmmToMinutes(seg.departure_time_local);
+        const arr = parseHHmmToMinutes(seg.arrival_time_local);
+        if (dep == null || arr == null) return 0;
+        let diff = arr - dep;
+        if (diff < 0) diff += 24 * 60;
+        return Math.max(0, diff / 60);
+      };
+
+      const computedBlockHoursFromSegments = result.duties.reduce(
+        (sum, d) => sum + d.segments.reduce((s, seg) => s + computeSegmentBlockHours(seg), 0),
+        0
+      );
+
+      console.log('total_block_hours (backend):', result.total_block_hours);
+      console.log('computedBlockHoursFromSegments:', computedBlockHoursFromSegments);
       
       setAnalysisResults({
         generatedAt: new Date(),
@@ -106,10 +131,12 @@ const Index = () => {
           totalDuties: result.total_duties,
           totalSectors: result.total_sectors,
           totalDutyHours: result.total_duty_hours,
-          // Use backend total_block_hours, fallback to sum of duty blockHours if missing/invalid
-          totalBlockHours: Number.isFinite(result.total_block_hours) && result.total_block_hours > 0
-            ? result.total_block_hours
-            : result.duties.reduce((sum, d) => sum + d.segments.reduce((s, seg) => s + (seg.block_hours || 0), 0), 0),
+          // Use backend total_block_hours, otherwise compute from segment block_hours,
+          // otherwise last-resort compute from local off/on times.
+          totalBlockHours:
+            Number.isFinite(result.total_block_hours) && result.total_block_hours > 0
+              ? result.total_block_hours
+              : computedBlockHoursFromSegments,
           highRiskDuties: result.high_risk_duties,
           criticalRiskDuties: result.critical_risk_duties,
           maxSleepDebt: result.max_sleep_debt,
