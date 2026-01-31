@@ -659,6 +659,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               date: restDay.date,
               dayOfWeek: format(restDay.date, 'EEE'),
               dutyHours: 0,
+              blockHours: 0,
               sectors: 0,
               minPerformance: 100,
               avgPerformance: 100,
