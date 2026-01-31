@@ -6,6 +6,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       date: new Date(2026, 1, 3),
       dayOfWeek: 'Tue',
       dutyHours: 8.2,
+      blockHours: 2.5,
       sectors: 2,
       minPerformance: 72.3,
       avgPerformance: 78.5,
@@ -30,14 +31,15 @@ const generateMockDuties = (): DutyAnalysis[] => {
       sleepQuality: 'excellent',
       sleepEnvironment: 'home',
       flightSegments: [
-        { flightNumber: 'QR841', departure: 'DOH', arrival: 'DXB', departureTime: '06:30', arrivalTime: '07:45', performance: 78.5 },
-        { flightNumber: 'QR842', departure: 'DXB', arrival: 'DOH', departureTime: '09:00', arrivalTime: '10:15', performance: 75.2 }
+        { flightNumber: 'QR841', departure: 'DOH', arrival: 'DXB', departureTime: '06:30', arrivalTime: '07:45', blockHours: 1.25, performance: 78.5 },
+        { flightNumber: 'QR842', departure: 'DXB', arrival: 'DOH', departureTime: '09:00', arrivalTime: '10:15', blockHours: 1.25, performance: 75.2 }
       ]
     },
     {
       date: new Date(2026, 1, 7),
       dayOfWeek: 'Sat',
       dutyHours: 10.5,
+      blockHours: 10.25,
       sectors: 2,
       minPerformance: 58.4,
       avgPerformance: 64.2,
@@ -65,14 +67,15 @@ const generateMockDuties = (): DutyAnalysis[] => {
         { time: '04:30', phase: 'cruise', performance: 58.4, circadian: 0.32, sleepPressure: 0.65, severity: 'high' }
       ],
       flightSegments: [
-        { flightNumber: 'QR103', departure: 'DOH', arrival: 'LHR', departureTime: '02:15', arrivalTime: '07:30', performance: 64.2 },
-        { flightNumber: 'QR104', departure: 'LHR', arrival: 'DOH', departureTime: '09:45', arrivalTime: '18:00', performance: 60.1 }
+        { flightNumber: 'QR103', departure: 'DOH', arrival: 'LHR', departureTime: '02:15', arrivalTime: '07:30', blockHours: 5.25, performance: 64.2 },
+        { flightNumber: 'QR104', departure: 'LHR', arrival: 'DOH', departureTime: '09:45', arrivalTime: '18:00', blockHours: 5.0, performance: 60.1 }
       ]
     },
     {
       date: new Date(2026, 1, 8),
       dayOfWeek: 'Sun',
       dutyHours: 6.8,
+      blockHours: 5.75,
       sectors: 1,
       minPerformance: 68.9,
       avgPerformance: 72.4,
@@ -85,13 +88,14 @@ const generateMockDuties = (): DutyAnalysis[] => {
       landingRisk: 'MODERATE',
       smsReportable: false,
       flightSegments: [
-        { flightNumber: 'QR632', departure: 'DOH', arrival: 'BOM', departureTime: '22:30', arrivalTime: '04:15', performance: 70.5 }
+        { flightNumber: 'QR632', departure: 'DOH', arrival: 'BOM', departureTime: '22:30', arrivalTime: '04:15', blockHours: 5.75, performance: 70.5 }
       ]
     },
     {
       date: new Date(2026, 1, 9),
       dayOfWeek: 'Mon',
       dutyHours: 9.4,
+      blockHours: 8.0,
       sectors: 2,
       minPerformance: 55.2,
       avgPerformance: 61.8,
@@ -104,14 +108,15 @@ const generateMockDuties = (): DutyAnalysis[] => {
       landingRisk: 'HIGH',
       smsReportable: false,
       flightSegments: [
-        { flightNumber: 'QR633', departure: 'BOM', arrival: 'DOH', departureTime: '05:30', arrivalTime: '08:00', performance: 61.8 },
-        { flightNumber: 'QR174', departure: 'DOH', arrival: 'JFK', departureTime: '10:15', arrivalTime: '17:45', performance: 57.3 }
+        { flightNumber: 'QR633', departure: 'BOM', arrival: 'DOH', departureTime: '05:30', arrivalTime: '08:00', blockHours: 2.5, performance: 61.8 },
+        { flightNumber: 'QR174', departure: 'DOH', arrival: 'JFK', departureTime: '10:15', arrivalTime: '17:45', blockHours: 5.5, performance: 57.3 }
       ]
     },
     {
       date: new Date(2026, 1, 11),
       dayOfWeek: 'Wed',
       dutyHours: 4.3,
+      blockHours: 3.5,
       sectors: 1,
       minPerformance: 48.4,
       avgPerformance: 54.1,
@@ -140,13 +145,14 @@ const generateMockDuties = (): DutyAnalysis[] => {
         { time: '03:45', phase: 'landing', performance: 50.1, circadian: 0.25, sleepPressure: 0.75, severity: 'critical' }
       ],
       flightSegments: [
-        { flightNumber: 'QR175', departure: 'JFK', arrival: 'DOH', departureTime: '01:30', arrivalTime: '20:00', performance: 50.1 }
+        { flightNumber: 'QR175', departure: 'JFK', arrival: 'DOH', departureTime: '01:30', arrivalTime: '20:00', blockHours: 3.5, performance: 50.1 }
       ]
     },
     {
       date: new Date(2026, 1, 12),
       dayOfWeek: 'Thu',
       dutyHours: 7.5,
+      blockHours: 6.5,
       sectors: 2,
       minPerformance: 45.2,
       avgPerformance: 52.8,
@@ -175,14 +181,15 @@ const generateMockDuties = (): DutyAnalysis[] => {
         { time: '04:15', phase: 'approach', performance: 47.5, circadian: 0.21, sleepPressure: 0.79, severity: 'critical' }
       ],
       flightSegments: [
-        { flightNumber: 'QR512', departure: 'DOH', arrival: 'SIN', departureTime: '02:00', arrivalTime: '14:30', performance: 52.8 },
-        { flightNumber: 'QR513', departure: 'SIN', arrival: 'DOH', departureTime: '16:00', arrivalTime: '20:30', performance: 47.5 }
+        { flightNumber: 'QR512', departure: 'DOH', arrival: 'SIN', departureTime: '02:00', arrivalTime: '14:30', blockHours: 3.5, performance: 52.8 },
+        { flightNumber: 'QR513', departure: 'SIN', arrival: 'DOH', departureTime: '16:00', arrivalTime: '20:30', blockHours: 3.0, performance: 47.5 }
       ]
     },
     {
       date: new Date(2026, 1, 13),
       dayOfWeek: 'Fri',
       dutyHours: 5.2,
+      blockHours: 4.25,
       sectors: 1,
       minPerformance: 52.8,
       avgPerformance: 58.4,
@@ -195,13 +202,14 @@ const generateMockDuties = (): DutyAnalysis[] => {
       landingRisk: 'HIGH',
       smsReportable: false,
       flightSegments: [
-        { flightNumber: 'QR224', departure: 'DOH', arrival: 'CDG', departureTime: '03:45', arrivalTime: '09:00', performance: 54.2 }
+        { flightNumber: 'QR224', departure: 'DOH', arrival: 'CDG', departureTime: '03:45', arrivalTime: '09:00', blockHours: 4.25, performance: 54.2 }
       ]
     },
     {
       date: new Date(2026, 1, 15),
       dayOfWeek: 'Sun',
       dutyHours: 8.8,
+      blockHours: 8.0,
       sectors: 2,
       minPerformance: 46.5,
       avgPerformance: 53.2,
@@ -221,14 +229,15 @@ const generateMockDuties = (): DutyAnalysis[] => {
         { time: '03:30', phase: 'cruise', performance: 46.5, circadian: 0.20, sleepPressure: 0.80, severity: 'critical' }
       ],
       flightSegments: [
-        { flightNumber: 'QR225', departure: 'CDG', arrival: 'DOH', departureTime: '01:00', arrivalTime: '08:30', performance: 53.2 },
-        { flightNumber: 'QR400', departure: 'DOH', arrival: 'BKK', departureTime: '10:30', arrivalTime: '21:00', performance: 48.8 }
+        { flightNumber: 'QR225', departure: 'CDG', arrival: 'DOH', departureTime: '01:00', arrivalTime: '08:30', blockHours: 4.5, performance: 53.2 },
+        { flightNumber: 'QR400', departure: 'DOH', arrival: 'BKK', departureTime: '10:30', arrivalTime: '21:00', blockHours: 3.5, performance: 48.8 }
       ]
     },
     {
       date: new Date(2026, 1, 16),
       dayOfWeek: 'Mon',
       dutyHours: 6.5,
+      blockHours: 4.5,
       sectors: 1,
       minPerformance: 44.8,
       avgPerformance: 51.5,
@@ -248,13 +257,14 @@ const generateMockDuties = (): DutyAnalysis[] => {
         { time: '03:30', phase: 'landing', performance: 46.2, circadian: 0.18, sleepPressure: 0.82, severity: 'critical' }
       ],
       flightSegments: [
-        { flightNumber: 'QR401', departure: 'BKK', arrival: 'DOH', departureTime: '23:30', arrivalTime: '04:00', performance: 46.2 }
+        { flightNumber: 'QR401', departure: 'BKK', arrival: 'DOH', departureTime: '23:30', arrivalTime: '04:00', blockHours: 4.5, performance: 46.2 }
       ]
     },
     {
       date: new Date(2026, 1, 21),
       dayOfWeek: 'Sat',
       dutyHours: 7.2,
+      blockHours: 6.5,
       sectors: 2,
       minPerformance: 71.5,
       avgPerformance: 76.8,
@@ -267,14 +277,15 @@ const generateMockDuties = (): DutyAnalysis[] => {
       landingRisk: 'LOW',
       smsReportable: false,
       flightSegments: [
-        { flightNumber: 'QR068', departure: 'DOH', arrival: 'IST', departureTime: '08:00', arrivalTime: '12:30', performance: 76.8 },
-        { flightNumber: 'QR069', departure: 'IST', arrival: 'DOH', departureTime: '14:00', arrivalTime: '18:30', performance: 74.2 }
+        { flightNumber: 'QR068', departure: 'DOH', arrival: 'IST', departureTime: '08:00', arrivalTime: '12:30', blockHours: 3.5, performance: 76.8 },
+        { flightNumber: 'QR069', departure: 'IST', arrival: 'DOH', departureTime: '14:00', arrivalTime: '18:30', blockHours: 3.0, performance: 74.2 }
       ]
     },
     {
       date: new Date(2026, 1, 23),
       dayOfWeek: 'Mon',
       dutyHours: 9.8,
+      blockHours: 8.5,
       sectors: 2,
       minPerformance: 65.4,
       avgPerformance: 70.2,
@@ -287,13 +298,14 @@ const generateMockDuties = (): DutyAnalysis[] => {
       landingRisk: 'MODERATE',
       smsReportable: false,
       flightSegments: [
-        { flightNumber: 'QR752', departure: 'DOH', arrival: 'SYD', departureTime: '19:30', arrivalTime: '16:00', performance: 70.2 }
+        { flightNumber: 'QR752', departure: 'DOH', arrival: 'SYD', departureTime: '19:30', arrivalTime: '16:00', blockHours: 8.5, performance: 70.2 }
       ]
     },
     {
       date: new Date(2026, 1, 24),
       dayOfWeek: 'Tue',
       dutyHours: 5.8,
+      blockHours: 4.5,
       sectors: 1,
       minPerformance: 47.2,
       avgPerformance: 53.8,
@@ -313,13 +325,14 @@ const generateMockDuties = (): DutyAnalysis[] => {
         { time: '04:00', phase: 'landing', performance: 49.5, circadian: 0.22, sleepPressure: 0.78, severity: 'critical' }
       ],
       flightSegments: [
-        { flightNumber: 'QR753', departure: 'SYD', arrival: 'DOH', departureTime: '22:00', arrivalTime: '05:30', performance: 49.5 }
+        { flightNumber: 'QR753', departure: 'SYD', arrival: 'DOH', departureTime: '22:00', arrivalTime: '05:30', blockHours: 4.5, performance: 49.5 }
       ]
     },
     {
       date: new Date(2026, 1, 25),
       dayOfWeek: 'Wed',
       dutyHours: 6.2,
+      blockHours: 5.25,
       sectors: 1,
       minPerformance: 62.5,
       avgPerformance: 68.4,
@@ -335,13 +348,14 @@ const generateMockDuties = (): DutyAnalysis[] => {
       sleepQuality: 'fair',
       sleepEnvironment: 'home',
       flightSegments: [
-        { flightNumber: 'QR362', departure: 'DOH', arrival: 'NRT', departureTime: '21:45', arrivalTime: '14:00', performance: 65.2 }
+        { flightNumber: 'QR362', departure: 'DOH', arrival: 'NRT', departureTime: '21:45', arrivalTime: '14:00', blockHours: 5.25, performance: 65.2 }
       ]
     },
     {
       date: new Date(2026, 1, 27),
       dayOfWeek: 'Fri',
       dutyHours: 8.5,
+      blockHours: 7.25,
       sectors: 2,
       minPerformance: 45.8,
       avgPerformance: 52.4,
@@ -361,8 +375,8 @@ const generateMockDuties = (): DutyAnalysis[] => {
         { time: '05:30', phase: 'landing', performance: 48.2, circadian: 0.35, sleepPressure: 0.72, severity: 'critical' }
       ],
       flightSegments: [
-        { flightNumber: 'QR363', departure: 'NRT', arrival: 'DOH', departureTime: '00:30', arrivalTime: '06:45', performance: 52.4 },
-        { flightNumber: 'QR148', departure: 'DOH', arrival: 'FCO', departureTime: '08:30', arrivalTime: '13:00', performance: 48.2 }
+        { flightNumber: 'QR363', departure: 'NRT', arrival: 'DOH', departureTime: '00:30', arrivalTime: '06:45', blockHours: 3.25, performance: 52.4 },
+        { flightNumber: 'QR148', departure: 'DOH', arrival: 'FCO', departureTime: '08:30', arrivalTime: '13:00', blockHours: 4.0, performance: 48.2 }
       ]
     }
   ];
@@ -374,6 +388,8 @@ export const mockAnalysisResults: AnalysisResults = {
   statistics: {
     totalDuties: 14,
     totalSectors: 23,
+    totalDutyHours: 114.5,
+    totalBlockHours: 71.75,
     highRiskDuties: 4,
     criticalRiskDuties: 7,
     maxSleepDebt: 8.0

@@ -18,6 +18,8 @@ export interface UploadedFile {
 export interface DutyStatistics {
   totalDuties: number;
   totalSectors: number;
+  totalDutyHours: number;
+  totalBlockHours: number;
   highRiskDuties: number;
   criticalRiskDuties: number;
   maxSleepDebt: number;
@@ -29,6 +31,7 @@ export interface FlightSegment {
   arrival: string;
   departureTime: string;
   arrivalTime: string;
+  blockHours: number;
   performance: number;
 }
 
@@ -54,6 +57,7 @@ export interface DutyAnalysis {
   dateString?: string; // Raw YYYY-MM-DD from backend for timezone-safe day extraction
   dayOfWeek: string;
   dutyHours: number;
+  blockHours: number;
   sectors: number;
   minPerformance: number;
   avgPerformance: number;
