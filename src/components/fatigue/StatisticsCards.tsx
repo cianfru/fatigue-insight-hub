@@ -1,4 +1,4 @@
-import { AlertTriangle, Plane, AlertCircle, Clock, Timer, Zap, Moon, TrendingDown } from 'lucide-react';
+import { AlertTriangle, Plane, AlertCircle, Clock, Timer, Zap, TrendingDown } from 'lucide-react';
 import { DutyStatistics } from '@/types/fatigue';
 
 interface StatisticsCardsProps {
@@ -14,19 +14,12 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
     return `${h}:${String(m).padStart(2, '0')}`;
   };
 
-  // Get performance color based on score
-  const getPerformanceColor = (score: number): string => {
-    if (score >= 80) return 'text-success';
-    if (score >= 70) return 'text-primary';
-    if (score >= 60) return 'text-warning';
-    return 'text-critical';
-  };
-
-  // Sleep quality indicator
-  const getSleepColor = (hours: number): string => {
-    if (hours >= 7) return 'text-success';
-    if (hours >= 6) return 'text-warning';
-    return 'text-critical';
+  // Pinch events are critical performance dips during high-workload phases
+  // Realistic thresholds: 0 = excellent, 1-3 = concerning, 4+ = problematic
+  const getPinchEventVariant = (count: number): 'success' | 'warning' | 'critical' => {
+    if (count === 0) return 'success';
+    if (count <= 3) return 'warning';
+    return 'critical';
   };
 
   return (
@@ -60,19 +53,12 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
       </div>
 
       {/* Secondary Stats Row - Fatigue Metrics */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard
-          label="Avg Sleep"
-          value={`${statistics.avgSleepPerNight.toFixed(1)}h`}
-          icon={<Moon className="h-4 w-4" />}
-          variant={statistics.avgSleepPerNight >= 7 ? 'success' : statistics.avgSleepPerNight >= 6 ? 'warning' : 'critical'}
-          subtitle="per night"
-        />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatCard
           label="Pinch Events"
           value={statistics.totalPinchEvents.toString()}
           icon={<Zap className="h-4 w-4" />}
-          variant={statistics.totalPinchEvents === 0 ? 'success' : statistics.totalPinchEvents <= 5 ? 'warning' : 'critical'}
+          variant={getPinchEventVariant(statistics.totalPinchEvents)}
           subtitle="fatigue peaks"
         />
         <StatCard
