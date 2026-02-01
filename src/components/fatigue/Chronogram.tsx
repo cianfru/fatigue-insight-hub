@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { DutyAnalysis, DutyStatistics, RestDaySleep } from '@/types/fatigue';
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { SleepQualityInfo } from '@/components/fatigue/SleepQualityInfo';
 
 // Helper to calculate recovery score from sleep estimate
 const getRecoveryScore = (estimate: NonNullable<DutyAnalysis['sleepEstimate']>): number => {
@@ -1105,8 +1106,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                 <PopoverTrigger asChild>
                                   <button
                                     type="button"
-                                    onClick={(e) => e.stopPropagation()}
-                                    onPointerDown={(e) => e.stopPropagation()}
                                     className={cn(
                                       "absolute z-20 flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
                                       classes.border,
@@ -1140,8 +1139,19 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           <span className="text-base">{bar.isPreDuty ? '🛏️' : '🔋'}</span>
                                           <span>{bar.isPreDuty ? 'Pre-Duty Sleep' : 'Recovery Sleep'}</span>
                                         </div>
-                                        <div className={cn("text-lg font-bold", classes.text)}>
-                                          {Math.round(bar.recoveryScore)}%
+                                        <div className="flex items-center gap-2">
+                                          {bar.isPreDuty && bar.relatedDuty.sleepEstimate && (
+                                            <SleepQualityInfo
+                                              explanation={bar.relatedDuty.sleepEstimate.explanation}
+                                              confidence={bar.relatedDuty.sleepEstimate.confidence}
+                                              confidenceBasis={bar.relatedDuty.sleepEstimate.confidenceBasis}
+                                              qualityFactors={bar.relatedDuty.sleepEstimate.qualityFactors}
+                                              references={bar.relatedDuty.sleepEstimate.references}
+                                            />
+                                          )}
+                                          <div className={cn("text-lg font-bold", classes.text)}>
+                                            {Math.round(bar.recoveryScore)}%
+                                          </div>
                                         </div>
                                       </div>
                                       

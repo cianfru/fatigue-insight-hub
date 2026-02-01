@@ -61,6 +61,23 @@ export interface SleepEstimate {
   sleep_start_hour?: number | null;  // Hour (0-24, decimal)
   sleep_end_day?: number | null;     // Day of month (1-31)
   sleep_end_hour?: number | null;    // Hour (0-24, decimal)
+
+  // Detailed sleep quality explanation (new backend fields)
+  explanation?: string;
+  confidence_basis?: string;
+  quality_factors?: {
+    base_efficiency: number;
+    wocl_boost: number;
+    late_onset_penalty: number;
+    recovery_boost: number;
+    time_pressure_factor: number;
+    insufficient_penalty: number;
+  };
+  references?: Array<{
+    key: string;
+    short: string;
+    full: string;
+  }>;
 }
 
 export interface Duty {
