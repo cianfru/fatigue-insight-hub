@@ -57,13 +57,15 @@ export function SleepQualityInfo({
   references,
   variant = 'icon',
 }: SleepQualityInfoProps) {
-  const hasDetailedInfo = explanation || confidenceBasis || qualityFactors || references?.length;
+  // Always show the info icon if we have a confidence score (the minimum data from backend)
+  // The popover will show whatever detailed info is available
+  const hasAnyData = confidence !== undefined;
 
-  if (!hasDetailedInfo) {
+  if (!hasAnyData) {
     return null;
   }
 
-  const confidencePercent = Math.round(confidence * 100);
+  const confidencePercent = Math.round((confidence || 0) * 100);
 
   return (
     <Popover>

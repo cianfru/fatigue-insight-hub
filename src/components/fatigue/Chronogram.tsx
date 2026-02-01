@@ -9,7 +9,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { DutyAnalysis, DutyStatistics, RestDaySleep } from '@/types/fatigue';
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { SleepQualityInfo } from '@/components/fatigue/SleepQualityInfo';
 
 // Helper to calculate recovery score from sleep estimate
 const getRecoveryScore = (estimate: NonNullable<DutyAnalysis['sleepEstimate']>): number => {
@@ -1139,21 +1138,18 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           <span className="text-base">{bar.isPreDuty ? '🛏️' : '🔋'}</span>
                                           <span>{bar.isPreDuty ? 'Pre-Duty Sleep' : 'Recovery Sleep'}</span>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                          {bar.isPreDuty && bar.relatedDuty.sleepEstimate && (
-                                            <SleepQualityInfo
-                                              explanation={bar.relatedDuty.sleepEstimate.explanation}
-                                              confidence={bar.relatedDuty.sleepEstimate.confidence}
-                                              confidenceBasis={bar.relatedDuty.sleepEstimate.confidenceBasis}
-                                              qualityFactors={bar.relatedDuty.sleepEstimate.qualityFactors}
-                                              references={bar.relatedDuty.sleepEstimate.references}
-                                            />
-                                          )}
-                                          <div className={cn("text-lg font-bold", classes.text)}>
-                                            {Math.round(bar.recoveryScore)}%
-                                          </div>
+                                        <div className={cn("text-lg font-bold", classes.text)}>
+                                          {Math.round(bar.recoveryScore)}%
                                         </div>
                                       </div>
+                                      
+                                      {/* Explanation from backend (if available) */}
+                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.explanation && (
+                                        <div className="bg-primary/5 border border-primary/20 rounded-md p-2 text-[11px] text-muted-foreground leading-relaxed">
+                                          <span className="text-primary font-medium">💡 </span>
+                                          {bar.relatedDuty.sleepEstimate.explanation}
+                                        </div>
+                                      )}
                                       
                                       {/* Sleep Timing - show full window for overnight sleep */}
                                       <div className="flex items-center justify-between text-muted-foreground">
@@ -1230,6 +1226,76 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           </span>
                                         </div>
                                       </div>
+                                      
+                                      {/* Quality Factors from backend (if available) */}
+                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.qualityFactors && (
+                                        <div className="bg-secondary/20 rounded-lg p-2 space-y-1.5">
+                                          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                                            🔬 Model Calculation Factors
+                                          </div>
+                                          {Object.entries(bar.relatedDuty.sleepEstimate.qualityFactors).map(([key, value]) => {
+                                            const labels: Record<string, string> = {
+                                              base_efficiency: 'Base Efficiency',
+                                              wocl_boost: 'WOCL Boost',
+                                              late_onset_penalty: 'Late Onset',
+                                              recovery_boost: 'Recovery Boost',
+                                              time_pressure_factor: 'Time Pressure',
+                                              insufficient_penalty: 'Duration Penalty',
+                                            };
+                                            const label = labels[key] || key;
+                                            const numValue = value as number;
+                                            const isBoost = numValue >= 1;
+                                            return (
+                                              <div key={key} className="flex items-center justify-between text-[11px]">
+                                                <span className="text-muted-foreground">{label}</span>
+                                                <span className={cn(
+                                                  "font-mono font-medium",
+                                                  numValue >= 1.05 ? "text-success" :
+                                                  numValue >= 0.98 ? "text-muted-foreground" :
+                                                  numValue >= 0.90 ? "text-warning" : "text-critical"
+                                                )}>
+                                                  {isBoost ? '+' : ''}{((numValue - 1) * 100).toFixed(0)}%
+                                                </span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                      
+                                      {/* Confidence & Basis (if available) */}
+                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate && (
+                                        <div className="flex items-center justify-between text-[11px]">
+                                          <span className="text-muted-foreground">Model Confidence</span>
+                                          <span className={cn(
+                                            "font-mono font-medium px-1.5 py-0.5 rounded",
+                                            bar.relatedDuty.sleepEstimate.confidence >= 0.7 ? "bg-success/10 text-success" :
+                                            bar.relatedDuty.sleepEstimate.confidence >= 0.5 ? "bg-warning/10 text-warning" : "bg-high/10 text-high"
+                                          )}>
+                                            {Math.round(bar.relatedDuty.sleepEstimate.confidence * 100)}%
+                                          </span>
+                                        </div>
+                                      )}
+                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.confidenceBasis && (
+                                        <div className="text-[10px] text-muted-foreground/70 italic leading-relaxed">
+                                          {bar.relatedDuty.sleepEstimate.confidenceBasis}
+                                        </div>
+                                      )}
+                                      
+                                      {/* References (if available) */}
+                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.references && bar.relatedDuty.sleepEstimate.references.length > 0 && (
+                                        <div className="border-t border-border/30 pt-2 space-y-1">
+                                          <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+                                            📚 Sources
+                                          </div>
+                                          <div className="flex flex-wrap gap-1">
+                                            {bar.relatedDuty.sleepEstimate.references.map((ref, i) => (
+                                              <span key={ref.key || i} className="text-[9px] px-1.5 py-0.5 rounded bg-secondary/50 text-muted-foreground" title={ref.full}>
+                                                {ref.short}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
                                       
                                       {/* Strategy Badge */}
                                       <div className="flex items-center justify-between pt-1">
