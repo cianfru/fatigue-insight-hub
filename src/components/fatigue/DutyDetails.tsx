@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { PriorSleepIndicator } from './PriorSleepIndicator';
 import { SleepRecoveryIndicator } from './SleepRecoveryIndicator';
 import { FlightPhasePerformance } from './FlightPhasePerformance';
+import { PerformanceDegradation } from './PerformanceDegradation';
 
 interface DutyDetailsProps {
   duty: DutyAnalysis;
@@ -125,7 +126,15 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
       {/* Section 3: Flight Phase Performance */}
       <FlightPhasePerformance duty={duty} />
 
-      {/* Section 4: Prior Sleep */}
+      {/* Section 4: Performance Degradation (if timeline points available) */}
+      {duty.timelinePoints && duty.timelinePoints.length > 0 && (
+        <PerformanceDegradation 
+          timelinePoint={duty.timelinePoints[duty.timelinePoints.length - 1]} 
+          variant="detailed" 
+        />
+      )}
+
+      {/* Section 5: Prior Sleep */}
       <PriorSleepIndicator duty={duty} variant="detailed" />
 
       {/* Section 4: Sleep Recovery (Strategic Sleep Estimator) */}
