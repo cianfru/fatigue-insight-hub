@@ -170,6 +170,7 @@ export function SleepRecoveryIndicator({ duty, variant = 'compact' }: SleepRecov
         </div>
         <div className="flex items-center gap-3">
           <SleepQualityInfo
+            variant="badge"
             explanation={estimate.explanation}
             confidence={estimate.confidence}
             confidenceBasis={estimate.confidenceBasis}

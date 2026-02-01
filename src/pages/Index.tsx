@@ -187,8 +187,6 @@ const Index = () => {
           sleepEstimate: (duty.sleep_quality ?? duty.sleep_estimate) ? (() => {
             const sleep = duty.sleep_quality ?? duty.sleep_estimate;
             if (!sleep) return undefined;
-            // DEBUG: log the sleep object to confirm backend shape
-            console.log('[SleepQuality] duty', duty.duty_id, 'sleep_quality keys:', Object.keys(sleep as object), sleep);
             
             const sleepBlocks = (sleep as unknown as Record<string, unknown>).sleep_blocks as Array<{ sleep_start_iso?: string; sleep_end_iso?: string }> | undefined;
             const firstBlock = sleepBlocks?.[0];
