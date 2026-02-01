@@ -121,7 +121,29 @@ export interface DutyAnalysis {
     sleepStartHour?: number;  // Hour (0-24, decimal)
     sleepEndDay?: number;     // Day of month (1-31)
     sleepEndHour?: number;    // Hour (0-24, decimal)
+    // Detailed sleep quality data from backend
+    explanation?: string;
+    confidenceBasis?: string;
+    qualityFactors?: SleepQualityFactors;
+    references?: SleepReference[];
   };
+}
+
+// Sleep quality calculation factors
+export interface SleepQualityFactors {
+  base_efficiency: number;
+  wocl_boost: number;
+  late_onset_penalty: number;
+  recovery_boost: number;
+  time_pressure_factor: number;
+  insufficient_penalty: number;
+}
+
+// Academic reference for sleep calculations
+export interface SleepReference {
+  key: string;
+  short: string;
+  full: string;
 }
 
 // Rest day sleep block (transformed from backend)
