@@ -84,6 +84,8 @@ export interface DutyAnalysis {
   actualFdpHours?: number; // Actual FDP worked
   usedDiscretion?: boolean; // Commander discretion used
   fdpExceedance?: number; // Hours over limit (if any)
+  // Per-timeline performance degradation points (from GET /api/duty/{id}/{duty_id})
+  timelinePoints?: TimelinePoint[];
   // Existing optional fields
   pinchEvents?: PinchEvent[];
   circadianPhaseShift?: number;
@@ -137,6 +139,17 @@ export interface SleepQualityFactors {
   recovery_boost: number;
   time_pressure_factor: number;
   insufficient_penalty: number;
+  pre_duty_awake_hours?: number; // Hours awake before report (Dawson & Reid, 1997)
+}
+
+// Per-timeline point performance degradation factors
+export interface TimelinePoint {
+  hours_on_duty: number;           // Hours since report
+  time_on_task_penalty: number;    // TOT decrement ~0.008/h (Folkard & Åkerstedt, 1999)
+  sleep_inertia: number;           // Process W component (Tassi & Muzet, 2000)
+  sleep_pressure: number;          // Process S (Borbély, 1982)
+  circadian: number;               // Process C (Dijk & Czeisler, 1995)
+  performance?: number;            // Combined performance score
 }
 
 // Academic reference for sleep calculations
