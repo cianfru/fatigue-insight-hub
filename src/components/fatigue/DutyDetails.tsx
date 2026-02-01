@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { useState } from 'react';
 import { PriorSleepIndicator } from './PriorSleepIndicator';
 import { SleepRecoveryIndicator } from './SleepRecoveryIndicator';
+import { FlightPhasePerformance } from './FlightPhasePerformance';
 
 interface DutyDetailsProps {
   duty: DutyAnalysis;
@@ -121,7 +122,10 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
         </CardContent>
       </Card>
 
-      {/* Section 3: Prior Sleep */}
+      {/* Section 3: Flight Phase Performance */}
+      <FlightPhasePerformance duty={duty} />
+
+      {/* Section 4: Prior Sleep */}
       <PriorSleepIndicator duty={duty} variant="detailed" />
 
       {/* Section 4: Sleep Recovery (Strategic Sleep Estimator) */}
