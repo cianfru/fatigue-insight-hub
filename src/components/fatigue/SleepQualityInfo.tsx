@@ -57,9 +57,6 @@ export function SleepQualityInfo({
   references,
   variant = 'icon',
 }: SleepQualityInfoProps) {
-  // DEBUG: Log what props we receive
-  console.log('[SleepQualityInfo] props:', { explanation, confidence, confidenceBasis, qualityFactors, references });
-
   // Always show the info icon if we have a confidence score (the minimum data from backend)
   // The popover will show whatever detailed info is available
   const hasAnyData = confidence !== undefined;
@@ -71,7 +68,7 @@ export function SleepQualityInfo({
   const confidencePercent = Math.round((confidence || 0) * 100);
 
   return (
-    <Popover>
+    <Popover modal>
       <PopoverTrigger asChild>
         {variant === 'icon' ? (
           <button
@@ -97,10 +94,11 @@ export function SleepQualityInfo({
           </Badge>
         )}
       </PopoverTrigger>
-      <PopoverContent 
-        side="right" 
-        align="start" 
-        className="w-[380px] p-0 bg-card/95 backdrop-blur-xl border-border/50 shadow-2xl"
+      <PopoverContent
+        side="left"
+        align="start"
+        sideOffset={8}
+        className="w-[380px] p-0 bg-card/95 backdrop-blur-xl border-border/50 shadow-2xl z-[60]"
       >
         <ScrollArea className="max-h-[70vh]">
           <div className="p-4 space-y-4">
