@@ -87,11 +87,14 @@ export function PerformanceDegradation({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Time on Duty */}
+        {/* Hours on Duty (Hours Since Report) */}
         <div className="flex items-center justify-between p-2 rounded-lg bg-secondary/30">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Hours on Duty</span>
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">Hours on Duty</span>
+              <span className="text-[10px] text-muted-foreground">Hours since report</span>
+            </div>
           </div>
           <span className="text-lg font-mono font-bold">{hours_on_duty.toFixed(1)}h</span>
         </div>
@@ -145,7 +148,7 @@ export function PerformanceDegradation({
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <Clock className="h-3.5 w-3.5 text-warning" />
-                <span>Time on Task Penalty</span>
+                <span>Time on Task</span>
               </div>
               <span className={cn(
                 "font-mono font-semibold",
@@ -155,11 +158,11 @@ export function PerformanceDegradation({
               </span>
             </div>
             <p className="text-[10px] text-muted-foreground">
-              Folkard & Åkerstedt (1999) — ~0.8%/hour decrement
+              Folkard & Åkerstedt (1999) — Linear TOT decrement (~0.8%/h)
             </p>
           </div>
 
-          {/* Sleep Inertia (only show if present) */}
+          {/* Sleep Inertia (Process W) - only show if present */}
           {sleep_inertia < 1 && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-sm">
