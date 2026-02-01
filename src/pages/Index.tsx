@@ -123,6 +123,7 @@ const Index = () => {
       setAnalysisResults({
         generatedAt: new Date(),
         month: analysisMonth,
+        analysisId: result.analysis_id || undefined,
         pilotId: result.pilot_id || undefined,
         pilotName: result.pilot_name || undefined,
         pilotBase: result.pilot_base || undefined,
@@ -162,6 +163,7 @@ const Index = () => {
           confidence: restDay.confidence,
         })),
         duties: result.duties.map(duty => ({
+          dutyId: duty.duty_id,
           date: parseISO(duty.date),
           dateString: duty.date,
           dayOfWeek: format(parseISO(duty.date), 'EEE'),

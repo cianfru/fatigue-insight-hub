@@ -58,6 +58,7 @@ export interface FlightPhasePerformance {
 }
 
 export interface DutyAnalysis {
+  dutyId?: string; // Backend duty_id (used for fetching detailed duty breakdown)
   date: Date;
   dateString?: string; // Raw YYYY-MM-DD from backend for timezone-safe day extraction
   dayOfWeek: string;
@@ -187,6 +188,7 @@ export interface AnalysisResults {
   duties: DutyAnalysis[];
   generatedAt: Date;
   month: Date; // Actual month from the roster data
+  analysisId?: string; // Backend analysis_id
   // Pilot info from backend
   pilotId?: string;
   pilotName?: string;
