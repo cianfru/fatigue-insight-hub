@@ -199,6 +199,23 @@ const Index = () => {
             const sleepEndDay = sleepRecord.sleep_end_day as number | undefined;
             const sleepEndHour = sleepRecord.sleep_end_hour as number | undefined;
             
+            // Extract detailed sleep quality data (snake_case from backend)
+            const explanation = sleepRecord.explanation as string | undefined;
+            const confidenceBasis = sleepRecord.confidence_basis as string | undefined;
+            const qualityFactors = sleepRecord.quality_factors as {
+              base_efficiency: number;
+              wocl_boost: number;
+              late_onset_penalty: number;
+              recovery_boost: number;
+              time_pressure_factor: number;
+              insufficient_penalty: number;
+            } | undefined;
+            const references = sleepRecord.references as Array<{
+              key: string;
+              short: string;
+              full: string;
+            }> | undefined;
+            
             return {
               totalSleepHours: sleep.total_sleep_hours,
               effectiveSleepHours: sleep.effective_sleep_hours,
@@ -215,6 +232,11 @@ const Index = () => {
               sleepStartHour,
               sleepEndDay,
               sleepEndHour,
+              // Detailed sleep quality info
+              explanation,
+              confidenceBasis,
+              qualityFactors,
+              references,
             };
           })() : undefined,
           flightSegments: duty.segments.map(seg => ({
