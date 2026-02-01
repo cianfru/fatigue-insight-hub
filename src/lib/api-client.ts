@@ -72,6 +72,7 @@ export interface SleepEstimate {
     recovery_boost: number;
     time_pressure_factor: number;
     insufficient_penalty: number;
+    pre_duty_awake_hours?: number; // Hours awake before report
   };
   references?: Array<{
     key: string;

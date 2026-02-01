@@ -21,8 +21,8 @@ const factorLabels: Record<keyof SleepQualityFactors, { label: string; descripti
     description: 'Starting sleep efficiency based on environment (home vs hotel)' 
   },
   wocl_boost: { 
-    label: 'WOCL Boost', 
-    description: 'Bonus for sleeping during Window of Circadian Low (02:00–06:00)' 
+    label: 'WOCL Alignment', 
+    description: 'Circadian misalignment penalty (0.85–1.0) for sleep timing (Dijk & Czeisler, 1994)' 
   },
   late_onset_penalty: { 
     label: 'Late Onset', 
@@ -30,19 +30,31 @@ const factorLabels: Record<keyof SleepQualityFactors, { label: string; descripti
   },
   recovery_boost: { 
     label: 'Recovery Boost', 
-    description: 'Bonus for recovery days allowing extended sleep' 
+    description: 'Graded boost (1.0/1.03/1.05) for recovery days (Borbély, 1982)' 
   },
   time_pressure_factor: { 
     label: 'Time Pressure', 
-    description: 'Penalty for early reports constraining sleep duration' 
+    description: 'Penalty (0.88–1.0) for early reports (Kecklund & Åkerstedt, 2004)' 
   },
   insufficient_penalty: { 
     label: 'Duration Penalty', 
     description: 'Penalty for total sleep below recommended threshold' 
   },
+  pre_duty_awake_hours: {
+    label: 'Pre-Duty Awake',
+    description: 'Hours awake before report time (Dawson & Reid, 1997)'
+  },
 };
 
-const getFactorStyle = (value: number): { color: string; label: string } => {
+const getFactorStyle = (key: string, value: number): { color: string; label: string } => {
+  // pre_duty_awake_hours is in hours, not a multiplier
+  if (key === 'pre_duty_awake_hours') {
+    if (value <= 2) return { color: 'text-success', label: 'optimal' };
+    if (value <= 4) return { color: 'text-muted-foreground', label: 'normal' };
+    if (value <= 8) return { color: 'text-warning', label: 'extended' };
+    return { color: 'text-critical', label: 'fatiguing' };
+  }
+  // Standard multiplier factors
   if (value >= 1.05) return { color: 'text-success', label: 'boost' };
   if (value >= 0.98) return { color: 'text-muted-foreground', label: 'neutral' };
   if (value >= 0.90) return { color: 'text-warning', label: 'minor penalty' };
@@ -166,9 +178,11 @@ export function SleepQualityInfo({
                     {Object.entries(qualityFactors).map(([key, value]) => {
                       const factorKey = key as keyof SleepQualityFactors;
                       const factor = factorLabels[factorKey];
-                      const style = getFactorStyle(value);
+                      const style = getFactorStyle(key, value);
                       
-                      if (!factor) return null;
+                      if (!factor || value === undefined) return null;
+                      
+                      const isHoursField = key === 'pre_duty_awake_hours';
                       
                       return (
                         <div 
@@ -186,32 +200,40 @@ export function SleepQualityInfo({
                               "font-mono text-xs font-semibold",
                               style.color
                             )}>
-                              {value >= 1 ? '+' : ''}{((value - 1) * 100).toFixed(0)}%
+                              {isHoursField 
+                                ? `${value.toFixed(1)}h` 
+                                : `${value >= 1 ? '+' : ''}${((value - 1) * 100).toFixed(0)}%`
+                              }
                             </span>
                             <div className={cn(
                               "h-2 w-2 rounded-full",
-                              value >= 1.05 && "bg-success",
-                              value >= 0.98 && value < 1.05 && "bg-muted-foreground/30",
-                              value >= 0.90 && value < 0.98 && "bg-warning",
-                              value < 0.90 && "bg-critical"
+                              isHoursField 
+                                ? (value <= 2 ? "bg-success" : value <= 4 ? "bg-muted-foreground/30" : value <= 8 ? "bg-warning" : "bg-critical")
+                                : (value >= 1.05 ? "bg-success" : value >= 0.98 ? "bg-muted-foreground/30" : value >= 0.90 ? "bg-warning" : "bg-critical")
                             )} />
                           </div>
                         </div>
                       );
                     })}
                   </div>
-                  {/* Net effect */}
-                  <div className="flex items-center justify-between pt-2 border-t border-border/30">
-                    <span className="text-xs font-medium">Net Effect</span>
-                    <span className={cn(
-                      "font-mono text-sm font-bold",
-                      Object.values(qualityFactors).reduce((a, b) => a * b, 1) >= 1 
-                        ? "text-success" 
-                        : "text-warning"
-                    )}>
-                      ×{Object.values(qualityFactors).reduce((a, b) => a * b, 1).toFixed(2)}
-                    </span>
-                  </div>
+                  {/* Net effect - exclude pre_duty_awake_hours from calculation */}
+                  {(() => {
+                    const multiplierFactors = Object.entries(qualityFactors)
+                      .filter(([key]) => key !== 'pre_duty_awake_hours')
+                      .map(([, value]) => value);
+                    const netEffect = multiplierFactors.reduce((a, b) => a * b, 1);
+                    return (
+                      <div className="flex items-center justify-between pt-2 border-t border-border/30">
+                        <span className="text-xs font-medium">Net Effect</span>
+                        <span className={cn(
+                          "font-mono text-sm font-bold",
+                          netEffect >= 1 ? "text-success" : "text-warning"
+                        )}>
+                          ×{netEffect.toFixed(2)}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </>
             )}
