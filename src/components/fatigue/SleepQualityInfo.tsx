@@ -57,9 +57,6 @@ export function SleepQualityInfo({
   references,
   variant = 'icon',
 }: SleepQualityInfoProps) {
-  // DEBUG: Log what props we receive
-  console.log('[SleepQualityInfo] props:', { explanation, confidence, confidenceBasis, qualityFactors, references });
-
   // Always show the info icon if we have a confidence score (the minimum data from backend)
   // The popover will show whatever detailed info is available
   const hasAnyData = confidence !== undefined;
@@ -75,6 +72,7 @@ export function SleepQualityInfo({
       <PopoverTrigger asChild>
         {variant === 'icon' ? (
           <button
+            type="button"
             className={cn(
               "inline-flex items-center justify-center",
               "h-5 w-5 rounded-full",
@@ -88,13 +86,17 @@ export function SleepQualityInfo({
             <Info className="h-3 w-3" />
           </button>
         ) : (
-          <Badge 
-            variant="outline" 
-            className="cursor-help gap-1 hover:bg-secondary/50 transition-colors"
-          >
-            <Info className="h-3 w-3" />
-            <span>How it's calculated</span>
-          </Badge>
+          // IMPORTANT: Radix PopoverTrigger needs a focusable/clickable element.
+          // Badge is a styled component and may not be interactive by default.
+          <button type="button" className="inline-flex" aria-label="How it's calculated">
+            <Badge
+              variant="outline"
+              className="cursor-help gap-1 hover:bg-secondary/50 transition-colors"
+            >
+              <Info className="h-3 w-3" />
+              <span>How it's calculated</span>
+            </Badge>
+          </button>
         )}
       </PopoverTrigger>
       <PopoverContent 
