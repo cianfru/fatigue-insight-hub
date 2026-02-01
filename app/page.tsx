@@ -2,21 +2,21 @@
 
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Header } from '@/src/components/fatigue/Header';
-import { Footer } from '@/src/components/fatigue/Footer';
-import { WelcomePage } from '@/src/components/fatigue/WelcomePage';
-import { DashboardContent } from '@/src/components/fatigue/DashboardContent';
-import { MathematicalModelPage } from '@/src/components/fatigue/MathematicalModelPage';
-import { FatigueSciencePage } from '@/src/components/fatigue/FatigueSciencePage';
-import { ResearchReferencesPage } from '@/src/components/fatigue/ResearchReferencesPage';
+import { Header } from '@/components/fatigue/Header';
+import { Footer } from '@/components/fatigue/Footer';
+import { WelcomePage } from '@/components/fatigue/WelcomePage';
+import { DashboardContent } from '@/components/fatigue/DashboardContent';
+import { MathematicalModelPage } from '@/components/fatigue/MathematicalModelPage';
+import { FatigueSciencePage } from '@/components/fatigue/FatigueSciencePage';
+import { ResearchReferencesPage } from '@/components/fatigue/ResearchReferencesPage';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/src/types/fatigue';
-import { mockAnalysisResults } from '@/src/data/mockAnalysisData';
-import { useTheme } from '@/src/hooks/useTheme';
-import { analyzeRoster } from '@/src/lib/api-client';
+import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
+import { mockAnalysisResults } from '@/data/mockAnalysisData';
+import { useTheme } from '@/hooks/useTheme';
+import { analyzeRoster } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 
