@@ -1,9 +1,6 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { DutyAnalysis } from '@/types/fatigue';
 import { DutyDetails } from './DutyDetails';
-import { FlightPhasePerformance } from './FlightPhasePerformance';
-import { SleepRecoveryIndicator } from './SleepRecoveryIndicator';
-import { PriorSleepIndicator } from './PriorSleepIndicator';
 import { format } from 'date-fns';
 
 interface DutyDetailsDrawerProps {
@@ -27,21 +24,8 @@ export function DutyDetailsDrawer({ duty, open, onOpenChange }: DutyDetailsDrawe
           </div>
         </SheetHeader>
         
-        <div className="space-y-6">
-          {/* Duty Details Card */}
-          <DutyDetails duty={duty} />
-          
-          {/* Sleep Recovery Indicator - Strategic Sleep Estimator */}
-          {duty.sleepEstimate && (
-            <SleepRecoveryIndicator duty={duty} variant="detailed" />
-          )}
-          
-          {/* Prior Sleep Indicator */}
-          <PriorSleepIndicator duty={duty} variant="detailed" />
-          
-          {/* Flight Phase Performance */}
-          <FlightPhasePerformance duty={duty} />
-        </div>
+        {/* All content is now consolidated in DutyDetails */}
+        <DutyDetails duty={duty} />
       </SheetContent>
     </Sheet>
   );
