@@ -188,9 +188,6 @@ const Index = () => {
             const sleep = duty.sleep_quality ?? duty.sleep_estimate;
             if (!sleep) return undefined;
             
-            // DEBUG: Log raw sleep data from backend
-            console.log('[Index] Raw sleep data for duty', duty.date, ':', JSON.stringify(sleep, null, 2));
-            
             const sleepBlocks = (sleep as unknown as Record<string, unknown>).sleep_blocks as Array<{ sleep_start_iso?: string; sleep_end_iso?: string }> | undefined;
             const firstBlock = sleepBlocks?.[0];
             const sleepStartIso = sleep.sleep_start_iso ?? firstBlock?.sleep_start_iso;

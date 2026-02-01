@@ -46,81 +46,57 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
   };
 
   return (
-    <Card variant="glow" className="animate-fade-in">
-      <CardHeader>
-        <CardTitle className="text-lg">
-          {format(duty.date, 'EEEE, MMMM d, yyyy')}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Key Metrics Grid */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Date</p>
-            <p className="font-medium">{format(duty.date, 'dd-MMM-yyyy')}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Duty Hours</p>
-            <p className="font-medium">{duty.dutyHours.toFixed(1)}h</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Sectors</p>
-            <p className="font-medium">{duty.sectors}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Min Performance</p>
-            <p className={`font-medium ${duty.minPerformance < 50 ? 'text-critical' : duty.minPerformance < 60 ? 'text-warning' : 'text-foreground'}`}>
-              {duty.minPerformance.toFixed(1)}/100
-            </p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Avg Performance</p>
-            <p className="font-medium">{duty.avgPerformance.toFixed(1)}/100</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Landing Performance</p>
-            <p className={`font-medium ${duty.landingPerformance < 50 ? 'text-critical' : duty.landingPerformance < 60 ? 'text-warning' : 'text-foreground'}`}>
-              {duty.landingPerformance.toFixed(1)}/100
-            </p>
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-1">
-              <Clock className="h-3 w-3 text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">Sleep Debt</p>
+    <div className="space-y-6 animate-fade-in">
+      {/* Section 1: General Details */}
+      <Card variant="glow">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">
+            {format(duty.date, 'EEEE, MMMM d, yyyy')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Duty Hours</p>
+              <p className="font-medium">{duty.dutyHours.toFixed(1)}h</p>
             </div>
-            <p className={`font-medium ${duty.sleepDebt > 5 ? 'text-critical' : duty.sleepDebt > 3 ? 'text-warning' : 'text-foreground'}`}>
-              {duty.sleepDebt.toFixed(1)}h
-            </p>
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-1">
-              <Moon className="h-3 w-3 text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">WOCL Exposure</p>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Sectors</p>
+              <p className="font-medium">{duty.sectors}</p>
             </div>
-            <p className={`font-medium ${duty.woclExposure > 2 ? 'text-critical' : duty.woclExposure > 1 ? 'text-warning' : 'text-foreground'}`}>
-              {duty.woclExposure.toFixed(1)}h
-            </p>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Block Hours</p>
+              <p className="font-medium">{duty.blockHours.toFixed(1)}h</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Min Performance</p>
+              <p className={`font-medium ${duty.minPerformance < 50 ? 'text-critical' : duty.minPerformance < 60 ? 'text-warning' : 'text-foreground'}`}>
+                {duty.minPerformance.toFixed(1)}/100
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Avg Performance</p>
+              <p className="font-medium">{duty.avgPerformance.toFixed(1)}/100</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Landing Performance</p>
+              <p className={`font-medium ${duty.landingPerformance < 50 ? 'text-critical' : duty.landingPerformance < 60 ? 'text-warning' : 'text-foreground'}`}>
+                {duty.landingPerformance.toFixed(1)}/100
+              </p>
+            </div>
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Prior Sleep Indicator - Enhanced */}
-        <div className="pt-2">
-          <PriorSleepIndicator duty={duty} variant="detailed" />
-        </div>
-
-        {/* Sleep Recovery Indicator - Strategic Sleep Estimator */}
-        {duty.sleepEstimate && (
-          <div className="pt-2">
-            <SleepRecoveryIndicator duty={duty} variant="detailed" />
-          </div>
-        )}
-
-        {/* Flight Segments */}
-        <div className="space-y-3">
-          <h4 className="flex items-center gap-2 font-medium">
+      {/* Section 2: Flight Segments */}
+      <Card variant="glass">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
             <Plane className="h-4 w-4 text-primary" />
             Flight Segments
-          </h4>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
           <div className="space-y-2">
             {duty.flightSegments.map((segment, index) => (
               <div
@@ -142,11 +118,26 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
               </div>
             ))}
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Risk Assessment */}
-        <div className="space-y-3">
-          <h4 className="font-medium">Risk Assessment</h4>
+      {/* Section 3: Prior Sleep */}
+      <PriorSleepIndicator duty={duty} variant="detailed" />
+
+      {/* Section 4: Sleep Recovery (Strategic Sleep Estimator) */}
+      {duty.sleepEstimate && (
+        <SleepRecoveryIndicator duty={duty} variant="detailed" />
+      )}
+
+      {/* Section 5: Risk Assessment */}
+      <Card variant="glass">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            Risk Assessment
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">Overall Risk</p>
@@ -156,7 +147,7 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Minimum Performance Risk</p>
+              <p className="text-xs text-muted-foreground">Min Perf. Risk</p>
               {getRiskBadge(duty.minPerformanceRisk)}
             </div>
             <div className="space-y-1">
@@ -164,73 +155,95 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
               {getRiskBadge(duty.landingRisk)}
             </div>
           </div>
-        </div>
 
-        {/* SMS Reportable Warning */}
-        {duty.smsReportable && (
-          <div className="flex items-start gap-3 rounded-lg border border-warning/50 bg-warning/10 p-4">
-            <AlertTriangle className="h-5 w-5 flex-shrink-0 text-warning" />
-            <div>
-              <p className="font-medium text-warning">SMS Reportable</p>
-              <p className="text-sm text-muted-foreground">
-                File fatigue report per EASA ORO.FTL.120
-              </p>
+          {/* Fatigue factors summary */}
+          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+            <div className="flex items-center gap-2">
+              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+              <div className="text-xs">
+                <span className="text-muted-foreground">Sleep Debt: </span>
+                <span className={`font-medium ${duty.sleepDebt > 5 ? 'text-critical' : duty.sleepDebt > 3 ? 'text-warning' : 'text-foreground'}`}>
+                  {duty.sleepDebt.toFixed(1)}h
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Moon className="h-3.5 w-3.5 text-muted-foreground" />
+              <div className="text-xs">
+                <span className="text-muted-foreground">WOCL: </span>
+                <span className={`font-medium ${duty.woclExposure > 2 ? 'text-critical' : duty.woclExposure > 1 ? 'text-warning' : 'text-foreground'}`}>
+                  {duty.woclExposure.toFixed(1)}h
+                </span>
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Detailed Assessment Collapsible */}
-        <Collapsible open={assessmentOpen} onOpenChange={setAssessmentOpen}>
-          <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg bg-secondary/30 p-3 text-sm hover:bg-secondary/50">
-            <span className="flex items-center gap-2">
-              📋 Detailed Assessment & Recommendations
-            </span>
-            <ChevronDown className={`h-4 w-4 transition-transform ${assessmentOpen ? 'rotate-180' : ''}`} />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-3">
-            <div className="space-y-3 rounded-lg bg-secondary/20 p-4 text-sm">
+          {/* SMS Reportable Warning */}
+          {duty.smsReportable && (
+            <div className="flex items-start gap-3 rounded-lg border border-warning/50 bg-warning/10 p-3">
+              <AlertTriangle className="h-5 w-5 flex-shrink-0 text-warning" />
               <div>
-                <h5 className="mb-1 font-medium">Fatigue Factors</h5>
-                <ul className="list-inside list-disc space-y-1 text-muted-foreground">
-                  {duty.woclExposure > 0 && (
-                    <li>Window of Circadian Low (WOCL) exposure: {duty.woclExposure.toFixed(1)}h</li>
-                  )}
-                  {duty.sleepDebt > 3 && (
-                    <li>Elevated sleep debt: {duty.sleepDebt.toFixed(1)}h accumulated</li>
-                  )}
-                  {duty.priorSleep < 24 && (
-                    <li>Limited prior sleep opportunity: {duty.priorSleep.toFixed(1)}h</li>
-                  )}
-                </ul>
-              </div>
-              <div>
-                <h5 className="mb-1 font-medium">Recommendations</h5>
-                <ul className="list-inside list-disc space-y-1 text-muted-foreground">
-                  {duty.overallRisk === 'CRITICAL' && (
-                    <>
-                      <li>Consider controlled rest if operationally feasible</li>
-                      <li>Enhanced crew monitoring during critical phases</li>
-                      <li>File SMS fatigue report</li>
-                    </>
-                  )}
-                  {duty.overallRisk === 'HIGH' && (
-                    <>
-                      <li>Maximize rest opportunities</li>
-                      <li>Consider caffeine strategically</li>
-                    </>
-                  )}
-                  {duty.overallRisk === 'MODERATE' && (
-                    <li>Maintain awareness of fatigue symptoms</li>
-                  )}
-                  {duty.overallRisk === 'LOW' && (
-                    <li>Normal operations - no special mitigations required</li>
-                  )}
-                </ul>
+                <p className="font-medium text-warning text-sm">SMS Reportable</p>
+                <p className="text-xs text-muted-foreground">
+                  File fatigue report per EASA ORO.FTL.120
+                </p>
               </div>
             </div>
-          </CollapsibleContent>
-        </Collapsible>
-      </CardContent>
-    </Card>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section 6: Detailed Assessment (Collapsible) */}
+      <Collapsible open={assessmentOpen} onOpenChange={setAssessmentOpen}>
+        <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg bg-secondary/30 p-3 text-sm hover:bg-secondary/50">
+          <span className="flex items-center gap-2">
+            📋 Detailed Assessment & Recommendations
+          </span>
+          <ChevronDown className={`h-4 w-4 transition-transform ${assessmentOpen ? 'rotate-180' : ''}`} />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-3">
+          <div className="space-y-3 rounded-lg bg-secondary/20 p-4 text-sm">
+            <div>
+              <h5 className="mb-1 font-medium">Fatigue Factors</h5>
+              <ul className="list-inside list-disc space-y-1 text-muted-foreground">
+                {duty.woclExposure > 0 && (
+                  <li>Window of Circadian Low (WOCL) exposure: {duty.woclExposure.toFixed(1)}h</li>
+                )}
+                {duty.sleepDebt > 3 && (
+                  <li>Elevated sleep debt: {duty.sleepDebt.toFixed(1)}h accumulated</li>
+                )}
+                {duty.priorSleep < 24 && (
+                  <li>Limited prior sleep opportunity: {duty.priorSleep.toFixed(1)}h</li>
+                )}
+              </ul>
+            </div>
+            <div>
+              <h5 className="mb-1 font-medium">Recommendations</h5>
+              <ul className="list-inside list-disc space-y-1 text-muted-foreground">
+                {duty.overallRisk === 'CRITICAL' && (
+                  <>
+                    <li>Consider controlled rest if operationally feasible</li>
+                    <li>Enhanced crew monitoring during critical phases</li>
+                    <li>File SMS fatigue report</li>
+                  </>
+                )}
+                {duty.overallRisk === 'HIGH' && (
+                  <>
+                    <li>Maximize rest opportunities</li>
+                    <li>Consider caffeine strategically</li>
+                  </>
+                )}
+                {duty.overallRisk === 'MODERATE' && (
+                  <li>Maintain awareness of fatigue symptoms</li>
+                )}
+                {duty.overallRisk === 'LOW' && (
+                  <li>Normal operations - no special mitigations required</li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
   );
 }
