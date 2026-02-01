@@ -367,6 +367,52 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     return bars;
   }, [duties, daysInMonth]);
 
+  // Compute FDP limit markers - these need to be rendered separately from duty bars
+  // to handle overnight cases where the FDP limit extends past midnight
+  interface FdpLimitMarker {
+    dayIndex: number;
+    hour: number; // Position in that day (0-24)
+    maxFdp: number;
+    duty: DutyAnalysis;
+  }
+
+  const fdpLimitMarkers = useMemo(() => {
+    const markers: FdpLimitMarker[] = [];
+    
+    dutyBars.forEach((bar) => {
+      // Only compute from the start of the duty (not continuations)
+      if (bar.isOvernightContinuation) return;
+      
+      const maxFdp = bar.duty.maxFdpHours;
+      if (!maxFdp) return;
+      
+      const fdpEndHour = bar.startHour + maxFdp;
+      
+      if (fdpEndHour <= 24) {
+        // FDP limit is on the same day
+        markers.push({
+          dayIndex: bar.dayIndex,
+          hour: fdpEndHour,
+          maxFdp,
+          duty: bar.duty,
+        });
+      } else {
+        // FDP limit extends past midnight - render on next day
+        const nextDayHour = fdpEndHour - 24;
+        if (bar.dayIndex < daysInMonth) {
+          markers.push({
+            dayIndex: bar.dayIndex + 1,
+            hour: nextDayHour,
+            maxFdp,
+            duty: bar.duty,
+          });
+        }
+      }
+    });
+    
+    return markers;
+  }, [dutyBars, daysInMonth]);
+
   // Calculate sleep/rest period bars showing recovery using backend timing
   // Uses ISO timestamps for accurate date/day positioning when available
   const sleepBars = useMemo(() => {
@@ -1275,16 +1321,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                     </button>
                                   </TooltipTrigger>
 
-                                  {/* FDP Limit indicator (dashed line at max FDP end) */}
-                                  {maxFdp && !bar.isOvernightContinuation && (
-                                    <div
-                                      className="absolute top-0 bottom-0 border-r-2 border-dashed border-muted-foreground/50 pointer-events-none"
-                                      style={{
-                                        left: `${((bar.startHour + maxFdp) / 24) * 100}%`,
-                                      }}
-                                      title={`Max FDP: ${maxFdp}h`}
-                                    />
-                                  )}
                                   <TooltipContent side="right" className="max-w-xs p-3">
                                     <div className="space-y-2 text-xs">
                                       <div className={cn(
@@ -1410,6 +1446,20 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                               </TooltipProvider>
                             );
                           })}
+
+                        {/* FDP Limit markers for this day - rendered separately to handle overnight cases */}
+                        {fdpLimitMarkers
+                          .filter((marker) => marker.dayIndex === dayNum)
+                          .map((marker, markerIndex) => (
+                            <div
+                              key={`fdp-${markerIndex}`}
+                              className="absolute top-0 bottom-0 border-r-2 border-dashed border-muted-foreground/50 pointer-events-none z-30"
+                              style={{
+                                left: `${(marker.hour / 24) * 100}%`,
+                              }}
+                              title={`Max FDP: ${marker.maxFdp}h`}
+                            />
+                          ))}
                       </div>
                     );
                   })}
