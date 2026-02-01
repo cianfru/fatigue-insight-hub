@@ -57,6 +57,9 @@ export function SleepQualityInfo({
   references,
   variant = 'icon',
 }: SleepQualityInfoProps) {
+  // DEBUG: Log what props we receive
+  console.log('[SleepQualityInfo] props:', { explanation, confidence, confidenceBasis, qualityFactors, references });
+
   // Always show the info icon if we have a confidence score (the minimum data from backend)
   // The popover will show whatever detailed info is available
   const hasAnyData = confidence !== undefined;
