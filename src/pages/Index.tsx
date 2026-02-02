@@ -6,6 +6,7 @@ import { WelcomePage } from '@/components/fatigue/WelcomePage';
 import { DashboardContent } from '@/components/fatigue/DashboardContent';
 import { MathematicalModelPage } from '@/components/fatigue/MathematicalModelPage';
 import { FatigueSciencePage } from '@/components/fatigue/FatigueSciencePage';
+import { LandingPage } from '@/components/landing/LandingPage';
 
 import { ResearchReferencesPage } from '@/components/fatigue/ResearchReferencesPage';
 import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
@@ -16,6 +17,7 @@ import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 
 const Index = () => {
+  const [showLanding, setShowLanding] = useState(true);
   const { theme, setTheme } = useTheme();
 
   const isoToHHmm = (iso: string) => {
@@ -272,6 +274,11 @@ const Index = () => {
     setSelectedDuty(duty);
     setDrawerOpen(true);
   };
+
+  // Show landing page first
+  if (showLanding) {
+    return <LandingPage onEnter={() => setShowLanding(false)} />;
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
