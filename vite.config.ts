@@ -5,7 +5,8 @@ import path from "path";
 // https://vitejs.dev/config/
 export default defineConfig(async ({ mode }) => {
   // Only load lovable-tagger in development — avoids build failures on Vercel
-  const plugins = [react()];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const plugins: any[] = [react()];
   if (mode === "development") {
     try {
       const { componentTagger } = await import("lovable-tagger");
