@@ -35,13 +35,29 @@ export function DutyDetailsDrawer({ duty, analysisId, open, onOpenChange }: Duty
         const detail = await getDutyDetail(analysisId, duty.dutyId);
         if (cancelled) return;
 
-        const timelinePoints = (detail?.timeline_points ?? detail?.timelinePoints) as DutyAnalysis['timelinePoints'] | undefined;
+        // Backend returns 'timeline' array - map to timelinePoints
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawTimeline = detail?.timeline ?? detail?.timeline_points ?? detail?.timelinePoints;
+        
+        // Map snake_case fields to TimelinePoint interface
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const timelinePoints = Array.isArray(rawTimeline) ? rawTimeline.map((pt: any) => ({
+          hours_on_duty: pt.hours_on_duty ?? 0,
+          time_on_task_penalty: pt.time_on_task_penalty ?? 0,
+          sleep_inertia: pt.sleep_inertia ?? 0,
+          sleep_pressure: pt.sleep_pressure ?? 0,
+          circadian: pt.circadian ?? 0,
+          performance: pt.performance,
+        })) : undefined;
+
+        console.log('Fetched timeline points:', timelinePoints?.length, 'points');
 
         setDetailedDuty({
           ...duty,
-          timelinePoints: Array.isArray(timelinePoints) ? timelinePoints : duty.timelinePoints,
+          timelinePoints: timelinePoints ?? duty.timelinePoints,
         });
-      } catch {
+      } catch (err) {
+        console.error('Failed to fetch duty detail:', err);
         // Silent fail: drawer still renders base duty data.
       }
     }
