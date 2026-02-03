@@ -165,9 +165,42 @@ const Index = () => {
       console.log('Analysis complete:', result);
       console.log('First duty segments:', result.duties[0]?.segments);
       console.log('Sample segment times:', result.duties[0]?.segments[0]?.departure_time, result.duties[0]?.segments[0]?.arrival_time);
-      
-      const analysisMonth = result.duties.length > 0 
-        ? parseISO(result.duties[0].date) 
+
+      // Diagnostic: Check for layover scenarios and sleep recognition
+      console.group('🛏️ Layover Sleep Diagnostics');
+      result.duties.forEach((duty, idx) => {
+        const firstSeg = duty.segments[0];
+        const lastSeg = duty.segments[duty.segments.length - 1];
+        const nextDuty = result.duties[idx + 1];
+
+        // Check if this duty ends away from base
+        const endsAwayFromBase = lastSeg && lastSeg.arrival !== settings.homeBase;
+
+        // Check if next duty starts at same location (potential layover)
+        const isLayover = endsAwayFromBase && nextDuty?.segments[0]?.departure === lastSeg.arrival;
+
+        if (isLayover || endsAwayFromBase) {
+          console.log(`📅 ${duty.date} (Duty ${idx + 1}/${result.duties.length})`);
+          console.log(`  Route: ${firstSeg?.departure} → ${lastSeg?.arrival}`);
+          console.log(`  Ends away from base: ${endsAwayFromBase ? 'YES' : 'NO'}`);
+          console.log(`  Layover detected: ${isLayover ? 'YES' : 'NO'}`);
+          if (nextDuty) {
+            const layoverHours = (new Date(nextDuty.report_time_utc).getTime() - new Date(duty.release_time_utc).getTime()) / (1000 * 60 * 60);
+            console.log(`  Time to next duty: ${layoverHours.toFixed(1)}h`);
+            console.log(`  Next duty prior_sleep: ${nextDuty.prior_sleep}h`);
+            console.log(`  Next duty has sleep_estimate: ${!!(nextDuty.sleep_quality ?? nextDuty.sleep_estimate)}`);
+            if (nextDuty.sleep_quality ?? nextDuty.sleep_estimate) {
+              const sleep = nextDuty.sleep_quality ?? nextDuty.sleep_estimate;
+              console.log(`  Next duty sleep hours: ${sleep?.total_sleep_hours}h effective`);
+              console.log(`  Sleep strategy: ${sleep?.sleep_strategy}`);
+            }
+          }
+        }
+      });
+      console.groupEnd();
+
+      const analysisMonth = result.duties.length > 0
+        ? parseISO(result.duties[0].date)
         : settings.selectedMonth;
 
       const parseHHmmToMinutes = (t: string | undefined): number | null => {
