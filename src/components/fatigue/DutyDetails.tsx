@@ -114,9 +114,9 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
                 <div className="flex items-center gap-4 text-sm">
                   <div className="flex flex-col items-end gap-0.5">
                     <span className="text-foreground">{segment.departureTime} - {segment.arrivalTime}</span>
-                    {(segment.departureTimeUtc || segment.arrivalTimeUtc) && (
+                    {segment.departureTimeUtc && segment.arrivalTimeUtc && (
                       <span className="text-[10px] text-muted-foreground font-mono">
-                        {segment.departureTimeUtc || '--'}Z - {segment.arrivalTimeUtc || '--'}Z
+                        {segment.departureTimeUtc} - {segment.arrivalTimeUtc}
                       </span>
                     )}
                   </div>

@@ -29,7 +29,13 @@ const Index = () => {
       return iso;
     }
   };
-  
+
+  // Extract HH:mm from ISO timestamp and append 'Z' for Zulu time display
+  const isoToZulu = (iso: string) => {
+    const hhmm = isoToHHmm(iso);
+    return hhmm ? `${hhmm}Z` : '';
+  };
+
   const [settings, setSettings] = useState<PilotSettings>({
     pilotId: 'P12345',
     homeBase: 'DOH',
@@ -249,8 +255,8 @@ const Index = () => {
             arrival: seg.arrival,
             departureTime: seg.departure_time_local,
             arrivalTime: seg.arrival_time_local,
-            departureTimeUtc: seg.departure_time,
-            arrivalTimeUtc: seg.arrival_time,
+            departureTimeUtc: isoToZulu(seg.departure_time),
+            arrivalTimeUtc: isoToZulu(seg.arrival_time),
             blockHours: seg.block_hours,
             performance: duty.avg_performance,
           })),

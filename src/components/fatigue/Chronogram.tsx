@@ -181,7 +181,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     const segments: FlightSegmentBar[] = [];
     const flightSegs = duty.flightSegments;
     if (flightSegs.length === 0) return [];
-    
+
     // For overnight continuation, we show the portion of the duty after midnight
     if (isOvernightContinuation) {
       // Collect only after-midnight segments and add ground time between them
@@ -234,14 +234,14 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       });
       return segments;
     }
-    
-    // Get first departure for check-in calculation
+
+    // Use actual report time from parser if available, otherwise fall back to estimated check-in
     const [firstDepH, firstDepM] = flightSegs[0].departureTime.split(':').map(Number);
     const firstDepHour = firstDepH + firstDepM / 60;
     // Use reportTimeLocal directly when available, fall back to default offset from first departure
     const reportHour = parseTimeToHours(duty.reportTimeLocal);
     const checkInHour = Math.max(0, reportHour ?? (firstDepHour - DEFAULT_CHECK_IN_MINUTES / 60));
-    
+
     // Add check-in segment
     segments.push({
       type: 'checkin',
@@ -345,8 +345,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         
         const [startH, startM] = firstSegment.departureTime.split(':').map(Number);
         const [endH, endM] = lastSegment.arrivalTime.split(':').map(Number);
-        
-        // FDP starts at check-in (before first departure)
+
+        // FDP starts at report time (actual RPT from parser) or estimated check-in
         const startHour = startH + startM / 60;
         // Use reportTimeLocal directly when available, fall back to default offset from first departure
         const reportHour = parseTimeToHours(duty.reportTimeLocal);

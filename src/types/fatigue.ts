@@ -34,10 +34,10 @@ export interface FlightSegment {
   flightNumber: string;
   departure: string;
   arrival: string;
-  departureTime: string;      // Local time (HH:mm)
-  arrivalTime: string;        // Local time (HH:mm)
-  departureTimeUtc?: string;  // UTC time (HH:mm)
-  arrivalTimeUtc?: string;    // UTC time (HH:mm)
+  departureTime: string;      // HH:mm in home base local time
+  arrivalTime: string;        // HH:mm in home base local time
+  departureTimeUtc?: string;  // HH:mmZ (Zulu time, formatted)
+  arrivalTimeUtc?: string;    // HH:mmZ (Zulu time, formatted)
   blockHours: number;
   performance: number;
 }
