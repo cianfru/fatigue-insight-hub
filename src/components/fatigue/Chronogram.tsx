@@ -1,14 +1,15 @@
 import { useState, useMemo } from 'react';
-import { Info, AlertTriangle, Battery } from 'lucide-react';
+import { Info, AlertTriangle, Battery, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { DutyAnalysis, DutyStatistics, RestDaySleep } from '@/types/fatigue';
+import { DutyAnalysis, DutyStatistics, RestDaySleep, FlightPhase } from '@/types/fatigue';
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useChronogramZoom } from '@/hooks/useChronogramZoom';
 
 // Helper to calculate recovery score from sleep estimate
 const getRecoveryScore = (estimate: NonNullable<DutyAnalysis['sleepEstimate']>): number => {
@@ -79,6 +80,12 @@ interface FlightSegmentBar {
   startHour: number;
   endHour: number;
   performance: number;
+  // Flight phase breakdown (when zoomed in)
+  phases?: {
+    phase: FlightPhase;
+    performance: number;
+    widthPercent: number; // Percentage of the segment
+  }[];
 }
 
 interface DutyBar {
@@ -125,6 +132,17 @@ const getPerformanceColor = (performance: number): string => {
 export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep }: ChronogramProps) {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('heatmap');
   const [infoOpen, setInfoOpen] = useState(false);
+  
+  // Zoom functionality
+  const { zoom, containerRef, resetZoom, isZoomed } = useChronogramZoom({
+    minScaleX: 1,
+    maxScaleX: 4,
+    minScaleY: 1,
+    maxScaleY: 3,
+  });
+  
+  // Show flight phases when zoomed in enough
+  const showFlightPhases = zoom.scaleX >= 2;
 
   // Count duties with commander discretion
   const discretionCount = useMemo(() => 
@@ -282,6 +300,18 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         passedMidnight = true;
       }
 
+      // Generate flight phase breakdown for this segment
+      // Phases: Takeoff (15%), Climb (10%), Cruise (50%), Descent (10%), Approach (10%), Landing (5%)
+      const flightDuration = arrHour - depHour;
+      const phases: FlightSegmentBar['phases'] = [
+        { phase: 'takeoff' as FlightPhase, performance: seg.performance + 5, widthPercent: 15 },
+        { phase: 'climb' as FlightPhase, performance: seg.performance + 3, widthPercent: 10 },
+        { phase: 'cruise' as FlightPhase, performance: seg.performance, widthPercent: 50 },
+        { phase: 'descent' as FlightPhase, performance: seg.performance - 2, widthPercent: 10 },
+        { phase: 'approach' as FlightPhase, performance: seg.performance - 4, widthPercent: 10 },
+        { phase: 'landing' as FlightPhase, performance: duty.landingPerformance || seg.performance - 5, widthPercent: 5 },
+      ];
+
       segments.push({
         type: 'flight',
         flightNumber: seg.flightNumber,
@@ -290,6 +320,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         startHour: depHour,
         endHour: arrHour,
         performance: seg.performance,
+        phases,
       });
     });
     
@@ -863,9 +894,28 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Display Mode Selector */}
+        {/* Display Mode Selector and Zoom Controls */}
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">Display Mode</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Display Mode</p>
+            {/* Zoom Controls */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {isZoomed ? `Zoom: ${zoom.scaleX.toFixed(1)}x` : 'Pinch/Ctrl+Scroll to zoom'}
+              </span>
+              {isZoomed && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={resetZoom}
+                  className="text-xs h-7 px-2"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Reset
+                </Button>
+              )}
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button
               variant={displayMode === 'heatmap' ? 'default' : 'outline'}
@@ -892,6 +942,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               🔄 Combined View
             </Button>
           </div>
+          {showFlightPhases && (
+            <p className="text-xs text-primary flex items-center gap-1">
+              <ZoomIn className="h-3 w-3" />
+              Flight phases visible (T/O, Cruise, Landing)
+            </p>
+          )}
         </div>
 
         {/* Info Collapsible */}
@@ -916,9 +972,19 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           </CollapsibleContent>
         </Collapsible>
 
-        {/* High-Resolution Timeline */}
-        <div className="overflow-x-auto pb-4">
-          <div className="min-w-[800px]">
+        {/* High-Resolution Timeline with zoom support */}
+        <div 
+          ref={containerRef}
+          className="overflow-x-auto pb-4 touch-pan-x touch-pan-y"
+        >
+          <div 
+            className="min-w-[800px] transition-transform duration-100"
+            style={{
+              transform: `scale(${zoom.scaleX}, ${zoom.scaleY})`,
+              transformOrigin: 'top left',
+              width: `${100 / zoom.scaleX}%`,
+            }}
+          >
             {/* Header with pilot info */}
             <div className="mb-4 text-center">
               {pilotName && (
@@ -1356,6 +1422,59 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         {/* Render individual flight segments */}
                                         {displayMode !== 'timeline' && bar.segments.map((segment, segIndex) => {
                                           const segmentWidth = ((segment.endHour - segment.startHour) / (bar.endHour - bar.startHour)) * 100;
+                                          
+                                          // When zoomed, show flight phases within each flight segment
+                                          if (showFlightPhases && segment.type === 'flight' && segment.phases) {
+                                            return (
+                                              <div
+                                                key={segIndex}
+                                                className="h-full relative flex"
+                                                style={{ width: `${segmentWidth}%` }}
+                                              >
+                                                {/* Segment separator line */}
+                                                {segIndex > 0 && (
+                                                  <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70 z-10" />
+                                                )}
+                                                {/* Render each flight phase */}
+                                                {segment.phases.map((phase, phaseIndex) => (
+                                                  <div
+                                                    key={phaseIndex}
+                                                    className="h-full flex items-center justify-center relative"
+                                                    style={{
+                                                      width: `${phase.widthPercent}%`,
+                                                      backgroundColor: getPerformanceColor(phase.performance),
+                                                    }}
+                                                    title={`${phase.phase}: ${Math.round(phase.performance)}%`}
+                                                  >
+                                                    {/* Phase separator */}
+                                                    {phaseIndex > 0 && (
+                                                      <div className="absolute left-0 top-0 bottom-0 w-px bg-background/40" />
+                                                    )}
+                                                    {/* Phase label for wider phases */}
+                                                    {phase.widthPercent >= 15 && segmentWidth > 10 && (
+                                                      <span className="text-[6px] font-medium text-background/90 truncate">
+                                                        {phase.phase === 'takeoff' ? 'T/O' :
+                                                         phase.phase === 'landing' ? 'LDG' :
+                                                         phase.phase === 'approach' ? 'APP' :
+                                                         phase.phase === 'cruise' ? 'CRZ' :
+                                                         phase.phase === 'climb' ? 'CLB' :
+                                                         phase.phase === 'descent' ? 'DES' :
+                                                         phase.phase.toUpperCase().substring(0, 3)}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                                {/* Flight number overlay */}
+                                                {segment.flightNumber && segmentWidth > 12 && (
+                                                  <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-background drop-shadow-sm">
+                                                    {segment.flightNumber}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            );
+                                          }
+                                          
+                                          // Standard rendering (not zoomed or non-flight segments)
                                           return (
                                             <div
                                               key={segIndex}
