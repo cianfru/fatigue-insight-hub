@@ -170,6 +170,7 @@ export function DashboardContent({
       {/* Duty Details Drawer */}
       <DutyDetailsDrawer 
         duty={selectedDuty} 
+        analysisId={analysisResults?.analysisId}
         open={drawerOpen} 
         onOpenChange={onDrawerOpenChange} 
       />

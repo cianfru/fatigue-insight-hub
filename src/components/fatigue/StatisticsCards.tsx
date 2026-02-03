@@ -1,5 +1,4 @@
-import { AlertTriangle, Plane, AlertCircle, Clock, Timer } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { AlertTriangle, Plane, AlertCircle, Clock, Timer, Zap, TrendingDown } from 'lucide-react';
 import { DutyStatistics } from '@/types/fatigue';
 
 interface StatisticsCardsProps {
@@ -7,86 +6,147 @@ interface StatisticsCardsProps {
 }
 
 export function StatisticsCards({ statistics }: StatisticsCardsProps) {
-  const stats = [
-    {
-      label: 'Total Duties',
-      value: statistics.totalDuties,
-      icon: Plane,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-    },
-    {
-      label: 'Total Sectors',
-      value: statistics.totalSectors,
-      icon: Plane,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-    },
-    {
-      label: 'Duty Hours',
-      value: `${Math.floor(statistics.totalDutyHours)}:${String(Math.round((statistics.totalDutyHours % 1) * 60)).padStart(2, '0')}`,
-      icon: Timer,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-    },
-    {
-      label: 'Block Hours',
-      value: `${Math.floor(statistics.totalBlockHours)}:${String(Math.round((statistics.totalBlockHours % 1) * 60)).padStart(2, '0')}`,
-      icon: Timer,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-    },
-    {
-      label: 'High Risk Duties',
-      value: statistics.highRiskDuties,
-      subtext: `${statistics.highRiskDuties} duties`,
-      icon: AlertTriangle,
-      color: 'text-warning',
-      bgColor: 'bg-warning/10',
-    },
-    {
-      label: 'Critical Risk',
-      value: statistics.criticalRiskDuties,
-      subtext: `${statistics.criticalRiskDuties} duties`,
-      icon: AlertCircle,
-      color: 'text-critical',
-      bgColor: 'bg-critical/10',
-    },
-    {
-      label: 'Max Sleep Debt',
-      value: `${statistics.maxSleepDebt.toFixed(1)}h`,
-      subtext: `${statistics.maxSleepDebt.toFixed(1)}h`,
-      icon: Clock,
-      color: 'text-critical',
-      bgColor: 'bg-critical/10',
-    },
-  ];
+  // Format hours as HH:MM
+  const formatHoursMinutes = (hours: number): string => {
+    if (!Number.isFinite(hours) || hours < 0) return '0:00';
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    return `${h}:${String(m).padStart(2, '0')}`;
+  };
+
+  // Pinch events are critical performance dips during high-workload phases
+  // Realistic thresholds: 0 = excellent, 1-3 = concerning, 4+ = problematic
+  const getPinchEventVariant = (count: number): 'success' | 'warning' | 'critical' => {
+    if (count === 0) return 'success';
+    if (count <= 3) return 'warning';
+    return 'critical';
+  };
 
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-7">
-      {stats.map((stat, index) => (
-        <Card 
-          key={stat.label} 
-          variant="glass" 
-          className="animate-fade-in"
-          style={{ animationDelay: `${index * 100}ms` }}
-        >
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-                <p className={`mt-1 text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-                {stat.subtext && (
-                  <p className="text-xs text-muted-foreground">{stat.subtext}</p>
-                )}
-              </div>
-              <div className={`rounded-lg p-2 ${stat.bgColor}`}>
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+    <div className="space-y-4">
+      {/* Primary Stats Row - Flight Activity */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard
+          label="Total Duties"
+          value={statistics.totalDuties.toString()}
+          icon={<Plane className="h-4 w-4" />}
+          variant="neutral"
+        />
+        <StatCard
+          label="Total Sectors"
+          value={statistics.totalSectors.toString()}
+          icon={<Plane className="h-4 w-4" />}
+          variant="neutral"
+        />
+        <StatCard
+          label="Duty Hours"
+          value={formatHoursMinutes(statistics.totalDutyHours)}
+          icon={<Timer className="h-4 w-4" />}
+          variant="neutral"
+        />
+        <StatCard
+          label="Block Hours"
+          value={formatHoursMinutes(statistics.totalBlockHours)}
+          icon={<Timer className="h-4 w-4" />}
+          variant="neutral"
+        />
+      </div>
+
+      {/* Secondary Stats Row - Fatigue Metrics */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <StatCard
+          label="Pinch Events"
+          value={statistics.totalPinchEvents.toString()}
+          icon={<Zap className="h-4 w-4" />}
+          variant={getPinchEventVariant(statistics.totalPinchEvents)}
+          subtitle="fatigue peaks"
+        />
+        <StatCard
+          label="Worst Score"
+          value={`${Math.round(statistics.worstPerformance)}%`}
+          icon={<TrendingDown className="h-4 w-4" />}
+          variant={statistics.worstPerformance >= 70 ? 'success' : statistics.worstPerformance >= 60 ? 'warning' : 'critical'}
+          subtitle="min performance"
+        />
+        <StatCard
+          label="High Risk"
+          value={statistics.highRiskDuties.toString()}
+          icon={<AlertTriangle className="h-4 w-4" />}
+          variant={statistics.highRiskDuties === 0 ? 'success' : 'warning'}
+          subtitle="duties"
+        />
+        <StatCard
+          label="Critical Risk"
+          value={statistics.criticalRiskDuties.toString()}
+          icon={<AlertCircle className="h-4 w-4" />}
+          variant={statistics.criticalRiskDuties === 0 ? 'success' : 'critical'}
+          subtitle="duties"
+        />
+        <StatCard
+          label="Sleep Debt"
+          value={`${statistics.maxSleepDebt.toFixed(1)}h`}
+          icon={<Clock className="h-4 w-4" />}
+          variant={statistics.maxSleepDebt <= 2 ? 'success' : statistics.maxSleepDebt <= 4 ? 'warning' : 'critical'}
+          subtitle="maximum"
+        />
+      </div>
+    </div>
+  );
+}
+
+interface StatCardProps {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  variant: 'neutral' | 'success' | 'warning' | 'critical';
+  subtitle?: string;
+}
+
+function StatCard({ label, value, icon, variant, subtitle }: StatCardProps) {
+  const variantStyles = {
+    neutral: {
+      text: 'text-foreground',
+      icon: 'text-muted-foreground',
+      bg: 'bg-muted/30',
+    },
+    success: {
+      text: 'text-success',
+      icon: 'text-success',
+      bg: 'bg-success/10',
+    },
+    warning: {
+      text: 'text-warning',
+      icon: 'text-warning',
+      bg: 'bg-warning/10',
+    },
+    critical: {
+      text: 'text-critical',
+      icon: 'text-critical',
+      bg: 'bg-critical/10',
+    },
+  };
+
+  const styles = variantStyles[variant];
+
+  return (
+    <div className="group relative overflow-hidden rounded-xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm transition-all hover:border-border hover:bg-card/80">
+      {/* Icon Badge */}
+      <div className={`absolute right-3 top-3 rounded-full p-2 ${styles.bg}`}>
+        <span className={styles.icon}>{icon}</span>
+      </div>
+      
+      {/* Content */}
+      <div className="space-y-1">
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <p className={`text-2xl font-semibold tracking-tight ${styles.text}`}>
+          {value}
+        </p>
+        {subtitle && (
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+            {subtitle}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

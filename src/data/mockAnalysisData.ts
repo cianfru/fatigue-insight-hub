@@ -392,7 +392,11 @@ export const mockAnalysisResults: AnalysisResults = {
     totalBlockHours: 71.75,
     highRiskDuties: 4,
     criticalRiskDuties: 7,
-    maxSleepDebt: 8.0
+    maxSleepDebt: 8.0,
+    totalPinchEvents: 12,
+    avgSleepPerNight: 6.2,
+    worstPerformance: 52,
+    worstDutyId: 'duty-1',
   },
   duties: generateMockDuties(),
   generatedAt: new Date(),

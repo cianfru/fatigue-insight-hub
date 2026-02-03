@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DutyAnalysis } from '@/types/fatigue';
 import { cn } from '@/lib/utils';
+import { SleepQualityInfo } from './SleepQualityInfo';
 
 interface SleepRecoveryIndicatorProps {
   duty: DutyAnalysis;
@@ -167,12 +168,22 @@ export function SleepRecoveryIndicator({ duty, variant = 'compact' }: SleepRecov
             <Badge variant={status.variant} className="ml-2">{status.label}</Badge>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold" style={{ color: status.color }}>
-            {Math.round(recoveryScore)}%
-          </div>
-          <div className="text-[10px] text-muted-foreground">
-            Confidence: {Math.round(estimate.confidence * 100)}%
+        <div className="flex items-center gap-3">
+          <SleepQualityInfo
+            variant="badge"
+            explanation={estimate.explanation}
+            confidence={estimate.confidence}
+            confidenceBasis={estimate.confidenceBasis}
+            qualityFactors={estimate.qualityFactors}
+            references={estimate.references}
+          />
+          <div className="text-right">
+            <div className="text-2xl font-bold" style={{ color: status.color }}>
+              {Math.round(recoveryScore)}%
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              Confidence: {Math.round(estimate.confidence * 100)}%
+            </div>
           </div>
         </div>
       </div>

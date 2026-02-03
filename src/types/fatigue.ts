@@ -23,6 +23,11 @@ export interface DutyStatistics {
   highRiskDuties: number;
   criticalRiskDuties: number;
   maxSleepDebt: number;
+  // Additional statistics from backend
+  totalPinchEvents: number;
+  avgSleepPerNight: number;
+  worstPerformance: number;
+  worstDutyId?: string;
 }
 
 export interface FlightSegment {
@@ -55,14 +60,16 @@ export interface FlightPhasePerformance {
 }
 
 export interface DutyAnalysis {
+  dutyId?: string; // Backend duty_id (used for fetching detailed duty breakdown)
   date: Date;
   dateString?: string; // Raw YYYY-MM-DD from backend for timezone-safe day extraction
   dayOfWeek: string;
+  reportTimeUtc?: string; // Raw report_time_utc from backend (ISO or HH:mm)
+  reportTimeLocal?: string; // Report time in home base timezone (HH:mm)
+  releaseTimeLocal?: string; // Release time in home base timezone (HH:mm)
   dutyHours: number;
   blockHours: number;
   sectors: number;
-  reportTimeLocal?: string; // HH:mm in home base timezone (from report_time_utc + offset)
-  releaseTimeLocal?: string; // HH:mm in home base timezone (from release_time_utc + offset)
   minPerformance: number;
   avgPerformance: number;
   landingPerformance: number;
@@ -80,6 +87,8 @@ export interface DutyAnalysis {
   actualFdpHours?: number; // Actual FDP worked
   usedDiscretion?: boolean; // Commander discretion used
   fdpExceedance?: number; // Hours over limit (if any)
+  // Per-timeline performance degradation points (from GET /api/duty/{id}/{duty_id})
+  timelinePoints?: TimelinePoint[];
   // Existing optional fields
   pinchEvents?: PinchEvent[];
   circadianPhaseShift?: number;
@@ -117,7 +126,40 @@ export interface DutyAnalysis {
     sleepStartHour?: number;  // Hour (0-24, decimal)
     sleepEndDay?: number;     // Day of month (1-31)
     sleepEndHour?: number;    // Hour (0-24, decimal)
+    // Detailed sleep quality data from backend
+    explanation?: string;
+    confidenceBasis?: string;
+    qualityFactors?: SleepQualityFactors;
+    references?: SleepReference[];
   };
+}
+
+// Sleep quality calculation factors
+export interface SleepQualityFactors {
+  base_efficiency: number;
+  wocl_boost: number;
+  late_onset_penalty: number;
+  recovery_boost: number;
+  time_pressure_factor: number;
+  insufficient_penalty: number;
+  pre_duty_awake_hours?: number; // Hours awake before report (Dawson & Reid, 1997)
+}
+
+// Per-timeline point performance degradation factors
+export interface TimelinePoint {
+  hours_on_duty: number;           // Hours since report
+  time_on_task_penalty: number;    // TOT decrement ~0.008/h (Folkard & Åkerstedt, 1999)
+  sleep_inertia: number;           // Process W component (Tassi & Muzet, 2000)
+  sleep_pressure: number;          // Process S (Borbély, 1982)
+  circadian: number;               // Process C (Dijk & Czeisler, 1995)
+  performance?: number;            // Combined performance score
+}
+
+// Academic reference for sleep calculations
+export interface SleepReference {
+  key: string;
+  short: string;
+  full: string;
 }
 
 // Rest day sleep block (transformed from backend)
@@ -148,6 +190,7 @@ export interface AnalysisResults {
   duties: DutyAnalysis[];
   generatedAt: Date;
   month: Date; // Actual month from the roster data
+  analysisId?: string; // Backend analysis_id
   // Pilot info from backend
   pilotId?: string;
   pilotName?: string;

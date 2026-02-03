@@ -1,14 +1,15 @@
 import { useState, useMemo } from 'react';
-import { Info, AlertTriangle, Battery } from 'lucide-react';
+import { Info, AlertTriangle, Battery, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { DutyAnalysis, DutyStatistics, RestDaySleep } from '@/types/fatigue';
+import { DutyAnalysis, DutyStatistics, RestDaySleep, FlightPhase } from '@/types/fatigue';
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useChronogramZoom } from '@/hooks/useChronogramZoom';
 
 // Helper to calculate recovery score from sleep estimate
 const getRecoveryScore = (estimate: NonNullable<DutyAnalysis['sleepEstimate']>): number => {
@@ -57,8 +58,19 @@ interface ChronogramProps {
 
 type DisplayMode = 'heatmap' | 'timeline' | 'combined';
 
-// Check-in time before first sector (EASA typically 60 min)
-const CHECK_IN_MINUTES = 60;
+// Default check-in time before first sector (EASA typically 60 min)
+// Used as fallback when report_time_local is not available from the parser
+const DEFAULT_CHECK_IN_MINUTES = 60;
+
+// Parse HH:mm time string to decimal hours
+const parseTimeToHours = (timeStr: string | undefined): number | undefined => {
+  if (!timeStr) return undefined;
+  const parts = timeStr.split(':').map(Number);
+  if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return parts[0] + parts[1] / 60;
+  }
+  return undefined;
+};
 
 interface FlightSegmentBar {
   type: 'checkin' | 'flight' | 'ground';
@@ -68,6 +80,12 @@ interface FlightSegmentBar {
   startHour: number;
   endHour: number;
   performance: number;
+  // Flight phase breakdown (when zoomed in)
+  phases?: {
+    phase: FlightPhase;
+    performance: number;
+    widthPercent: number; // Percentage of the segment
+  }[];
 }
 
 interface DutyBar {
@@ -75,7 +93,8 @@ interface DutyBar {
   startHour: number; // FDP start (check-in time)
   endHour: number;
   duty: DutyAnalysis;
-  isOvernightContinuation?: boolean;
+  isOvernightStart?: boolean; // First part of overnight bar (ends at 24:00)
+  isOvernightContinuation?: boolean; // Second part of overnight bar (starts at 00:00)
   segments: FlightSegmentBar[]; // Individual flight segments
 }
 
@@ -89,6 +108,11 @@ interface SleepBar {
   sleepStrategy: string;
   isPreDuty: boolean; // Sleep before the duty on this day
   relatedDuty: DutyAnalysis;
+  isOvernightStart?: boolean; // First part of overnight bar (ends at 24:00)
+  isOvernightContinuation?: boolean; // Second part of overnight bar (starts at 00:00)
+  // Original full sleep window times (for display in tooltip)
+  originalStartHour?: number;
+  originalEndHour?: number;
 }
 
 // WOCL (Window of Circadian Low) is typically 02:00 - 06:00
@@ -108,6 +132,17 @@ const getPerformanceColor = (performance: number): string => {
 export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep }: ChronogramProps) {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('heatmap');
   const [infoOpen, setInfoOpen] = useState(false);
+  
+  // Zoom functionality
+  const { zoom, containerRef, resetZoom, isZoomed } = useChronogramZoom({
+    minScaleX: 1,
+    maxScaleX: 4,
+    minScaleY: 1,
+    maxScaleY: 3,
+  });
+  
+  // Show flight phases when zoomed in enough
+  const showFlightPhases = zoom.scaleX >= 2;
 
   // Count duties with commander discretion
   const discretionCount = useMemo(() => 
@@ -149,19 +184,21 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
     // For overnight continuation, we show the portion of the duty after midnight
     if (isOvernightContinuation) {
+      // Collect only after-midnight segments and add ground time between them
+      let lastEndHour = 0; // Track where the previous segment ended (starts at 00:00)
+
       flightSegs.forEach((seg) => {
         const [depH, depM] = seg.departureTime.split(':').map(Number);
         const [arrH, arrM] = seg.arrivalTime.split(':').map(Number);
         const depHour = depH + depM / 60;
         const arrHour = arrH + arrM / 60;
 
-        // For overnight flights, arrival time is on the next day (after midnight)
-        // Include segments that either:
-        // 1. Depart before midnight and arrive after midnight (show arrival portion: 0 to arrHour)
-        // 2. Depart and arrive both after midnight (show full segment)
-
         if (arrHour < depHour) {
-          // This flight crosses midnight - show the portion from 00:00 to arrival
+          // This flight crosses midnight — show the portion from 00:00 to arrival
+          // Add ground time gap if the continuation doesn't start right at 00:00
+          if (lastEndHour < arrHour && lastEndHour > 0.25) {
+            // There was a previous after-midnight segment; fill ground between them
+          }
           segments.push({
             type: 'flight',
             flightNumber: seg.flightNumber,
@@ -171,8 +208,18 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             endHour: arrHour,
             performance: seg.performance,
           });
+          lastEndHour = arrHour;
         } else if (depHour < 12 && arrHour < 12) {
-          // Both times are in early morning (after midnight) - show full segment
+          // Both times are in early morning (after midnight) — show full segment
+          // Add ground time from the previous after-midnight endpoint
+          if (depHour > lastEndHour + 0.25) {
+            segments.push({
+              type: 'ground',
+              startHour: lastEndHour,
+              endHour: depHour,
+              performance: duty.avgPerformance,
+            });
+          }
           segments.push({
             type: 'flight',
             flightNumber: seg.flightNumber,
@@ -182,6 +229,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             endHour: arrHour,
             performance: seg.performance,
           });
+          lastEndHour = arrHour;
         }
       });
       return segments;
@@ -190,22 +238,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     // Use actual report time from parser if available, otherwise fall back to estimated check-in
     const [firstDepH, firstDepM] = flightSegs[0].departureTime.split(':').map(Number);
     const firstDepHour = firstDepH + firstDepM / 60;
-    let checkInHour: number;
-    if (duty.reportTimeLocal) {
-      const [rptH, rptM] = duty.reportTimeLocal.split(':').map(Number);
-      if (!Number.isNaN(rptH) && !Number.isNaN(rptM)) {
-        checkInHour = rptH + rptM / 60;
-        // Ensure check-in is before first departure (handle edge cases)
-        if (checkInHour > firstDepHour + 2) {
-          // Report time appears to be from previous day (e.g., RPT 23:00 for dep 01:00)
-          // Keep as-is, the overnight logic will handle it
-        }
-      } else {
-        checkInHour = Math.max(0, firstDepHour - CHECK_IN_MINUTES / 60);
-      }
-    } else {
-      checkInHour = Math.max(0, firstDepHour - CHECK_IN_MINUTES / 60);
-    }
+    // Use reportTimeLocal directly when available, fall back to default offset from first departure
+    const reportHour = parseTimeToHours(duty.reportTimeLocal);
+    const checkInHour = Math.max(0, reportHour ?? (firstDepHour - DEFAULT_CHECK_IN_MINUTES / 60));
 
     // Add check-in segment
     segments.push({
@@ -216,28 +251,39 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     });
     
     // Add each flight segment
+    // Track midnight crossing so we stop adding segments for the departure-day bar
+    let passedMidnight = false;
+
     flightSegs.forEach((seg, index) => {
+      if (passedMidnight) return;
+
       const [depH, depM] = seg.departureTime.split(':').map(Number);
       const [arrH, arrM] = seg.arrivalTime.split(':').map(Number);
       const depHour = depH + depM / 60;
       let arrHour = arrH + arrM / 60;
-      
-      // Handle overnight: if arrival is before departure, it's the next day
-      if (arrHour < depHour) {
-        arrHour = 24; // Cap at midnight for this day's bar
-      }
-      
+
       // Add ground time between flights if there's a gap
       if (index > 0) {
         const prevSeg = flightSegs[index - 1];
         const [prevArrH, prevArrM] = prevSeg.arrivalTime.split(':').map(Number);
-        let prevArrHour = prevArrH + prevArrM / 60;
-        
-        // Skip ground time if previous flight was overnight
+        const prevArrHour = prevArrH + prevArrM / 60;
+
+        // Midnight crossed between consecutive segments
+        // (previous arrived in PM, this departs in AM next day)
         if (prevArrHour > depHour) {
-          prevArrHour = 0; // Reset for overnight continuation
+          // Fill remaining ground time up to midnight and stop
+          if (prevArrHour < 23.75) {
+            segments.push({
+              type: 'ground',
+              startHour: prevArrHour,
+              endHour: 24,
+              performance: duty.avgPerformance,
+            });
+          }
+          passedMidnight = true;
+          return;
         }
-        
+
         if (depHour > prevArrHour + 0.25) { // More than 15 min gap
           segments.push({
             type: 'ground',
@@ -247,7 +293,25 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           });
         }
       }
-      
+
+      // Handle overnight: if arrival is before departure, cap at midnight
+      if (arrHour < depHour) {
+        arrHour = 24; // Cap at midnight for this day's bar
+        passedMidnight = true;
+      }
+
+      // Generate flight phase breakdown for this segment
+      // Phases: Takeoff (15%), Climb (10%), Cruise (50%), Descent (10%), Approach (10%), Landing (5%)
+      const flightDuration = arrHour - depHour;
+      const phases: FlightSegmentBar['phases'] = [
+        { phase: 'takeoff' as FlightPhase, performance: seg.performance + 5, widthPercent: 15 },
+        { phase: 'climb' as FlightPhase, performance: seg.performance + 3, widthPercent: 10 },
+        { phase: 'cruise' as FlightPhase, performance: seg.performance, widthPercent: 50 },
+        { phase: 'descent' as FlightPhase, performance: seg.performance - 2, widthPercent: 10 },
+        { phase: 'approach' as FlightPhase, performance: seg.performance - 4, widthPercent: 10 },
+        { phase: 'landing' as FlightPhase, performance: duty.landingPerformance || seg.performance - 5, widthPercent: 5 },
+      ];
+
       segments.push({
         type: 'flight',
         flightNumber: seg.flightNumber,
@@ -256,6 +320,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         startHour: depHour,
         endHour: arrHour,
         performance: seg.performance,
+        phases,
       });
     });
     
@@ -283,17 +348,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
         // FDP starts at report time (actual RPT from parser) or estimated check-in
         const startHour = startH + startM / 60;
-        let checkInHour: number;
-        if (duty.reportTimeLocal) {
-          const [rptH, rptM] = duty.reportTimeLocal.split(':').map(Number);
-          if (!Number.isNaN(rptH) && !Number.isNaN(rptM)) {
-            checkInHour = rptH + rptM / 60;
-          } else {
-            checkInHour = Math.max(0, startHour - CHECK_IN_MINUTES / 60);
-          }
-        } else {
-          checkInHour = Math.max(0, startHour - CHECK_IN_MINUTES / 60);
-        }
+        // Use reportTimeLocal directly when available, fall back to default offset from first departure
+        const reportHour = parseTimeToHours(duty.reportTimeLocal);
+        const checkInHour = Math.max(0, reportHour ?? (startHour - DEFAULT_CHECK_IN_MINUTES / 60));
         const endHour = endH + endM / 60;
         
         // Detect overnight duty - FDP crosses midnight:
@@ -309,6 +366,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             startHour: checkInHour,
             endHour: 24, // Always ends at midnight for display
             duty,
+            isOvernightStart: true,
             segments: calculateSegments(duty, false),
           });
           
@@ -339,6 +397,52 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     
     return bars;
   }, [duties, daysInMonth]);
+
+  // Compute FDP limit markers - these need to be rendered separately from duty bars
+  // to handle overnight cases where the FDP limit extends past midnight
+  interface FdpLimitMarker {
+    dayIndex: number;
+    hour: number; // Position in that day (0-24)
+    maxFdp: number;
+    duty: DutyAnalysis;
+  }
+
+  const fdpLimitMarkers = useMemo(() => {
+    const markers: FdpLimitMarker[] = [];
+    
+    dutyBars.forEach((bar) => {
+      // Only compute from the start of the duty (not continuations)
+      if (bar.isOvernightContinuation) return;
+      
+      const maxFdp = bar.duty.maxFdpHours;
+      if (!maxFdp) return;
+      
+      const fdpEndHour = bar.startHour + maxFdp;
+      
+      if (fdpEndHour <= 24) {
+        // FDP limit is on the same day
+        markers.push({
+          dayIndex: bar.dayIndex,
+          hour: fdpEndHour,
+          maxFdp,
+          duty: bar.duty,
+        });
+      } else {
+        // FDP limit extends past midnight - render on next day
+        const nextDayHour = fdpEndHour - 24;
+        if (bar.dayIndex < daysInMonth) {
+          markers.push({
+            dayIndex: bar.dayIndex + 1,
+            hour: nextDayHour,
+            maxFdp,
+            duty: bar.duty,
+          });
+        }
+      }
+    });
+    
+    return markers;
+  }, [dutyBars, daysInMonth]);
 
   // Calculate sleep/rest period bars showing recovery using backend timing
   // Uses ISO timestamps for accurate date/day positioning when available
@@ -432,6 +536,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               sleepStrategy: sleepEstimate.sleepStrategy,
               isPreDuty: true,
               relatedDuty: duty,
+              isOvernightStart: true,
+              originalStartHour: startHour,
+              originalEndHour: endHour,
             });
           }
           // Part 2: 00:00 to endHour on end day
@@ -446,6 +553,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               sleepStrategy: sleepEstimate.sleepStrategy,
               isPreDuty: true,
               relatedDuty: duty,
+              isOvernightContinuation: true,
+              originalStartHour: startHour,
+              originalEndHour: endHour,
             });
           }
         }
@@ -488,6 +598,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 sleepStrategy: sleepEstimate.sleepStrategy,
                 isPreDuty: true,
                 relatedDuty: duty,
+                isOvernightStart: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
               });
             }
             // Part 2: 00:00 to endHour on end day
@@ -502,6 +615,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 sleepStrategy: sleepEstimate.sleepStrategy,
                 isPreDuty: true,
                 relatedDuty: duty,
+                isOvernightContinuation: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
               });
             }
           }
@@ -658,6 +774,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               date: restDay.date,
               dayOfWeek: format(restDay.date, 'EEE'),
               dutyHours: 0,
+              blockHours: 0,
               sectors: 0,
               minPerformance: 100,
               avgPerformance: 100,
@@ -699,6 +816,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                   sleepStrategy: restDay.strategyType,
                   isPreDuty: false,
                   relatedDuty: pseudoDuty,
+                  isOvernightStart: true,
+                  originalStartHour: startHour,
+                  originalEndHour: endHour,
                 });
               }
               // Part 2: 00:00 to endHour on end day
@@ -713,6 +833,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                   sleepStrategy: restDay.strategyType,
                   isPreDuty: false,
                   relatedDuty: pseudoDuty,
+                  isOvernightContinuation: true,
+                  originalStartHour: startHour,
+                  originalEndHour: endHour,
                 });
               }
             }
@@ -771,9 +894,28 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Display Mode Selector */}
+        {/* Display Mode Selector and Zoom Controls */}
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">Display Mode</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Display Mode</p>
+            {/* Zoom Controls */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {isZoomed ? `Zoom: ${zoom.scaleX.toFixed(1)}x` : 'Pinch/Ctrl+Scroll to zoom'}
+              </span>
+              {isZoomed && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={resetZoom}
+                  className="text-xs h-7 px-2"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Reset
+                </Button>
+              )}
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button
               variant={displayMode === 'heatmap' ? 'default' : 'outline'}
@@ -800,6 +942,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               🔄 Combined View
             </Button>
           </div>
+          {showFlightPhases && (
+            <p className="text-xs text-primary flex items-center gap-1">
+              <ZoomIn className="h-3 w-3" />
+              Flight phases visible (T/O, Cruise, Landing)
+            </p>
+          )}
         </div>
 
         {/* Info Collapsible */}
@@ -824,9 +972,19 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           </CollapsibleContent>
         </Collapsible>
 
-        {/* High-Resolution Timeline */}
-        <div className="overflow-x-auto pb-4">
-          <div className="min-w-[800px]">
+        {/* High-Resolution Timeline with zoom support */}
+        <div 
+          ref={containerRef}
+          className="overflow-x-auto pb-4 touch-pan-x touch-pan-y"
+        >
+          <div 
+            className="min-w-[800px] transition-transform duration-100"
+            style={{
+              transform: `scale(${zoom.scaleX}, ${zoom.scaleY})`,
+              transformOrigin: 'top left',
+              width: `${100 / zoom.scaleX}%`,
+            }}
+          >
             {/* Header with pilot info */}
             <div className="mb-4 text-center">
               {pilotName && (
@@ -1001,15 +1159,20 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                           .map((bar, barIndex) => {
                             const barWidth = ((bar.endHour - bar.startHour) / 24) * 100;
                             const classes = getRecoveryClasses(bar.recoveryScore);
+                            // Determine border radius based on overnight status
+                            // Start bars: rounded left, flat right; Continuation bars: flat left, rounded right
+                            const borderRadius = bar.isOvernightStart 
+                              ? '2px 0 0 2px' 
+                              : bar.isOvernightContinuation 
+                                ? '0 2px 2px 0' 
+                                : '2px';
                             return (
                               <Popover key={`sleep-${barIndex}`}>
                                 <PopoverTrigger asChild>
                                   <button
                                     type="button"
-                                    onClick={(e) => e.stopPropagation()}
-                                    onPointerDown={(e) => e.stopPropagation()}
                                     className={cn(
-                                      "absolute z-20 rounded-sm flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
+                                      "absolute z-20 flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
                                       classes.border,
                                       classes.bg
                                     )}
@@ -1018,6 +1181,10 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       height: 11,
                                       left: `${(bar.startHour / 24) * 100}%`,
                                       width: `${Math.max(barWidth, 1)}%`,
+                                      borderRadius,
+                                      // Remove border on connected edges for visual continuity
+                                      borderRight: bar.isOvernightStart ? 'none' : undefined,
+                                      borderLeft: bar.isOvernightContinuation ? 'none' : undefined,
                                     }}
                                   >
                                     {/* Show recovery info if bar is wide enough */}
@@ -1042,11 +1209,20 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         </div>
                                       </div>
                                       
-                                      {/* Sleep Timing */}
+                                      {/* Explanation from backend (if available) */}
+                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.explanation && (
+                                        <div className="bg-primary/5 border border-primary/20 rounded-md p-2 text-[11px] text-muted-foreground leading-relaxed">
+                                          <span className="text-primary font-medium">💡 </span>
+                                          {bar.relatedDuty.sleepEstimate.explanation}
+                                        </div>
+                                      )}
+                                      
+                                      {/* Sleep Timing - show full window for overnight sleep */}
                                       <div className="flex items-center justify-between text-muted-foreground">
                                         <span>Sleep Window</span>
                                         <span className="font-mono font-medium text-foreground">
-                                          {bar.startHour.toFixed(0).padStart(2, '0')}:00 → {bar.endHour.toFixed(0).padStart(2, '0')}:00
+                                          {(bar.originalStartHour ?? bar.startHour).toFixed(0).padStart(2, '0')}:00 → {(bar.originalEndHour ?? bar.endHour).toFixed(0).padStart(2, '0')}:00
+                                          {(bar.isOvernightStart || bar.isOvernightContinuation) && ' (+1d)'}
                                         </span>
                                       </div>
                                       
@@ -1117,6 +1293,76 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         </div>
                                       </div>
                                       
+                                      {/* Quality Factors from backend (if available) */}
+                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.qualityFactors && (
+                                        <div className="bg-secondary/20 rounded-lg p-2 space-y-1.5">
+                                          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                                            🔬 Model Calculation Factors
+                                          </div>
+                                          {Object.entries(bar.relatedDuty.sleepEstimate.qualityFactors).map(([key, value]) => {
+                                            const labels: Record<string, string> = {
+                                              base_efficiency: 'Base Efficiency',
+                                              wocl_boost: 'WOCL Boost',
+                                              late_onset_penalty: 'Late Onset',
+                                              recovery_boost: 'Recovery Boost',
+                                              time_pressure_factor: 'Time Pressure',
+                                              insufficient_penalty: 'Duration Penalty',
+                                            };
+                                            const label = labels[key] || key;
+                                            const numValue = value as number;
+                                            const isBoost = numValue >= 1;
+                                            return (
+                                              <div key={key} className="flex items-center justify-between text-[11px]">
+                                                <span className="text-muted-foreground">{label}</span>
+                                                <span className={cn(
+                                                  "font-mono font-medium",
+                                                  numValue >= 1.05 ? "text-success" :
+                                                  numValue >= 0.98 ? "text-muted-foreground" :
+                                                  numValue >= 0.90 ? "text-warning" : "text-critical"
+                                                )}>
+                                                  {isBoost ? '+' : ''}{((numValue - 1) * 100).toFixed(0)}%
+                                                </span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                      
+                                      {/* Confidence & Basis (if available) */}
+                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate && (
+                                        <div className="flex items-center justify-between text-[11px]">
+                                          <span className="text-muted-foreground">Model Confidence</span>
+                                          <span className={cn(
+                                            "font-mono font-medium px-1.5 py-0.5 rounded",
+                                            bar.relatedDuty.sleepEstimate.confidence >= 0.7 ? "bg-success/10 text-success" :
+                                            bar.relatedDuty.sleepEstimate.confidence >= 0.5 ? "bg-warning/10 text-warning" : "bg-high/10 text-high"
+                                          )}>
+                                            {Math.round(bar.relatedDuty.sleepEstimate.confidence * 100)}%
+                                          </span>
+                                        </div>
+                                      )}
+                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.confidenceBasis && (
+                                        <div className="text-[10px] text-muted-foreground/70 italic leading-relaxed">
+                                          {bar.relatedDuty.sleepEstimate.confidenceBasis}
+                                        </div>
+                                      )}
+                                      
+                                      {/* References (if available) */}
+                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.references && bar.relatedDuty.sleepEstimate.references.length > 0 && (
+                                        <div className="border-t border-border/30 pt-2 space-y-1">
+                                          <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+                                            📚 Sources
+                                          </div>
+                                          <div className="flex flex-wrap gap-1">
+                                            {bar.relatedDuty.sleepEstimate.references.map((ref, i) => (
+                                              <span key={ref.key || i} className="text-[9px] px-1.5 py-0.5 rounded bg-secondary/50 text-muted-foreground" title={ref.full}>
+                                                {ref.short}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                      
                                       {/* Strategy Badge */}
                                       <div className="flex items-center justify-between pt-1">
                                         <span className="text-muted-foreground">Strategy</span>
@@ -1146,6 +1392,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                             const usedDiscretion = bar.duty.usedDiscretion;
                             const maxFdp = bar.duty.maxFdpHours;
                             const actualFdp = bar.duty.actualFdpHours || bar.duty.dutyHours;
+                            // Determine border radius based on overnight status for visual continuity
+                            const borderRadius = bar.isOvernightStart 
+                              ? '2px 0 0 2px' 
+                              : bar.isOvernightContinuation 
+                                ? '0 2px 2px 0' 
+                                : '2px';
                             
                             return (
                               <TooltipProvider key={barIndex} delayDuration={100}>
@@ -1154,7 +1406,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                     <button
                                       onClick={() => onDutySelect(bar.duty)}
                                       className={cn(
-                                        "absolute z-10 rounded-sm transition-all hover:ring-2 cursor-pointer overflow-hidden flex",
+                                        "absolute z-10 transition-all hover:ring-2 cursor-pointer overflow-hidden flex",
                                         selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground",
                                         usedDiscretion ? "ring-2 ring-critical hover:ring-critical/80" : "hover:ring-foreground"
                                       )}
@@ -1164,11 +1416,65 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         left: `${(bar.startHour / 24) * 100}%`,
                                         width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
                                         background: displayMode === 'timeline' ? 'hsl(var(--primary))' : undefined,
+                                        borderRadius,
                                       }}
                                       >
                                         {/* Render individual flight segments */}
                                         {displayMode !== 'timeline' && bar.segments.map((segment, segIndex) => {
                                           const segmentWidth = ((segment.endHour - segment.startHour) / (bar.endHour - bar.startHour)) * 100;
+                                          
+                                          // When zoomed, show flight phases within each flight segment
+                                          if (showFlightPhases && segment.type === 'flight' && segment.phases) {
+                                            return (
+                                              <div
+                                                key={segIndex}
+                                                className="h-full relative flex"
+                                                style={{ width: `${segmentWidth}%` }}
+                                              >
+                                                {/* Segment separator line */}
+                                                {segIndex > 0 && (
+                                                  <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70 z-10" />
+                                                )}
+                                                {/* Render each flight phase */}
+                                                {segment.phases.map((phase, phaseIndex) => (
+                                                  <div
+                                                    key={phaseIndex}
+                                                    className="h-full flex items-center justify-center relative"
+                                                    style={{
+                                                      width: `${phase.widthPercent}%`,
+                                                      backgroundColor: getPerformanceColor(phase.performance),
+                                                    }}
+                                                    title={`${phase.phase}: ${Math.round(phase.performance)}%`}
+                                                  >
+                                                    {/* Phase separator */}
+                                                    {phaseIndex > 0 && (
+                                                      <div className="absolute left-0 top-0 bottom-0 w-px bg-background/40" />
+                                                    )}
+                                                    {/* Phase label for wider phases */}
+                                                    {phase.widthPercent >= 15 && segmentWidth > 10 && (
+                                                      <span className="text-[6px] font-medium text-background/90 truncate">
+                                                        {phase.phase === 'takeoff' ? 'T/O' :
+                                                         phase.phase === 'landing' ? 'LDG' :
+                                                         phase.phase === 'approach' ? 'APP' :
+                                                         phase.phase === 'cruise' ? 'CRZ' :
+                                                         phase.phase === 'climb' ? 'CLB' :
+                                                         phase.phase === 'descent' ? 'DES' :
+                                                         phase.phase.toUpperCase().substring(0, 3)}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                                {/* Flight number overlay */}
+                                                {segment.flightNumber && segmentWidth > 12 && (
+                                                  <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-background drop-shadow-sm">
+                                                    {segment.flightNumber}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            );
+                                          }
+                                          
+                                          // Standard rendering (not zoomed or non-flight segments)
                                           return (
                                             <div
                                               key={segIndex}
@@ -1210,16 +1516,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                     </button>
                                   </TooltipTrigger>
 
-                                  {/* FDP Limit indicator (dashed line at max FDP end) */}
-                                  {maxFdp && !bar.isOvernightContinuation && (
-                                    <div
-                                      className="absolute top-0 bottom-0 border-r-2 border-dashed border-muted-foreground/50 pointer-events-none"
-                                      style={{
-                                        left: `${((bar.startHour + maxFdp) / 24) * 100}%`,
-                                      }}
-                                      title={`Max FDP: ${maxFdp}h`}
-                                    />
-                                  )}
                                   <TooltipContent side="right" className="max-w-xs p-3">
                                     <div className="space-y-2 text-xs">
                                       <div className={cn(
@@ -1345,6 +1641,20 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                               </TooltipProvider>
                             );
                           })}
+
+                        {/* FDP Limit markers for this day - rendered separately to handle overnight cases */}
+                        {fdpLimitMarkers
+                          .filter((marker) => marker.dayIndex === dayNum)
+                          .map((marker, markerIndex) => (
+                            <div
+                              key={`fdp-${markerIndex}`}
+                              className="absolute top-0 bottom-0 border-r-2 border-dashed border-muted-foreground/50 pointer-events-none z-30"
+                              style={{
+                                left: `${(marker.hour / 24) * 100}%`,
+                              }}
+                              title={`Max FDP: ${marker.maxFdp}h`}
+                            />
+                          ))}
                       </div>
                     );
                   })}

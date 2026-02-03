@@ -1,19 +1,76 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { DutyAnalysis } from '@/types/fatigue';
 import { DutyDetails } from './DutyDetails';
-import { FlightPhasePerformance } from './FlightPhasePerformance';
-import { SleepRecoveryIndicator } from './SleepRecoveryIndicator';
-import { PriorSleepIndicator } from './PriorSleepIndicator';
 import { format } from 'date-fns';
+import { useEffect, useMemo, useState } from 'react';
+import { getDutyDetail } from '@/lib/api-client';
 
 interface DutyDetailsDrawerProps {
   duty: DutyAnalysis | null;
+  analysisId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function DutyDetailsDrawer({ duty, open, onOpenChange }: DutyDetailsDrawerProps) {
-  if (!duty) return null;
+export function DutyDetailsDrawer({ duty, analysisId, open, onOpenChange }: DutyDetailsDrawerProps) {
+  const [detailedDuty, setDetailedDuty] = useState<DutyAnalysis | null>(null);
+
+  const dutyKey = useMemo(() => {
+    if (!analysisId || !duty?.dutyId) return null;
+    return `${analysisId}:${duty.dutyId}`;
+  }, [analysisId, duty?.dutyId]);
+
+  // Fetch detailed duty (timeline_points etc.) when drawer opens.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      // Always start from the base duty passed in.
+      setDetailedDuty(duty);
+
+      if (!open) return;
+      if (!analysisId || !duty?.dutyId) return;
+
+      try {
+        const detail = await getDutyDetail(analysisId, duty.dutyId);
+        if (cancelled) return;
+
+        // Backend returns 'timeline' array - map to timelinePoints
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawTimeline = detail?.timeline ?? detail?.timeline_points ?? detail?.timelinePoints;
+        
+        // Map snake_case fields to TimelinePoint interface
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const timelinePoints = Array.isArray(rawTimeline) ? rawTimeline.map((pt: any) => ({
+          hours_on_duty: pt.hours_on_duty ?? 0,
+          time_on_task_penalty: pt.time_on_task_penalty ?? 0,
+          sleep_inertia: pt.sleep_inertia ?? 0,
+          sleep_pressure: pt.sleep_pressure ?? 0,
+          circadian: pt.circadian ?? 0,
+          performance: pt.performance,
+        })) : undefined;
+
+        console.log('Fetched timeline points:', timelinePoints?.length, 'points');
+
+        setDetailedDuty({
+          ...duty,
+          timelinePoints: timelinePoints ?? duty.timelinePoints,
+        });
+      } catch (err) {
+        console.error('Failed to fetch duty detail:', err);
+        // Silent fail: drawer still renders base duty data.
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, dutyKey, analysisId, duty]);
+
+  const displayDuty = detailedDuty ?? duty;
+
+  if (!displayDuty) return null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -22,26 +79,13 @@ export function DutyDetailsDrawer({ duty, open, onOpenChange }: DutyDetailsDrawe
           <div className="flex items-center justify-between">
             <SheetTitle className="flex items-center gap-2">
               <span className="text-primary">✈️</span>
-              Duty Details - {duty.dayOfWeek}, {format(duty.date, 'MMM dd')}
+              Duty Details - {displayDuty.dayOfWeek}, {format(displayDuty.date, 'MMM dd')}
             </SheetTitle>
           </div>
         </SheetHeader>
         
-        <div className="space-y-6">
-          {/* Duty Details Card */}
-          <DutyDetails duty={duty} />
-          
-          {/* Sleep Recovery Indicator - Strategic Sleep Estimator */}
-          {duty.sleepEstimate && (
-            <SleepRecoveryIndicator duty={duty} variant="detailed" />
-          )}
-          
-          {/* Prior Sleep Indicator */}
-          <PriorSleepIndicator duty={duty} variant="detailed" />
-          
-          {/* Flight Phase Performance */}
-          <FlightPhasePerformance duty={duty} />
-        </div>
+        {/* All content is now consolidated in DutyDetails */}
+        <DutyDetails duty={displayDuty} />
       </SheetContent>
     </Sheet>
   );

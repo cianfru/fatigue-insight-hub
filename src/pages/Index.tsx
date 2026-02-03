@@ -6,9 +6,9 @@ import { WelcomePage } from '@/components/fatigue/WelcomePage';
 import { DashboardContent } from '@/components/fatigue/DashboardContent';
 import { MathematicalModelPage } from '@/components/fatigue/MathematicalModelPage';
 import { FatigueSciencePage } from '@/components/fatigue/FatigueSciencePage';
+import { LandingPage } from '@/components/landing/LandingPage';
 
 import { ResearchReferencesPage } from '@/components/fatigue/ResearchReferencesPage';
-import { AboutPage } from '@/components/fatigue/AboutPage';
 import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { mockAnalysisResults } from '@/data/mockAnalysisData';
 import { useTheme } from '@/hooks/useTheme';
@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 
 const Index = () => {
+  const [showLanding, setShowLanding] = useState(true);
   const { theme, setTheme } = useTheme();
 
   const isoToHHmm = (iso: string) => {
@@ -35,33 +36,6 @@ const Index = () => {
     return hhmm ? `${hhmm}Z` : '';
   };
 
-  // Convert a UTC HH:mm time to local HH:mm using an offset (in minutes).
-  // Handles wrap-around past midnight.
-  const utcToLocal = (utcTime: string, offsetMinutes: number): string => {
-    if (!utcTime) return '';
-    const [h, m] = utcTime.split(':').map(Number);
-    if (Number.isNaN(h) || Number.isNaN(m)) return utcTime;
-    let totalMin = h * 60 + m + offsetMinutes;
-    // Wrap around 24h
-    totalMin = ((totalMin % 1440) + 1440) % 1440;
-    const hh = Math.floor(totalMin / 60).toString().padStart(2, '0');
-    const mm = (totalMin % 60).toString().padStart(2, '0');
-    return `${hh}:${mm}`;
-  };
-
-  // Derive timezone offset (in minutes) from a segment's UTC vs local times.
-  const getOffsetFromSegment = (depUtc: string, depLocal: string): number => {
-    if (!depUtc || !depLocal) return 0;
-    const [uh, um] = depUtc.split(':').map(Number);
-    const [lh, lm] = depLocal.split(':').map(Number);
-    if (Number.isNaN(uh) || Number.isNaN(um) || Number.isNaN(lh) || Number.isNaN(lm)) return 0;
-    let diff = (lh * 60 + lm) - (uh * 60 + um);
-    // Normalize to -720..+720 range
-    if (diff > 720) diff -= 1440;
-    if (diff < -720) diff += 1440;
-    return diff;
-  };
-  
   const [settings, setSettings] = useState<PilotSettings>({
     pilotId: 'P12345',
     homeBase: 'DOH',
@@ -128,10 +102,36 @@ const Index = () => {
       const analysisMonth = result.duties.length > 0 
         ? parseISO(result.duties[0].date) 
         : settings.selectedMonth;
+
+      const parseHHmmToMinutes = (t: string | undefined): number | null => {
+        if (!t) return null;
+        const [h, m] = t.split(':').map(Number);
+        if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+        return h * 60 + m;
+      };
+
+      const computeSegmentBlockHours = (seg: { block_hours?: number; departure_time_local?: string; arrival_time_local?: string }) => {
+        if (typeof seg.block_hours === 'number' && Number.isFinite(seg.block_hours) && seg.block_hours > 0) return seg.block_hours;
+        const dep = parseHHmmToMinutes(seg.departure_time_local);
+        const arr = parseHHmmToMinutes(seg.arrival_time_local);
+        if (dep == null || arr == null) return 0;
+        let diff = arr - dep;
+        if (diff < 0) diff += 24 * 60;
+        return Math.max(0, diff / 60);
+      };
+
+      const computedBlockHoursFromSegments = result.duties.reduce(
+        (sum, d) => sum + d.segments.reduce((s, seg) => s + computeSegmentBlockHours(seg), 0),
+        0
+      );
+
+      console.log('total_block_hours (backend):', result.total_block_hours);
+      console.log('computedBlockHoursFromSegments:', computedBlockHoursFromSegments);
       
       setAnalysisResults({
         generatedAt: new Date(),
         month: analysisMonth,
+        analysisId: result.analysis_id || undefined,
         pilotId: result.pilot_id || undefined,
         pilotName: result.pilot_name || undefined,
         pilotBase: result.pilot_base || undefined,
@@ -140,10 +140,17 @@ const Index = () => {
           totalDuties: result.total_duties,
           totalSectors: result.total_sectors,
           totalDutyHours: result.total_duty_hours,
-          totalBlockHours: result.total_block_hours,
+          totalBlockHours:
+            Number.isFinite(result.total_block_hours) && result.total_block_hours > 0
+              ? result.total_block_hours
+              : computedBlockHoursFromSegments,
           highRiskDuties: result.high_risk_duties,
           criticalRiskDuties: result.critical_risk_duties,
           maxSleepDebt: result.max_sleep_debt,
+          totalPinchEvents: result.total_pinch_events || 0,
+          avgSleepPerNight: result.avg_sleep_per_night || 0,
+          worstPerformance: result.worst_performance || 0,
+          worstDutyId: result.worst_duty_id || undefined,
         },
         restDaysSleep: result.rest_days_sleep?.map(restDay => ({
           date: parseISO(restDay.date),
@@ -163,29 +170,17 @@ const Index = () => {
           strategyType: restDay.strategy_type,
           confidence: restDay.confidence,
         })),
-        duties: result.duties.map(duty => {
-          // Derive home-base timezone offset from first segment's UTC vs local departure
-          const firstSeg = duty.segments[0];
-          const offsetMin = firstSeg
-            ? getOffsetFromSegment(firstSeg.departure_time, firstSeg.departure_time_local)
-            : 0;
-          // Convert report/release UTC times to home-base local
-          const reportTimeLocal = duty.report_time_utc
-            ? utcToLocal(duty.report_time_utc, offsetMin)
-            : undefined;
-          const releaseTimeLocal = duty.release_time_utc
-            ? utcToLocal(duty.release_time_utc, offsetMin)
-            : undefined;
-
-          return {
+        duties: result.duties.map(duty => ({
+          dutyId: duty.duty_id,
           date: parseISO(duty.date),
           dateString: duty.date,
           dayOfWeek: format(parseISO(duty.date), 'EEE'),
+          reportTimeUtc: duty.report_time_utc,
+          reportTimeLocal: duty.report_time_local,
+          releaseTimeLocal: duty.release_time_local,
           dutyHours: duty.duty_hours,
           blockHours: duty.segments.reduce((sum, seg) => sum + (seg.block_hours || 0), 0),
           sectors: duty.sectors,
-          reportTimeLocal,
-          releaseTimeLocal,
           minPerformance: duty.min_performance,
           avgPerformance: duty.avg_performance,
           landingPerformance: duty.landing_performance || duty.min_performance,
@@ -214,6 +209,23 @@ const Index = () => {
             const sleepEndDay = sleepRecord.sleep_end_day as number | undefined;
             const sleepEndHour = sleepRecord.sleep_end_hour as number | undefined;
             
+            // Extract detailed sleep quality data (snake_case from backend)
+            const explanation = sleepRecord.explanation as string | undefined;
+            const confidenceBasis = sleepRecord.confidence_basis as string | undefined;
+            const qualityFactors = sleepRecord.quality_factors as {
+              base_efficiency: number;
+              wocl_boost: number;
+              late_onset_penalty: number;
+              recovery_boost: number;
+              time_pressure_factor: number;
+              insufficient_penalty: number;
+            } | undefined;
+            const references = sleepRecord.references as Array<{
+              key: string;
+              short: string;
+              full: string;
+            }> | undefined;
+            
             return {
               totalSleepHours: sleep.total_sleep_hours,
               effectiveSleepHours: sleep.effective_sleep_hours,
@@ -230,6 +242,11 @@ const Index = () => {
               sleepStartHour,
               sleepEndDay,
               sleepEndHour,
+              // Detailed sleep quality info
+              explanation,
+              confidenceBasis,
+              qualityFactors,
+              references,
             };
           })() : undefined,
           flightSegments: duty.segments.map(seg => ({
@@ -243,7 +260,7 @@ const Index = () => {
             blockHours: seg.block_hours,
             performance: duty.avg_performance,
           })),
-        };}),
+        })),
       });
       
       toast.success('Analysis complete!');
@@ -265,6 +282,11 @@ const Index = () => {
     setSelectedDuty(duty);
     setDrawerOpen(true);
   };
+
+  // Show landing page first
+  if (showLanding) {
+    return <LandingPage onEnter={() => setShowLanding(false)} />;
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -305,12 +327,6 @@ const Index = () => {
               >
                 References
               </TabsTrigger>
-              <TabsTrigger 
-                value="about" 
-                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-              >
-                About
-              </TabsTrigger>
             </TabsList>
           </div>
         </div>
@@ -346,10 +362,6 @@ const Index = () => {
 
         <TabsContent value="research" className="flex-1 mt-0">
           <ResearchReferencesPage />
-        </TabsContent>
-
-        <TabsContent value="about" className="flex-1 mt-0">
-          <AboutPage />
         </TabsContent>
       </Tabs>
 
