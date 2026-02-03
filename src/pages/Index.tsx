@@ -249,6 +249,8 @@ const Index = () => {
             arrival: seg.arrival,
             departureTime: seg.departure_time_local,
             arrivalTime: seg.arrival_time_local,
+            departureTimeUtc: seg.departure_time,
+            arrivalTimeUtc: seg.arrival_time,
             blockHours: seg.block_hours,
             performance: duty.avg_performance,
           })),

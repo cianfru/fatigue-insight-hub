@@ -34,8 +34,10 @@ export interface FlightSegment {
   flightNumber: string;
   departure: string;
   arrival: string;
-  departureTime: string;
-  arrivalTime: string;
+  departureTime: string;      // Local time (HH:mm)
+  arrivalTime: string;        // Local time (HH:mm)
+  departureTimeUtc?: string;  // UTC time (HH:mm)
+  arrivalTimeUtc?: string;    // UTC time (HH:mm)
   blockHours: number;
   performance: number;
 }

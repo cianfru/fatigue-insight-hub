@@ -143,24 +143,28 @@ export function PerformanceDegradation({
             </p>
           </div>
 
-          {/* Time on Task Penalty */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2">
-                <Clock className="h-3.5 w-3.5 text-warning" />
-                <span>Time on Task</span>
-              </div>
-              <span className={cn(
-                "font-mono font-semibold",
-                totPenaltyPercent > 5 ? "text-warning" : "text-muted-foreground"
-              )}>
-                -{totPenaltyPercent}%
-              </span>
+        {/* Time on Task Penalty */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2">
+              <Clock className="h-3.5 w-3.5 text-warning" />
+              <span>Time on Task</span>
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              Folkard & Åkerstedt (1999) — Linear TOT decrement (~0.8%/h)
-            </p>
+            <span className={cn(
+              "font-mono font-semibold",
+              totPenaltyPercent > 5 ? "text-warning" : "text-muted-foreground"
+            )}>
+              -{totPenaltyPercent}%
+            </span>
           </div>
+          <Progress 
+            value={Math.max(0, 100 - totPenaltyPercent)} 
+            className="h-1.5"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            Folkard & Åkerstedt (1999) — Linear TOT decrement (~0.8%/h)
+          </p>
+        </div>
 
           {/* Sleep Inertia (Process W) - only show if present */}
           {sleep_inertia < 1 && (
