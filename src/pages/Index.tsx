@@ -36,6 +36,73 @@ const Index = () => {
     return hhmm ? `${hhmm}Z` : '';
   };
 
+  // Calculate per-segment performance based on temporal position within duty
+  // This accounts for cumulative fatigue and time-on-task degradation
+  const calculateSegmentPerformances = (duty: {
+    segments: Array<{ departure_time: string; arrival_time: string; block_hours?: number }>;
+    report_time_utc: string;
+    min_performance: number;
+    avg_performance: number;
+    landing_performance: number | null;
+    duty_hours: number;
+  }): number[] => {
+    if (duty.segments.length === 0) return [];
+    if (duty.segments.length === 1) {
+      // Single sector - use average performance
+      return [duty.avg_performance];
+    }
+
+    // Parse ISO timestamps to get minutes since duty start
+    const parseIsoToDate = (iso: string): Date | null => {
+      try {
+        return parseISO(iso);
+      } catch {
+        return null;
+      }
+    };
+
+    const reportTime = parseIsoToDate(duty.report_time_utc);
+    if (!reportTime) {
+      // Fallback if parsing fails
+      return duty.segments.map(() => duty.avg_performance);
+    }
+
+    // Calculate cumulative flight hours at each segment's landing
+    const segmentEndHours: number[] = [];
+    let cumulativeHours = 0;
+
+    duty.segments.forEach((seg, idx) => {
+      const arrivalTime = parseIsoToDate(seg.arrival_time);
+      if (arrivalTime) {
+        // Hours from report to this segment's arrival
+        const hoursFromReport = (arrivalTime.getTime() - reportTime.getTime()) / (1000 * 60 * 60);
+        segmentEndHours.push(hoursFromReport);
+      } else {
+        // Fallback: estimate based on cumulative block hours
+        const blockHours = seg.block_hours || 1;
+        cumulativeHours += blockHours + 0.5; // Add ground time estimate
+        segmentEndHours.push(cumulativeHours);
+      }
+    });
+
+    // Estimate performance at each segment's landing
+    // Use linear degradation from first segment (higher) to last segment (duty.landing_performance)
+    const finalLanding = duty.landing_performance ?? duty.min_performance;
+    const totalDutyHours = duty.duty_hours;
+
+    // Estimate starting performance (before first landing)
+    // Assuming ~5-8% degradation over the duty, first segment should be higher
+    const performanceDrop = duty.avg_performance - finalLanding;
+    const estimatedStartPerf = Math.min(100, duty.avg_performance + performanceDrop * 0.5);
+
+    return segmentEndHours.map((hoursElapsed) => {
+      // Linear interpolation from start to final landing
+      const fraction = totalDutyHours > 0 ? hoursElapsed / totalDutyHours : 0;
+      const performance = estimatedStartPerf - (estimatedStartPerf - finalLanding) * fraction;
+      return Math.max(0, Math.min(100, performance));
+    });
+  };
+
   const [settings, setSettings] = useState<PilotSettings>({
     pilotId: 'P12345',
     homeBase: 'DOH',
@@ -170,30 +237,34 @@ const Index = () => {
           strategyType: restDay.strategy_type,
           confidence: restDay.confidence,
         })),
-        duties: result.duties.map(duty => ({
-          dutyId: duty.duty_id,
-          date: parseISO(duty.date),
-          dateString: duty.date,
-          dayOfWeek: format(parseISO(duty.date), 'EEE'),
-          reportTimeUtc: duty.report_time_utc,
-          reportTimeLocal: duty.report_time_local,
-          releaseTimeLocal: duty.release_time_local,
-          dutyHours: duty.duty_hours,
-          blockHours: duty.segments.reduce((sum, seg) => sum + (seg.block_hours || 0), 0),
-          sectors: duty.sectors,
-          minPerformance: duty.min_performance,
-          avgPerformance: duty.avg_performance,
-          landingPerformance: duty.landing_performance || duty.min_performance,
-          sleepDebt: duty.sleep_debt,
-          woclExposure: duty.wocl_hours,
-          priorSleep: duty.prior_sleep,
-          overallRisk: duty.risk_level.toUpperCase() as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
-          minPerformanceRisk: duty.risk_level.toUpperCase() as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
-          landingRisk: duty.risk_level.toUpperCase() as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
-          smsReportable: duty.is_reportable,
-          maxFdpHours: duty.max_fdp_hours,
-          extendedFdpHours: duty.extended_fdp_hours,
-          usedDiscretion: duty.used_discretion,
+        duties: result.duties.map(duty => {
+          // Calculate per-segment performance based on temporal position
+          const segmentPerformances = calculateSegmentPerformances(duty);
+
+          return {
+            dutyId: duty.duty_id,
+            date: parseISO(duty.date),
+            dateString: duty.date,
+            dayOfWeek: format(parseISO(duty.date), 'EEE'),
+            reportTimeUtc: duty.report_time_utc,
+            reportTimeLocal: duty.report_time_local,
+            releaseTimeLocal: duty.release_time_local,
+            dutyHours: duty.duty_hours,
+            blockHours: duty.segments.reduce((sum, seg) => sum + (seg.block_hours || 0), 0),
+            sectors: duty.sectors,
+            minPerformance: duty.min_performance,
+            avgPerformance: duty.avg_performance,
+            landingPerformance: duty.landing_performance || duty.min_performance,
+            sleepDebt: duty.sleep_debt,
+            woclExposure: duty.wocl_hours,
+            priorSleep: duty.prior_sleep,
+            overallRisk: duty.risk_level.toUpperCase() as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
+            minPerformanceRisk: duty.risk_level.toUpperCase() as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
+            landingRisk: duty.risk_level.toUpperCase() as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
+            smsReportable: duty.is_reportable,
+            maxFdpHours: duty.max_fdp_hours,
+            extendedFdpHours: duty.extended_fdp_hours,
+            usedDiscretion: duty.used_discretion,
           sleepEstimate: (duty.sleep_quality ?? duty.sleep_estimate) ? (() => {
             const sleep = duty.sleep_quality ?? duty.sleep_estimate;
             if (!sleep) return undefined;
@@ -249,7 +320,7 @@ const Index = () => {
               references,
             };
           })() : undefined,
-          flightSegments: duty.segments.map(seg => ({
+          flightSegments: duty.segments.map((seg, idx) => ({
             flightNumber: seg.flight_number,
             departure: seg.departure,
             arrival: seg.arrival,
@@ -258,9 +329,10 @@ const Index = () => {
             departureTimeUtc: isoToZulu(seg.departure_time),
             arrivalTimeUtc: isoToZulu(seg.arrival_time),
             blockHours: seg.block_hours,
-            performance: duty.avg_performance,
+            performance: segmentPerformances[idx] || duty.avg_performance,
           })),
-        })),
+        };
+        }),
       });
       
       toast.success('Analysis complete!');

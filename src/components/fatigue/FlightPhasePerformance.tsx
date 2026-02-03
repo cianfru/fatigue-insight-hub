@@ -43,8 +43,12 @@ const getPerformanceTextColor = (performance: number): string => {
 };
 
 // Generate simulated phase performance for a single flight segment
-const generateSegmentPhases = (segment: FlightSegment, dutyAvg: number, landingPerf: number): PhaseData[] => {
+const generateSegmentPhases = (segment: FlightSegment, dutyAvg: number): PhaseData[] => {
   const basePerf = segment.performance || dutyAvg;
+  // Landing performance is derived from segment's own performance (represents end of this segment)
+  // Slightly lower than approach due to final phase fatigue
+  const segmentLandingPerf = basePerf - 5;
+
   return [
     { phase: 'preflight' as FlightPhase, label: 'Pre-flight', icon: '📋', performance: Math.min(100, basePerf + 5), isCritical: false },
     { phase: 'taxi' as FlightPhase, label: 'Taxi', icon: '🛞', performance: Math.min(100, basePerf + 3), isCritical: false },
@@ -53,7 +57,7 @@ const generateSegmentPhases = (segment: FlightSegment, dutyAvg: number, landingP
     { phase: 'cruise' as FlightPhase, label: 'Cruise', icon: '✈️', performance: basePerf - 2, isCritical: false },
     { phase: 'descent' as FlightPhase, label: 'Descent', icon: '📉', performance: basePerf - 3, isCritical: false },
     { phase: 'approach' as FlightPhase, label: 'Approach', icon: '🎯', performance: basePerf - 4, isCritical: true },
-    { phase: 'landing' as FlightPhase, label: 'Landing', icon: '🛬', performance: landingPerf, isCritical: true },
+    { phase: 'landing' as FlightPhase, label: 'Landing', icon: '🛬', performance: segmentLandingPerf, isCritical: true },
   ].map(p => ({ ...p, performance: Math.max(0, Math.min(100, p.performance)) }));
 };
 
@@ -167,7 +171,7 @@ export function FlightPhasePerformance({ duty }: FlightPhasePerformanceProps) {
             <h5 className="text-xs font-medium text-muted-foreground">Per-Sector Breakdown</h5>
             {duty.flightSegments.map((segment, index) => {
               const isExpanded = expandedSegments.has(index);
-              const segmentPhases = generateSegmentPhases(segment, duty.avgPerformance, duty.landingPerformance);
+              const segmentPhases = generateSegmentPhases(segment, duty.avgPerformance);
               const lowestPhase = segmentPhases.reduce((a, b) => a.performance < b.performance ? a : b);
               
               return (
