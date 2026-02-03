@@ -111,8 +111,15 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
                     {segment.departure} → {segment.arrival}
                   </span>
                 </div>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <span>{segment.departureTime} - {segment.arrivalTime}</span>
+                <div className="flex items-center gap-4 text-sm">
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span className="text-foreground">{segment.departureTime} - {segment.arrivalTime}</span>
+                    {(segment.departureTimeUtc || segment.arrivalTimeUtc) && (
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {segment.departureTimeUtc || '--'}Z - {segment.arrivalTimeUtc || '--'}Z
+                      </span>
+                    )}
+                  </div>
                   <Badge variant={segment.performance < 50 ? 'critical' : segment.performance < 60 ? 'warning' : 'success'}>
                     {segment.performance.toFixed(0)}%
                   </Badge>

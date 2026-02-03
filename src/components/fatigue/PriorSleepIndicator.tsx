@@ -8,11 +8,14 @@ interface PriorSleepIndicatorProps {
   variant?: 'compact' | 'detailed';
 }
 
+// Prior sleep quality based on hours of prior rest opportunity
+// Thresholds based on EASA ORO.FTL rest requirements (min 10h rest = ~7-8h sleep opportunity)
 const getSleepQuality = (hours: number): { label: string; variant: 'success' | 'warning' | 'high' | 'critical' } => {
-  if (hours >= 28) return { label: 'Excellent', variant: 'success' };
-  if (hours >= 24) return { label: 'Good', variant: 'success' };
-  if (hours >= 20) return { label: 'Fair', variant: 'warning' };
-  if (hours >= 16) return { label: 'Poor', variant: 'high' };
+  // priorSleep from backend is hours of sleep opportunity in prior rest period
+  if (hours >= 8) return { label: 'Excellent', variant: 'success' };
+  if (hours >= 7) return { label: 'Good', variant: 'success' };
+  if (hours >= 6) return { label: 'Fair', variant: 'warning' };
+  if (hours >= 5) return { label: 'Poor', variant: 'high' };
   return { label: 'Critical', variant: 'critical' };
 };
 
@@ -25,7 +28,10 @@ export function PriorSleepIndicator({ duty, variant = 'compact' }: PriorSleepInd
       }
     : getSleepQuality(duty.priorSleep);
   
-  const isHome = duty.sleepEnvironment === 'home' || duty.priorSleep >= 26;
+  // sleepEnvironment from backend, or infer from sleep estimate if available
+  // Default to 'home' if not specified (most common case for long rest)
+  const isHome = duty.sleepEnvironment === 'home' || 
+                 (!duty.sleepEnvironment && (duty.sleepEstimate?.sleepStrategy === 'recovery' || duty.priorSleep >= 8));
 
   if (variant === 'compact') {
     return (
