@@ -29,6 +29,12 @@ const Index = () => {
     }
   };
 
+  // Extract HH:mm from ISO timestamp and append 'Z' for Zulu time display
+  const isoToZulu = (iso: string) => {
+    const hhmm = isoToHHmm(iso);
+    return hhmm ? `${hhmm}Z` : '';
+  };
+
   // Convert a UTC HH:mm time to local HH:mm using an offset (in minutes).
   // Handles wrap-around past midnight.
   const utcToLocal = (utcTime: string, offsetMinutes: number): string => {
@@ -232,6 +238,8 @@ const Index = () => {
             arrival: seg.arrival,
             departureTime: seg.departure_time_local,
             arrivalTime: seg.arrival_time_local,
+            departureTimeUtc: isoToZulu(seg.departure_time),
+            arrivalTimeUtc: isoToZulu(seg.arrival_time),
             blockHours: seg.block_hours,
             performance: duty.avg_performance,
           })),
