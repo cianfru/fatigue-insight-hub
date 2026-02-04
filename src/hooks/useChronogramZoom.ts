@@ -54,6 +54,17 @@ export function useChronogramZoom(options: UseChronogramZoomOptions = {}) {
     };
   };
 
+  // Get position relative to container
+  const getRelativePosition = (clientX: number, clientY: number) => {
+    const container = containerRef.current;
+    if (!container) return { x: 0, y: 0 };
+    const rect = container.getBoundingClientRect();
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    };
+  };
+
   const handleTouchStart = useCallback((e: TouchEvent) => {
     if (e.touches.length === 2) {
       e.preventDefault();
@@ -75,19 +86,29 @@ export function useChronogramZoom(options: UseChronogramZoomOptions = {}) {
       
       if (lastTouchDistance.current && lastTouchCenter.current) {
         const scaleChange = newDistance / lastTouchDistance.current;
-        const centerDeltaX = newCenter.x - lastTouchCenter.current.x;
-        const centerDeltaY = newCenter.y - lastTouchCenter.current.y;
+        
+        // Get pinch center relative to container
+        const relCenter = getRelativePosition(newCenter.x, newCenter.y);
         
         setZoom(prev => {
           // Calculate new scales
           const newScaleX = Math.min(maxScaleX, Math.max(minScaleX, prev.scaleX * scaleChange));
           const newScaleY = Math.min(maxScaleY, Math.max(minScaleY, prev.scaleY * scaleChange));
           
+          // Calculate pan adjustment to keep pinch center stationary
+          // The point under the pinch should remain at the same screen position
+          const scaleRatioX = newScaleX / prev.scaleX;
+          const scaleRatioY = newScaleY / prev.scaleY;
+          
+          // Adjust pan so the point under fingers stays fixed
+          const newPanX = relCenter.x - scaleRatioX * (relCenter.x - prev.panX);
+          const newPanY = relCenter.y - scaleRatioY * (relCenter.y - prev.panY);
+          
           return {
             scaleX: newScaleX,
             scaleY: newScaleY,
-            panX: prev.panX + centerDeltaX,
-            panY: prev.panY + centerDeltaY,
+            panX: newPanX,
+            panY: newPanY,
           };
         });
       }
@@ -116,7 +137,7 @@ export function useChronogramZoom(options: UseChronogramZoomOptions = {}) {
     lastPanPosition.current = null;
   }, []);
 
-  // Mouse wheel zoom (desktop)
+  // Mouse wheel zoom (desktop) - zoom toward cursor position
   const handleWheel = useCallback((e: WheelEvent) => {
     // Only zoom if Ctrl/Meta is pressed (standard zoom gesture)
     if (e.ctrlKey || e.metaKey) {
@@ -125,18 +146,28 @@ export function useChronogramZoom(options: UseChronogramZoomOptions = {}) {
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
       const isHorizontal = e.shiftKey; // Shift + wheel = horizontal only
       
+      // Get cursor position relative to container
+      const cursorPos = getRelativePosition(e.clientX, e.clientY);
+      
       setZoom(prev => {
-        if (isHorizontal) {
-          return {
-            ...prev,
-            scaleX: Math.min(maxScaleX, Math.max(minScaleX, prev.scaleX * delta)),
-          };
-        }
+        const newScaleX = Math.min(maxScaleX, Math.max(minScaleX, prev.scaleX * delta));
+        const newScaleY = isHorizontal 
+          ? prev.scaleY 
+          : Math.min(maxScaleY, Math.max(minScaleY, prev.scaleY * delta));
+        
+        // Calculate pan adjustment to keep cursor point stationary
+        const scaleRatioX = newScaleX / prev.scaleX;
+        const scaleRatioY = newScaleY / prev.scaleY;
+        
+        // Adjust pan so the point under cursor stays fixed
+        const newPanX = cursorPos.x - scaleRatioX * (cursorPos.x - prev.panX);
+        const newPanY = cursorPos.y - scaleRatioY * (cursorPos.y - prev.panY);
+        
         return {
-          scaleX: Math.min(maxScaleX, Math.max(minScaleX, prev.scaleX * delta)),
-          scaleY: Math.min(maxScaleY, Math.max(minScaleY, prev.scaleY * delta)),
-          panX: prev.panX,
-          panY: prev.panY,
+          scaleX: newScaleX,
+          scaleY: newScaleY,
+          panX: newPanX,
+          panY: newPanY,
         };
       });
     }
@@ -172,10 +203,5 @@ export function useChronogramZoom(options: UseChronogramZoomOptions = {}) {
     containerRef,
     resetZoom,
     isZoomed,
-    // CSS transform for the zoomable content
-    zoomStyle: {
-      transform: `scale(${zoom.scaleX}, ${zoom.scaleY}) translate(${zoom.panX / zoom.scaleX}px, ${zoom.panY / zoom.scaleY}px)`,
-      transformOrigin: 'top left',
-    },
   };
 }
