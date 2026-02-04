@@ -56,7 +56,7 @@ interface ChronogramProps {
   restDaysSleep?: RestDaySleep[];
 }
 
-type DisplayMode = 'heatmap' | 'timeline' | 'combined';
+type DisplayMode = 'heatmap' | 'combined';
 
 // Default check-in time before first sector (EASA typically 60 min)
 // Used as fallback when report_time_local is not available from the parser
@@ -923,15 +923,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               onClick={() => setDisplayMode('heatmap')}
               className="text-xs"
             >
-              🎨 Performance Heatmap (shows fatigue levels)
-            </Button>
-            <Button
-              variant={displayMode === 'timeline' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setDisplayMode('timeline')}
-              className="text-xs"
-            >
-              📊 Duty/Rest Timeline (simple)
+              🎨 Performance Heatmap
             </Button>
             <Button
               variant={displayMode === 'combined' ? 'default' : 'outline'}
@@ -975,12 +967,13 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         {/* High-Resolution Timeline with zoom support */}
         <div 
           ref={containerRef}
-          className="overflow-x-auto pb-4 touch-pan-x touch-pan-y"
+          className="overflow-auto pb-4 touch-pan-x touch-pan-y"
+          style={{ maxHeight: isZoomed ? '80vh' : undefined }}
         >
           <div 
             className="min-w-[800px] transition-transform duration-100"
             style={{
-              transform: `scale(${zoom.scaleX}, ${zoom.scaleY})`,
+              transform: `translate(${zoom.panX}px, ${zoom.panY}px) scale(${zoom.scaleX}, ${zoom.scaleY})`,
               transformOrigin: 'top left',
               width: `${100 / zoom.scaleX}%`,
             }}
@@ -1415,12 +1408,11 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         height: 13,
                                         left: `${(bar.startHour / 24) * 100}%`,
                                         width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
-                                        background: displayMode === 'timeline' ? 'hsl(var(--primary))' : undefined,
                                         borderRadius,
                                       }}
                                       >
                                         {/* Render individual flight segments */}
-                                        {displayMode !== 'timeline' && bar.segments.map((segment, segIndex) => {
+                                        {bar.segments.map((segment, segIndex) => {
                                           const segmentWidth = ((segment.endHour - segment.startHour) / (bar.endHour - bar.startHour)) * 100;
                                           
                                           // When zoomed, show flight phases within each flight segment
@@ -1450,26 +1442,14 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                                     {phaseIndex > 0 && (
                                                       <div className="absolute left-0 top-0 bottom-0 w-px bg-background/40" />
                                                     )}
-                                                    {/* Phase label for wider phases */}
-                                                    {phase.widthPercent >= 15 && segmentWidth > 10 && (
+                                                    {/* Phase label - only show for cruise when wide enough */}
+                                                    {phase.phase === 'cruise' && zoom.scaleX >= 2.5 && segmentWidth > 15 && (
                                                       <span className="text-[6px] font-medium text-background/90 truncate">
-                                                        {phase.phase === 'takeoff' ? 'T/O' :
-                                                         phase.phase === 'landing' ? 'LDG' :
-                                                         phase.phase === 'approach' ? 'APP' :
-                                                         phase.phase === 'cruise' ? 'CRZ' :
-                                                         phase.phase === 'climb' ? 'CLB' :
-                                                         phase.phase === 'descent' ? 'DES' :
-                                                         phase.phase.toUpperCase().substring(0, 3)}
+                                                        {Math.round(phase.performance)}%
                                                       </span>
                                                     )}
                                                   </div>
                                                 ))}
-                                                {/* Flight number overlay */}
-                                                {segment.flightNumber && segmentWidth > 12 && (
-                                                  <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-background drop-shadow-sm">
-                                                    {segment.flightNumber}
-                                                  </span>
-                                                )}
                                               </div>
                                             );
                                           }
@@ -1662,8 +1642,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               </div>
 
               {/* Color legend - aligned with chart height */}
-              {displayMode !== 'timeline' && (
-                <div className="ml-4 flex w-16 flex-shrink-0 flex-col">
+              <div className="ml-4 flex w-16 flex-shrink-0 flex-col">
                   <div className="h-8 text-[10px] text-muted-foreground text-center">Score</div>
                   <div className="flex gap-1" style={{ height: `${allDays.length * 28}px` }}>
                     {/* Gradient bar */}
@@ -1686,7 +1665,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                     </div>
                   </div>
                 </div>
-              )}
             </div>
 
             {/* X-axis label */}
