@@ -1,15 +1,17 @@
 import { useState, useMemo } from 'react';
-import { Info, AlertTriangle, Battery, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Info, AlertTriangle, ZoomIn, RotateCcw, Brain, Battery } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DutyAnalysis, DutyStatistics, RestDaySleep, FlightPhase } from '@/types/fatigue';
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useChronogramZoom } from '@/hooks/useChronogramZoom';
+import { HumanPerformanceTimeline } from './HumanPerformanceTimeline';
 
 // Helper to calculate recovery score from sleep estimate
 const getRecoveryScore = (estimate: NonNullable<DutyAnalysis['sleepEstimate']>): number => {
@@ -882,18 +884,34 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
   const hours = Array.from({ length: 8 }, (_, i) => i * 3); // 00, 03, 06, 09, 12, 15, 18, 21
 
+  const [activeTab, setActiveTab] = useState<'homebase' | 'elapsed'>('homebase');
+
   return (
     <Card variant="glass">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2">
           <span className="text-primary">📊</span>
-          Monthly Chronogram - High-Resolution Timeline
+          Monthly Chronogram
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          30-minute resolution showing duty timing, WOCL exposure, and fatigue patterns
+          High-resolution timeline showing duty timing, WOCL exposure, and fatigue patterns
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Tab selector for timeline type */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'homebase' | 'elapsed')}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="homebase" className="text-xs">
+              🏠 Home-Base Timeline
+            </TabsTrigger>
+            <TabsTrigger value="elapsed" className="text-xs">
+              <Brain className="h-3 w-3 mr-1" />
+              Human Performance (Elapsed)
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Home-Base Timeline Tab */}
+          <TabsContent value="homebase" className="mt-4 space-y-4">
         {/* Display Mode Selector and Zoom Controls */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -1698,6 +1716,20 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             ))}
           </div>
         </div>
+          </TabsContent>
+
+          {/* Human Performance (Elapsed Time) Tab */}
+          <TabsContent value="elapsed" className="mt-4">
+            <HumanPerformanceTimeline
+              duties={duties}
+              month={month}
+              pilotName={pilotName}
+              pilotBase={pilotBase}
+              onDutySelect={onDutySelect}
+              selectedDuty={selectedDuty}
+            />
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );
