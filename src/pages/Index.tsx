@@ -241,6 +241,11 @@ const Index = () => {
           // Calculate per-segment performance based on temporal position
           const segmentPerformances = calculateSegmentPerformances(duty);
 
+          // Extract sleep environment and quality from duty level or nested in sleep data
+          const sleep = duty.sleep_quality ?? duty.sleep_estimate;
+          const sleepEnvironment = duty.sleep_environment ?? sleep?.sleep_environment;
+          const sleepQuality = duty.sleep_quality_label ?? sleep?.sleep_quality_label;
+
           return {
             dutyId: duty.duty_id,
             date: parseISO(duty.date),
@@ -265,8 +270,9 @@ const Index = () => {
             maxFdpHours: duty.max_fdp_hours,
             extendedFdpHours: duty.extended_fdp_hours,
             usedDiscretion: duty.used_discretion,
-          sleepEstimate: (duty.sleep_quality ?? duty.sleep_estimate) ? (() => {
-            const sleep = duty.sleep_quality ?? duty.sleep_estimate;
+            sleepEnvironment,
+            sleepQuality,
+          sleepEstimate: sleep ? (() => {
             if (!sleep) return undefined;
             
             const sleepBlocks = (sleep as unknown as Record<string, unknown>).sleep_blocks as Array<{ sleep_start_iso?: string; sleep_end_iso?: string }> | undefined;

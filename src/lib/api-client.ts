@@ -79,6 +79,9 @@ export interface SleepEstimate {
     short: string;
     full: string;
   }>;
+  // Sleep environment and quality indicators
+  sleep_environment?: 'home' | 'layover';
+  sleep_quality_label?: 'poor' | 'fair' | 'good' | 'excellent';
 }
 
 export interface Duty {
@@ -104,6 +107,9 @@ export interface Duty {
   sleep_estimate?: SleepEstimate;
   // Backend currently returns this key
   sleep_quality?: SleepEstimate;
+  // Sleep environment and quality (can be at duty level or within sleep_estimate/sleep_quality)
+  sleep_environment?: 'home' | 'layover';
+  sleep_quality_label?: 'poor' | 'fair' | 'good' | 'excellent';
   
   risk_level: 'low' | 'moderate' | 'high' | 'critical' | 'extreme' | 'unknown';
   is_reportable: boolean;
