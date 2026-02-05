@@ -1,13 +1,36 @@
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 import { EarthScene } from './EarthScene';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, ChevronDown } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { ArrowRight, ChevronDown, Lock } from 'lucide-react';
 
 interface LandingPageProps {
   onEnter: () => void;
 }
 
+const ACCESS_PASSWORD = 'Admin123';
+
 export function LandingPage({ onEnter }: LandingPageProps) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === ACCESS_PASSWORD) {
+      setIsAuthenticated(true);
+      setError(false);
+    } else {
+      setError(true);
+    }
+  };
+
+  const handleEnter = () => {
+    if (isAuthenticated) {
+      onEnter();
+    }
+  };
+
   return (
     <div className="relative h-screen w-full overflow-hidden bg-[#000408]">
       {/* 3D Earth Background */}
@@ -51,27 +74,61 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           </p>
           
           {/* CTA Button */}
-          <Button 
-            onClick={onEnter}
-            size="lg"
-            className="group mt-4 gap-2 bg-primary/90 backdrop-blur-sm hover:bg-primary text-primary-foreground px-8 py-6 text-lg"
-          >
-            Enter Platform
-            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-          </Button>
+          {!isAuthenticated ? (
+            <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+              <div className="flex gap-2">
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                  <Input
+                    type="password"
+                    placeholder="Enter access password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setError(false);
+                    }}
+                    className={`pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/40 w-64 ${
+                      error ? 'border-red-500 animate-shake' : ''
+                    }`}
+                  />
+                </div>
+                <Button 
+                  type="submit"
+                  size="default"
+                  className="gap-2 bg-primary/90 backdrop-blur-sm hover:bg-primary text-primary-foreground"
+                >
+                  Unlock
+                </Button>
+              </div>
+              {error && (
+                <p className="text-sm text-red-400">Incorrect password. Please try again.</p>
+              )}
+            </form>
+          ) : (
+            <Button 
+              onClick={handleEnter}
+              size="lg"
+              className="group mt-4 gap-2 bg-primary/90 backdrop-blur-sm hover:bg-primary text-primary-foreground px-8 py-6 text-lg"
+            >
+              Enter Platform
+              <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+            </Button>
+          )}
         </div>
       </div>
       
       {/* Scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-        <button 
-          onClick={onEnter}
-          className="flex flex-col items-center gap-2 text-white/40 transition-colors hover:text-white/70"
-        >
-          <span className="text-xs uppercase tracking-widest">Explore</span>
-          <ChevronDown className="h-5 w-5" />
-        </button>
-      </div>
+      {isAuthenticated && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+          <button 
+            onClick={handleEnter}
+            className="flex flex-col items-center gap-2 text-white/40 transition-colors hover:text-white/70"
+          >
+            <span className="text-xs uppercase tracking-widest">Explore</span>
+            <ChevronDown className="h-5 w-5" />
+          </button>
+        </div>
+      )}
       
       {/* Version badge */}
       <div className="absolute right-8 top-8 flex items-center gap-3 text-xs text-white/30">
