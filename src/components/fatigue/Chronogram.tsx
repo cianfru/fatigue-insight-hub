@@ -58,7 +58,7 @@ interface ChronogramProps {
   restDaysSleep?: RestDaySleep[];
 }
 
-type DisplayMode = 'heatmap' | 'combined';
+// Display mode removed - chronogram is always a heatmap now
 
 // Default check-in time before first sector (EASA typically 60 min)
 // Used as fallback when report_time_local is not available from the parser
@@ -132,7 +132,6 @@ const getPerformanceColor = (performance: number): string => {
 };
 
 export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep }: ChronogramProps) {
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('heatmap');
   const [infoOpen, setInfoOpen] = useState(false);
   
   // Zoom functionality
@@ -912,52 +911,32 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
           {/* Home-Base Timeline Tab */}
           <TabsContent value="homebase" className="mt-4 space-y-4">
-        {/* Display Mode Selector and Zoom Controls */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">Display Mode</p>
-            {/* Zoom Controls */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {isZoomed ? `Zoom: ${zoom.scaleX.toFixed(1)}x` : 'Pinch/Ctrl+Scroll to zoom'}
-              </span>
-              {isZoomed && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={resetZoom}
-                  className="text-xs h-7 px-2"
-                >
-                  <RotateCcw className="h-3 w-3 mr-1" />
-                  Reset
-                </Button>
-              )}
-            </div>
+        {/* Zoom Controls */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {showFlightPhases && (
+              <p className="text-xs text-primary flex items-center gap-1">
+                <ZoomIn className="h-3 w-3" />
+                Flight phases visible
+              </p>
+            )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={displayMode === 'heatmap' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setDisplayMode('heatmap')}
-              className="text-xs"
-            >
-              🎨 Performance Heatmap
-            </Button>
-            <Button
-              variant={displayMode === 'combined' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setDisplayMode('combined')}
-              className="text-xs"
-            >
-              🔄 Combined View
-            </Button>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {isZoomed ? `Zoom: ${zoom.scaleX.toFixed(1)}x` : 'Pinch/Ctrl+Scroll to zoom'}
+            </span>
+            {isZoomed && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetZoom}
+                className="text-xs h-7 px-2"
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Reset
+              </Button>
+            )}
           </div>
-          {showFlightPhases && (
-            <p className="text-xs text-primary flex items-center gap-1">
-              <ZoomIn className="h-3 w-3" />
-              Flight phases visible (T/O, Cruise, Landing)
-            </p>
-          )}
         </div>
 
         {/* Info Collapsible */}

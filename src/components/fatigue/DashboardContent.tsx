@@ -136,7 +136,7 @@ export function DashboardContent({
               />
 
               {/* Section 6: Export Options */}
-              <ExportOptions />
+              <ExportOptions duties={analysisResults.duties} />
             </div>
           )}
 
