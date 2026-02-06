@@ -206,50 +206,50 @@
 
 /* Aurora Background Effect */
 .aurora-bg {
-  opacity: 0.5;
+  opacity: 0.8;
 }
 
 .light .aurora-bg {
-  opacity: 0.3;
+  opacity: 0.5;
 }
 
 .aurora-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(120px);
+  filter: blur(80px);
   mix-blend-mode: screen;
   will-change: transform;
 }
 
 .light .aurora-blob {
   mix-blend-mode: multiply;
-  filter: blur(140px);
+  filter: blur(100px);
 }
 
 .aurora-blob-1 {
-  width: 50vw;
-  height: 50vh;
-  top: -15%;
-  left: -10%;
-  background: radial-gradient(circle, hsl(var(--primary) / 0.25) 0%, transparent 70%);
+  width: 60vw;
+  height: 60vh;
+  top: -10%;
+  left: -5%;
+  background: radial-gradient(circle, hsl(var(--primary) / 0.4) 0%, transparent 60%);
   animation: aurora-drift-1 18s ease-in-out infinite;
 }
 
 .aurora-blob-2 {
-  width: 45vw;
-  height: 45vh;
-  top: 30%;
-  right: -15%;
-  background: radial-gradient(circle, hsl(280 65% 60% / 0.2) 0%, transparent 70%);
+  width: 55vw;
+  height: 55vh;
+  top: 25%;
+  right: -10%;
+  background: radial-gradient(circle, hsl(280 65% 60% / 0.35) 0%, transparent 60%);
   animation: aurora-drift-2 22s ease-in-out infinite;
 }
 
 .aurora-blob-3 {
-  width: 40vw;
-  height: 40vh;
-  bottom: -10%;
-  left: 20%;
-  background: radial-gradient(circle, hsl(var(--primary) / 0.15) 0%, transparent 70%);
+  width: 50vw;
+  height: 50vh;
+  bottom: -5%;
+  left: 15%;
+  background: radial-gradient(circle, hsl(160 70% 50% / 0.25) 0%, transparent 60%);
   animation: aurora-drift-3 25s ease-in-out infinite;
 }
 
