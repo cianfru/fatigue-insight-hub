@@ -7,7 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DutyAnalysis, DutyStatistics, RestDaySleep, FlightPhase } from '@/types/fatigue';
+import { DutyAnalysis, DutyStatistics, RestDaySleep, FlightPhase, SleepQualityFactors, SleepReference } from '@/types/fatigue';
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useChronogramZoom } from '@/hooks/useChronogramZoom';
@@ -40,6 +40,7 @@ const getStrategyIcon = (strategy: string): string => {
     case 'extended': return '🛏️';
     case 'restricted': return '⏰';
     case 'recovery': return '🔋';
+    case 'post_duty_recovery': return '🛏️';
     case 'normal': return '😴';
     default: return '😴';
   }
@@ -115,6 +116,13 @@ interface SleepBar {
   // Original full sleep window times (for display in tooltip)
   originalStartHour?: number;
   originalEndHour?: number;
+  // Quality factor data (from backend for all sleep types)
+  qualityFactors?: SleepQualityFactors;
+  explanation?: string;
+  confidenceBasis?: string;
+  confidence?: number;
+  references?: SleepReference[];
+  woclOverlapHours?: number;
 }
 
 // WOCL (Window of Circadian Low) is typically 02:00 - 06:00
@@ -496,6 +504,16 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
       const recoveryScore = getRecoveryScore(sleepEstimate);
       
+      // Common quality factor fields for all sleep bars from this duty
+      const sleepBarExtras = {
+        qualityFactors: sleepEstimate.qualityFactors,
+        explanation: sleepEstimate.explanation,
+        confidenceBasis: sleepEstimate.confidenceBasis,
+        confidence: sleepEstimate.confidence,
+        references: sleepEstimate.references,
+        woclOverlapHours: sleepEstimate.woclOverlapHours,
+      };
+      
       // PREFER pre-computed day/hour values if available (timezone-safe from backend)
       const hasPrecomputed = 
         sleepEstimate.sleepStartDay != null && 
@@ -723,11 +741,24 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           }
         }
       }
+      
+      // Enrich all bars from this duty with quality factor data
+      const barsFromThisDuty = bars.filter(b => b.relatedDuty === duty && !b.qualityFactors);
+      barsFromThisDuty.forEach(b => Object.assign(b, sleepBarExtras));
     });
     
     // Add rest day sleep bars (from separate rest_days_sleep array)
     if (restDaysSleep) {
       restDaysSleep.forEach((restDay) => {
+        // Rest-day level quality factor extras
+        const restDayExtras = {
+          qualityFactors: restDay.qualityFactors,
+          explanation: restDay.explanation,
+          confidenceBasis: restDay.confidenceBasis,
+          confidence: restDay.confidence,
+          references: restDay.references,
+        };
+        
         restDay.sleepBlocks.forEach((block) => {
           // Calculate recovery score for rest day sleep
           const baseScore = (block.effectiveHours / 8) * 100;
@@ -802,6 +833,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 sleepStrategy: restDay.strategyType,
                 isPreDuty: false,
                 relatedDuty: pseudoDuty,
+                ...restDayExtras,
               });
             } else {
               // Overnight sleep: crosses midnight
@@ -820,6 +852,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                   isOvernightStart: true,
                   originalStartHour: startHour,
                   originalEndHour: endHour,
+                  ...restDayExtras,
                 });
               }
               // Part 2: 00:00 to endHour on end day
@@ -837,6 +870,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                   isOvernightContinuation: true,
                   originalStartHour: startHour,
                   originalEndHour: endHour,
+                  ...restDayExtras,
                 });
               }
             }
@@ -1200,10 +1234,10 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       </div>
                                       
                                       {/* Explanation from backend (if available) */}
-                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.explanation && (
+                                      {bar.explanation && (
                                         <div className="bg-primary/5 border border-primary/20 rounded-md p-2 text-[11px] text-muted-foreground leading-relaxed">
                                           <span className="text-primary font-medium">💡 </span>
-                                          {bar.relatedDuty.sleepEstimate.explanation}
+                                          {bar.explanation}
                                         </div>
                                       )}
                                       
@@ -1258,17 +1292,17 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           </div>
                                         </div>
                                         
-                                        {/* WOCL Penalty (only for pre-duty sleep with WOCL data) */}
-                                        {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.woclOverlapHours > 0 && (
+                                        {/* WOCL Penalty */}
+                                        {(bar.woclOverlapHours ?? 0) > 0 && (
                                           <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-1.5">
                                               <span className="text-muted-foreground">🌙</span>
                                               <span>WOCL Overlap</span>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                              <span className="text-muted-foreground">{bar.relatedDuty.sleepEstimate.woclOverlapHours.toFixed(1)}h</span>
+                                              <span className="text-muted-foreground">{bar.woclOverlapHours!.toFixed(1)}h</span>
                                               <span className="font-mono font-medium text-critical min-w-[40px] text-right">
-                                                -{Math.round(bar.relatedDuty.sleepEstimate.woclOverlapHours * 5)}
+                                                -{Math.round(bar.woclOverlapHours! * 5)}
                                               </span>
                                             </div>
                                           </div>
@@ -1284,12 +1318,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       </div>
                                       
                                       {/* Quality Factors from backend (if available) */}
-                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.qualityFactors && (
+                                      {bar.qualityFactors && (
                                         <div className="bg-secondary/20 rounded-lg p-2 space-y-1.5">
                                           <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                                             🔬 Model Calculation Factors
                                           </div>
-                                          {Object.entries(bar.relatedDuty.sleepEstimate.qualityFactors).map(([key, value]) => {
+                                          {Object.entries(bar.qualityFactors).map(([key, value]) => {
                                             const labels: Record<string, string> = {
                                               base_efficiency: 'Base Efficiency',
                                               wocl_boost: 'WOCL Boost',
@@ -1297,20 +1331,22 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                               recovery_boost: 'Recovery Boost',
                                               time_pressure_factor: 'Time Pressure',
                                               insufficient_penalty: 'Duration Penalty',
+                                              pre_duty_awake_hours: 'Pre-Duty Awake',
                                             };
                                             const label = labels[key] || key;
                                             const numValue = value as number;
+                                            const isHours = key === 'pre_duty_awake_hours';
                                             const isBoost = numValue >= 1;
                                             return (
                                               <div key={key} className="flex items-center justify-between text-[11px]">
                                                 <span className="text-muted-foreground">{label}</span>
                                                 <span className={cn(
                                                   "font-mono font-medium",
-                                                  numValue >= 1.05 ? "text-success" :
-                                                  numValue >= 0.98 ? "text-muted-foreground" :
-                                                  numValue >= 0.90 ? "text-warning" : "text-critical"
+                                                  isHours
+                                                    ? (numValue <= 2 ? "text-success" : numValue <= 4 ? "text-muted-foreground" : numValue <= 8 ? "text-warning" : "text-critical")
+                                                    : (numValue >= 1.05 ? "text-success" : numValue >= 0.98 ? "text-muted-foreground" : numValue >= 0.90 ? "text-warning" : "text-critical")
                                                 )}>
-                                                  {isBoost ? '+' : ''}{((numValue - 1) * 100).toFixed(0)}%
+                                                  {isHours ? `${numValue.toFixed(1)}h` : `${isBoost ? '+' : ''}${((numValue - 1) * 100).toFixed(0)}%`}
                                                 </span>
                                               </div>
                                             );
@@ -1319,32 +1355,32 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       )}
                                       
                                       {/* Confidence & Basis (if available) */}
-                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate && (
+                                      {bar.confidence != null && (
                                         <div className="flex items-center justify-between text-[11px]">
                                           <span className="text-muted-foreground">Model Confidence</span>
                                           <span className={cn(
                                             "font-mono font-medium px-1.5 py-0.5 rounded",
-                                            bar.relatedDuty.sleepEstimate.confidence >= 0.7 ? "bg-success/10 text-success" :
-                                            bar.relatedDuty.sleepEstimate.confidence >= 0.5 ? "bg-warning/10 text-warning" : "bg-high/10 text-high"
+                                            bar.confidence >= 0.7 ? "bg-success/10 text-success" :
+                                            bar.confidence >= 0.5 ? "bg-warning/10 text-warning" : "bg-high/10 text-high"
                                           )}>
-                                            {Math.round(bar.relatedDuty.sleepEstimate.confidence * 100)}%
+                                            {Math.round(bar.confidence * 100)}%
                                           </span>
                                         </div>
                                       )}
-                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.confidenceBasis && (
+                                      {bar.confidenceBasis && (
                                         <div className="text-[10px] text-muted-foreground/70 italic leading-relaxed">
-                                          {bar.relatedDuty.sleepEstimate.confidenceBasis}
+                                          {bar.confidenceBasis}
                                         </div>
                                       )}
                                       
                                       {/* References (if available) */}
-                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.references && bar.relatedDuty.sleepEstimate.references.length > 0 && (
+                                      {bar.references && bar.references.length > 0 && (
                                         <div className="border-t border-border/30 pt-2 space-y-1">
                                           <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
                                             📚 Sources
                                           </div>
                                           <div className="flex flex-wrap gap-1">
-                                            {bar.relatedDuty.sleepEstimate.references.map((ref, i) => (
+                                            {bar.references.map((ref, i) => (
                                               <span key={ref.key || i} className="text-[9px] px-1.5 py-0.5 rounded bg-secondary/50 text-muted-foreground" title={ref.full}>
                                                 {ref.short}
                                               </span>
@@ -1358,7 +1394,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         <span className="text-muted-foreground">Strategy</span>
                                         <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-secondary/50">
                                           <span>{getStrategyIcon(bar.sleepStrategy)}</span>
-                                          <span className="capitalize font-medium">{bar.sleepStrategy.replace('_', ' ')}</span>
+                                          <span className="capitalize font-medium">{bar.sleepStrategy.split('_').join(' ')}</span>
                                         </div>
                                       </div>
                                       

@@ -119,7 +119,8 @@ export interface DutyAnalysis {
       | 'normal'
       // Additional backend strategies
       | 'early_bedtime'
-      | 'afternoon_nap';
+      | 'afternoon_nap'
+      | 'post_duty_recovery';
     confidence: number;
     warnings: string[];
     // Sleep timing (HH:mm in home base timezone)
@@ -188,8 +189,13 @@ export interface RestDaySleep {
   totalSleepHours: number;
   effectiveSleepHours: number;
   sleepEfficiency: number;
-  strategyType: 'recovery' | 'normal';
+  strategyType: 'recovery' | 'normal' | 'post_duty_recovery';
   confidence: number;
+  // Quality factor breakdown from backend
+  explanation?: string;
+  confidenceBasis?: string;
+  qualityFactors?: SleepQualityFactors;
+  references?: SleepReference[];
 }
 
 export interface AnalysisResults {
