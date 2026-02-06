@@ -30,20 +30,20 @@ import {
 
 export function WelcomePage() {
   return (
-    <div className="mx-auto max-w-5xl space-y-8 p-6 pb-16">
+    <div className="mx-auto max-w-5xl space-y-6 md:space-y-8 p-4 md:p-6 pb-12 md:pb-16">
       {/* Hero Section */}
       <Card variant="glass" className="text-center">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-4xl font-bold tracking-tight">Aerowake</CardTitle>
-          <p className="text-xl text-muted-foreground mt-3">
+        <CardHeader className="pb-3 md:pb-4">
+          <CardTitle className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Aerowake</CardTitle>
+          <p className="text-base md:text-lg lg:text-xl text-muted-foreground mt-2 md:mt-3">
             Your Evidence-Based Aviation Fatigue Analysis Tool
           </p>
         </CardHeader>
         <CardContent>
-          <div className="flex justify-center gap-2 flex-wrap">
-            <Badge variant="info">Borbély Two-Process Model</Badge>
-            <Badge variant="success">EASA ORO.FTL Compliant</Badge>
-            <Badge variant="outline">Professional Grade</Badge>
+          <div className="flex justify-center gap-1.5 md:gap-2 flex-wrap">
+            <Badge variant="info" className="text-[10px] md:text-xs">Borbély Two-Process Model</Badge>
+            <Badge variant="success" className="text-[10px] md:text-xs">EASA ORO.FTL Compliant</Badge>
+            <Badge variant="outline" className="text-[10px] md:text-xs">Professional Grade</Badge>
           </div>
         </CardContent>
       </Card>

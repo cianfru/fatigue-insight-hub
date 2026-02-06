@@ -23,69 +23,69 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 md:space-y-4">
       {/* Primary Stats Row - Flight Activity */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
         <StatCard
           label="Total Duties"
           value={statistics.totalDuties.toString()}
-          icon={<Plane className="h-4 w-4" />}
+          icon={<Plane className="h-3.5 w-3.5 md:h-4 md:w-4" />}
           variant="neutral"
         />
         <StatCard
           label="Total Sectors"
           value={statistics.totalSectors.toString()}
-          icon={<Plane className="h-4 w-4" />}
+          icon={<Plane className="h-3.5 w-3.5 md:h-4 md:w-4" />}
           variant="neutral"
         />
         <StatCard
           label="Duty Hours"
           value={formatHoursMinutes(statistics.totalDutyHours)}
-          icon={<Timer className="h-4 w-4" />}
+          icon={<Timer className="h-3.5 w-3.5 md:h-4 md:w-4" />}
           variant="neutral"
         />
         <StatCard
           label="Block Hours"
           value={formatHoursMinutes(statistics.totalBlockHours)}
-          icon={<Timer className="h-4 w-4" />}
+          icon={<Timer className="h-3.5 w-3.5 md:h-4 md:w-4" />}
           variant="neutral"
         />
       </div>
 
       {/* Secondary Stats Row - Fatigue Metrics */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3 md:grid-cols-5">
         <StatCard
           label="Pinch Events"
           value={statistics.totalPinchEvents.toString()}
-          icon={<Zap className="h-4 w-4" />}
+          icon={<Zap className="h-3.5 w-3.5 md:h-4 md:w-4" />}
           variant={getPinchEventVariant(statistics.totalPinchEvents)}
           subtitle="fatigue peaks"
         />
         <StatCard
           label="Worst Score"
           value={`${Math.round(statistics.worstPerformance)}%`}
-          icon={<TrendingDown className="h-4 w-4" />}
+          icon={<TrendingDown className="h-3.5 w-3.5 md:h-4 md:w-4" />}
           variant={statistics.worstPerformance >= 70 ? 'success' : statistics.worstPerformance >= 60 ? 'warning' : 'critical'}
           subtitle="min performance"
         />
         <StatCard
           label="High Risk"
           value={statistics.highRiskDuties.toString()}
-          icon={<AlertTriangle className="h-4 w-4" />}
+          icon={<AlertTriangle className="h-3.5 w-3.5 md:h-4 md:w-4" />}
           variant={statistics.highRiskDuties === 0 ? 'success' : 'warning'}
           subtitle="duties"
         />
         <StatCard
           label="Critical Risk"
           value={statistics.criticalRiskDuties.toString()}
-          icon={<AlertCircle className="h-4 w-4" />}
+          icon={<AlertCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />}
           variant={statistics.criticalRiskDuties === 0 ? 'success' : 'critical'}
           subtitle="duties"
         />
         <StatCard
           label="Sleep Debt"
           value={`${statistics.maxSleepDebt.toFixed(1)}h`}
-          icon={<Clock className="h-4 w-4" />}
+          icon={<Clock className="h-3.5 w-3.5 md:h-4 md:w-4" />}
           variant={statistics.maxSleepDebt <= 2 ? 'success' : statistics.maxSleepDebt <= 4 ? 'warning' : 'critical'}
           subtitle="maximum"
         />
@@ -129,20 +129,20 @@ function StatCard({ label, value, icon, variant, subtitle }: StatCardProps) {
   const styles = variantStyles[variant];
 
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm transition-all hover:border-border hover:bg-card/80">
+    <div className="group relative overflow-hidden rounded-lg md:rounded-xl border border-border/50 bg-card/50 p-3 md:p-4 backdrop-blur-sm transition-all hover:border-border hover:bg-card/80">
       {/* Icon Badge */}
-      <div className={`absolute right-3 top-3 rounded-full p-2 ${styles.bg}`}>
+      <div className={`absolute right-2 top-2 md:right-3 md:top-3 rounded-full p-1.5 md:p-2 ${styles.bg}`}>
         <span className={styles.icon}>{icon}</span>
       </div>
       
       {/* Content */}
-      <div className="space-y-1">
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
-        <p className={`text-2xl font-semibold tracking-tight ${styles.text}`}>
+      <div className="space-y-0.5 md:space-y-1">
+        <p className="text-[10px] md:text-xs font-medium text-muted-foreground">{label}</p>
+        <p className={`text-xl md:text-2xl font-semibold tracking-tight ${styles.text}`}>
           {value}
         </p>
         {subtitle && (
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+          <p className="text-[9px] md:text-[10px] uppercase tracking-wider text-muted-foreground/70">
             {subtitle}
           </p>
         )}

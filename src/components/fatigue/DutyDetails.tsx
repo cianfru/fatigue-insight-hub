@@ -48,41 +48,41 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 md:space-y-6 animate-fade-in">
       {/* Section 1: General Details */}
       <Card variant="glow">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">
-            {format(duty.date, 'EEEE, MMMM d, yyyy')}
+        <CardHeader className="pb-2 md:pb-3">
+          <CardTitle className="text-base md:text-lg">
+            {format(duty.date, 'EEE, MMM d, yyyy')}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Duty Hours</p>
-              <p className="font-medium">{duty.dutyHours.toFixed(1)}h</p>
+          <div className="grid grid-cols-2 gap-3 md:gap-4 sm:grid-cols-3">
+            <div className="space-y-0.5 md:space-y-1">
+              <p className="text-[10px] md:text-xs text-muted-foreground">Duty Hours</p>
+              <p className="font-medium text-sm md:text-base">{duty.dutyHours.toFixed(1)}h</p>
             </div>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Sectors</p>
-              <p className="font-medium">{duty.sectors}</p>
+            <div className="space-y-0.5 md:space-y-1">
+              <p className="text-[10px] md:text-xs text-muted-foreground">Sectors</p>
+              <p className="font-medium text-sm md:text-base">{duty.sectors}</p>
             </div>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Block Hours</p>
-              <p className="font-medium">{duty.blockHours.toFixed(1)}h</p>
+            <div className="space-y-0.5 md:space-y-1">
+              <p className="text-[10px] md:text-xs text-muted-foreground">Block Hours</p>
+              <p className="font-medium text-sm md:text-base">{duty.blockHours.toFixed(1)}h</p>
             </div>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Min Performance</p>
-              <p className={`font-medium ${duty.minPerformance < 50 ? 'text-critical' : duty.minPerformance < 60 ? 'text-warning' : 'text-foreground'}`}>
+            <div className="space-y-0.5 md:space-y-1">
+              <p className="text-[10px] md:text-xs text-muted-foreground">Min Performance</p>
+              <p className={`font-medium text-sm md:text-base ${duty.minPerformance < 50 ? 'text-critical' : duty.minPerformance < 60 ? 'text-warning' : 'text-foreground'}`}>
                 {duty.minPerformance.toFixed(1)}/100
               </p>
             </div>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Avg Performance</p>
-              <p className="font-medium">{duty.avgPerformance.toFixed(1)}/100</p>
+            <div className="space-y-0.5 md:space-y-1">
+              <p className="text-[10px] md:text-xs text-muted-foreground">Avg Performance</p>
+              <p className="font-medium text-sm md:text-base">{duty.avgPerformance.toFixed(1)}/100</p>
             </div>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Landing Performance</p>
-              <p className={`font-medium ${duty.landingPerformance < 50 ? 'text-critical' : duty.landingPerformance < 60 ? 'text-warning' : 'text-foreground'}`}>
+            <div className="space-y-0.5 md:space-y-1">
+              <p className="text-[10px] md:text-xs text-muted-foreground">Landing</p>
+              <p className={`font-medium text-sm md:text-base ${duty.landingPerformance < 50 ? 'text-critical' : duty.landingPerformance < 60 ? 'text-warning' : 'text-foreground'}`}>
                 {duty.landingPerformance.toFixed(1)}/100
               </p>
             </div>
@@ -92,9 +92,9 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
 
       {/* Section 2: Flight Segments */}
       <Card variant="glass">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Plane className="h-4 w-4 text-primary" />
+        <CardHeader className="pb-2 md:pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm md:text-base">
+            <Plane className="h-3.5 w-3.5 md:h-4 md:w-4 text-primary" />
             Flight Segments
           </CardTitle>
         </CardHeader>
@@ -119,38 +119,38 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
               return (
                 <div
                   key={index}
-                  className="flex items-center justify-between rounded-lg bg-secondary/50 p-3"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg bg-secondary/50 p-2.5 md:p-3 gap-2 sm:gap-4"
                 >
-                  <div className="flex items-center gap-4">
-                    <span className="font-mono text-sm font-medium text-primary">{segment.flightNumber}</span>
-                    <span className="text-sm">
+                  <div className="flex items-center gap-2 md:gap-4">
+                    <span className="font-mono text-xs md:text-sm font-medium text-primary">{segment.flightNumber}</span>
+                    <span className="text-xs md:text-sm">
                       {segment.departure} → {segment.arrival}
                     </span>
                   </div>
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="flex flex-col items-end gap-0.5">
+                  <div className="flex items-center justify-between sm:justify-end gap-2 md:gap-4 text-xs md:text-sm">
+                    <div className="flex flex-col items-start sm:items-end gap-0.5">
                       {/* Primary: Airport-local times with airport codes */}
-                      <span className="text-foreground">
+                      <span className="text-foreground text-[11px] md:text-sm">
                         {depTimeAirport} {segment.departure}
-                        {depTzBadge && <span className="text-[9px] text-muted-foreground ml-0.5">({depTzBadge})</span>}
+                        {depTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground ml-0.5">({depTzBadge})</span>}
                         {' - '}
                         {arrTimeAirport} {segment.arrival}
-                        {arrTzBadge && <span className="text-[9px] text-muted-foreground ml-0.5">({arrTzBadge})</span>}
+                        {arrTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground ml-0.5">({arrTzBadge})</span>}
                       </span>
                       {/* Secondary: UTC times */}
                       {segment.departureTimeUtc && segment.arrivalTimeUtc && (
-                        <span className="text-[10px] text-muted-foreground font-mono">
+                        <span className="text-[9px] md:text-[10px] text-muted-foreground font-mono">
                           {segment.departureTimeUtc} - {segment.arrivalTimeUtc}
                         </span>
                       )}
                       {/* Tertiary: Home base times */}
                       {segment.departureTimeAirportLocal && segment.departureTime !== segment.departureTimeAirportLocal && (
-                        <span className="text-[9px] text-muted-foreground">
+                        <span className="text-[8px] md:text-[9px] text-muted-foreground">
                           Home: {segment.departureTime} - {segment.arrivalTime}
                         </span>
                       )}
                     </div>
-                    <Badge variant={segment.performance < 50 ? 'critical' : segment.performance < 60 ? 'warning' : 'success'}>
+                    <Badge variant={segment.performance < 50 ? 'critical' : segment.performance < 60 ? 'warning' : 'success'} className="text-[10px] md:text-xs">
                       {segment.performance.toFixed(0)}%
                     </Badge>
                   </div>

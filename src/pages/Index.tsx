@@ -118,6 +118,7 @@ const Index = () => {
   const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(null);
   const [selectedDuty, setSelectedDuty] = useState<DutyAnalysis | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleSettingsChange = (newSettings: Partial<PilotSettings>) => {
@@ -376,40 +377,45 @@ const Index = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <Header theme={settings.theme} onThemeChange={(theme) => handleSettingsChange({ theme })} />
+      <Header 
+        theme={settings.theme} 
+        onThemeChange={(theme) => handleSettingsChange({ theme })}
+        onMenuToggle={() => setSidebarOpen(true)}
+        showMenuButton={true}
+      />
       
       {/* Main Navigation Tabs */}
       <Tabs defaultValue="overview" className="flex flex-1 flex-col">
-        <div className="border-b border-border bg-card/30 backdrop-blur-sm">
-          <div className="px-6">
-            <TabsList className="h-12 w-full justify-start gap-1 rounded-none border-0 bg-transparent p-0">
+        <div className="border-b border-border bg-card/30 backdrop-blur-sm overflow-x-auto">
+          <div className="px-2 md:px-6">
+            <TabsList className="h-10 md:h-12 w-full justify-start gap-0 md:gap-1 rounded-none border-0 bg-transparent p-0">
               <TabsTrigger 
                 value="overview" 
-                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                className="rounded-none border-b-2 border-transparent px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
                 Overview
               </TabsTrigger>
               <TabsTrigger 
                 value="dashboard" 
-                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                className="rounded-none border-b-2 border-transparent px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
                 Dashboard
               </TabsTrigger>
               <TabsTrigger 
                 value="model" 
-                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                className="rounded-none border-b-2 border-transparent px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
                 Model
               </TabsTrigger>
               <TabsTrigger 
                 value="science" 
-                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                className="rounded-none border-b-2 border-transparent px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
                 Science
               </TabsTrigger>
               <TabsTrigger 
                 value="research" 
-                className="rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                className="rounded-none border-b-2 border-transparent px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
                 References
               </TabsTrigger>
@@ -435,6 +441,8 @@ const Index = () => {
             onDutySelect={handleDutySelect}
             drawerOpen={drawerOpen}
             onDrawerOpenChange={setDrawerOpen}
+            sidebarOpen={sidebarOpen}
+            onSidebarOpenChange={setSidebarOpen}
           />
         </TabsContent>
 

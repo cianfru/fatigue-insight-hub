@@ -74,12 +74,12 @@ export function DutyDetailsDrawer({ duty, analysisId, open, onOpenChange }: Duty
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
-        <SheetHeader className="pb-4">
+      <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-4 md:p-6">
+        <SheetHeader className="pb-3 md:pb-4">
           <div className="flex items-center justify-between">
-            <SheetTitle className="flex items-center gap-2">
+            <SheetTitle className="flex items-center gap-2 text-sm md:text-base">
               <span className="text-primary">✈️</span>
-              Duty Details - {displayDuty.dayOfWeek}, {format(displayDuty.date, 'MMM dd')}
+              Duty - {displayDuty.dayOfWeek}, {format(displayDuty.date, 'MMM dd')}
             </SheetTitle>
           </div>
         </SheetHeader>
