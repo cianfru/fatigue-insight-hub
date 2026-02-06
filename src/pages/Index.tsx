@@ -7,6 +7,7 @@ import { DashboardContent } from '@/components/fatigue/DashboardContent';
 import { MathematicalModelPage } from '@/components/fatigue/MathematicalModelPage';
 import { FatigueSciencePage } from '@/components/fatigue/FatigueSciencePage';
 import { LandingPage } from '@/components/landing/LandingPage';
+import { AuroraBackground } from '@/components/ui/aurora-background';
 
 import { ResearchReferencesPage } from '@/components/fatigue/ResearchReferencesPage';
 import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
@@ -381,7 +382,9 @@ const Index = () => {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="relative flex min-h-screen flex-col bg-background">
+      <AuroraBackground />
+      <div className="relative z-10 flex min-h-screen flex-col">
       <Header 
         theme={settings.theme} 
         onThemeChange={(theme) => handleSettingsChange({ theme })}
@@ -391,7 +394,7 @@ const Index = () => {
       
       {/* Main Navigation Tabs */}
       <Tabs defaultValue="overview" className="flex flex-1 flex-col">
-        <div className="border-b border-border bg-card/30 backdrop-blur-sm overflow-x-auto">
+        <div className="border-b border-border/30 glass-subtle overflow-x-auto">
           <div className="px-2 md:px-6">
             <TabsList className="h-10 md:h-12 w-full justify-start gap-0 md:gap-1 rounded-none border-0 bg-transparent p-0">
               <TabsTrigger 
@@ -465,6 +468,7 @@ const Index = () => {
       </Tabs>
 
       <Footer />
+      </div>
     </div>
   );
 };

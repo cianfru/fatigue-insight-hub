@@ -73,7 +73,7 @@ export function DashboardContent({
           <X className="h-5 w-5" />
         </Button>
         
-        <div className="h-full overflow-y-auto bg-background border-r border-border">
+        <div className="h-full overflow-y-auto glass-strong border-r border-border/30">
           <SettingsSidebar 
             settings={settings} 
             onSettingsChange={onSettingsChange}
