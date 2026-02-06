@@ -262,7 +262,7 @@ const Index = () => {
             reportTimeLocal: duty.report_time_local,
             releaseTimeLocal: duty.release_time_local,
             dutyHours: duty.duty_hours,
-            blockHours: duty.segments.reduce((sum, seg) => sum + (seg.block_hours || 0), 0),
+            blockHours: duty.segments.reduce((sum, seg) => sum + computeSegmentBlockHours(seg), 0),
             sectors: duty.sectors,
             minPerformance: duty.min_performance,
             avgPerformance: duty.avg_performance,
