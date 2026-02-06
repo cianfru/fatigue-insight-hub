@@ -237,6 +237,11 @@ const Index = () => {
           sleepEfficiency: restDay.sleep_efficiency,
           strategyType: restDay.strategy_type,
           confidence: restDay.confidence,
+          // Quality factor breakdown from backend
+          explanation: restDay.explanation,
+          confidenceBasis: restDay.confidence_basis,
+          qualityFactors: restDay.quality_factors,
+          references: restDay.references,
         })),
         duties: result.duties.map(duty => {
           // Calculate per-segment performance based on temporal position

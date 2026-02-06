@@ -34,6 +34,7 @@ const getStrategyIcon = (strategy: string) => {
     case 'extended': return '🛏️';
     case 'restricted': return '⏰';
     case 'recovery': return '🔋';
+    case 'post_duty_recovery': return '🛏️';
     default: return '😴';
   }
 };
@@ -46,6 +47,7 @@ const getStrategyLabel = (strategy: string) => {
     case 'extended': return 'Extended Rest';
     case 'restricted': return 'Restricted Sleep';
     case 'recovery': return 'Recovery Period';
+    case 'post_duty_recovery': return 'Post-Duty Recovery';
     default: return 'Normal Sleep';
   }
 };

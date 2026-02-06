@@ -54,7 +54,8 @@ export interface SleepEstimate {
     | 'normal'
     // Additional backend strategies
     | 'early_bedtime'
-    | 'afternoon_nap';
+    | 'afternoon_nap'
+    | 'post_duty_recovery';
   confidence: number;
   warnings: string[];
   // Sleep blocks array (detailed sleep periods)
@@ -149,8 +150,25 @@ export interface RestDaySleep {
   total_sleep_hours: number;
   effective_sleep_hours: number;
   sleep_efficiency: number;
-  strategy_type: 'recovery' | 'normal';
+  strategy_type: 'recovery' | 'normal' | 'post_duty_recovery';
   confidence: number;
+  // Quality factor breakdown (new backend fields)
+  explanation?: string;
+  confidence_basis?: string;
+  quality_factors?: {
+    base_efficiency: number;
+    wocl_boost: number;
+    late_onset_penalty: number;
+    recovery_boost: number;
+    time_pressure_factor: number;
+    insufficient_penalty: number;
+    pre_duty_awake_hours?: number;
+  };
+  references?: Array<{
+    key: string;
+    short: string;
+    full: string;
+  }>;
 }
 
 export interface AnalysisResult {
