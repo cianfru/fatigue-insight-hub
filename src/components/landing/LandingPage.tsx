@@ -47,15 +47,15 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#000408]/60 via-transparent to-transparent" />
       
       {/* Aurora blobs on landing */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-40">
-        <div className="absolute rounded-full blur-[120px]" style={{ mixBlendMode: 'screen', top: '-15%', left: '-10%', width: '50vw', height: '50vh', background: 'radial-gradient(circle, hsl(199 89% 48% / 0.3) 0%, transparent 70%)', animation: 'aurora-drift-1 18s ease-in-out infinite' }} />
-        <div className="absolute rounded-full blur-[120px]" style={{ mixBlendMode: 'screen', top: '30%', right: '-15%', width: '45vw', height: '45vh', background: 'radial-gradient(circle, hsl(280 65% 60% / 0.25) 0%, transparent 70%)', animation: 'aurora-drift-2 22s ease-in-out infinite' }} />
-        <div className="absolute rounded-full blur-[120px]" style={{ mixBlendMode: 'screen', bottom: '-10%', left: '20%', width: '40vw', height: '40vh', background: 'radial-gradient(circle, hsl(199 89% 48% / 0.2) 0%, transparent 70%)', animation: 'aurora-drift-3 25s ease-in-out infinite' }} />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" style={{ opacity: 0.7 }}>
+        <div className="absolute rounded-full" style={{ mixBlendMode: 'screen', top: '-10%', left: '-5%', width: '60vw', height: '60vh', background: 'radial-gradient(circle, hsl(199 89% 48% / 0.5) 0%, transparent 60%)', filter: 'blur(80px)', animation: 'aurora-drift-1 18s ease-in-out infinite' }} />
+        <div className="absolute rounded-full" style={{ mixBlendMode: 'screen', top: '25%', right: '-10%', width: '55vw', height: '55vh', background: 'radial-gradient(circle, hsl(280 65% 60% / 0.4) 0%, transparent 60%)', filter: 'blur(80px)', animation: 'aurora-drift-2 22s ease-in-out infinite' }} />
+        <div className="absolute rounded-full" style={{ mixBlendMode: 'screen', bottom: '-5%', left: '15%', width: '50vw', height: '50vh', background: 'radial-gradient(circle, hsl(160 70% 50% / 0.3) 0%, transparent 60%)', filter: 'blur(80px)', animation: 'aurora-drift-3 25s ease-in-out infinite' }} />
       </div>
       
       {/* Content */}
       <div className="relative z-10 flex h-full flex-col items-start justify-center px-4 sm:px-8 md:px-16 lg:px-24">
-        <div className="max-w-2xl space-y-4 md:space-y-8 rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] p-6 md:p-10 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+        <div className="max-w-2xl space-y-4 md:space-y-8 rounded-2xl border border-white/[0.12] p-6 md:p-10" style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
           {/* Logo / Title */}
           <div className="space-y-2">
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold tracking-tight text-white">
