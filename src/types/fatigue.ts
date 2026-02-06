@@ -40,6 +40,13 @@ export interface FlightSegment {
   arrivalTimeUtc?: string;    // HH:mmZ (Zulu time, formatted)
   blockHours: number;
   performance: number;
+  // New airport-local time fields
+  departureTimeAirportLocal?: string;  // HH:mm in actual airport timezone
+  arrivalTimeAirportLocal?: string;    // HH:mm in actual airport timezone
+  departureTimezone?: string;          // IANA timezone e.g. "Asia/Kolkata"
+  arrivalTimezone?: string;            // IANA timezone e.g. "Asia/Qatar"
+  departureUtcOffset?: number | null;  // UTC offset hours e.g. 5.5
+  arrivalUtcOffset?: number | null;    // UTC offset hours e.g. 3.0
 }
 
 export type FlightPhase = 'preflight' | 'taxi' | 'takeoff' | 'climb' | 'cruise' | 'descent' | 'approach' | 'landing';
@@ -196,6 +203,7 @@ export interface AnalysisResults {
   pilotName?: string;
   pilotBase?: string;
   pilotAircraft?: string;
+  homeBaseTimezone?: string; // IANA timezone e.g. "Asia/Qatar"
   // Rest day sleep data
   restDaysSleep?: RestDaySleep[];
 }
