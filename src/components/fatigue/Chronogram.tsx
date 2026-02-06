@@ -879,7 +879,46 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       });
     }
     
-    return bars;
+    // Deduplicate overlapping sleep bars on the same day
+    // If two bars overlap in time on the same dayIndex, keep the one with higher data quality
+    // (has qualityFactors) or higher recovery score
+    const deduped: SleepBar[] = [];
+    const barsByDay = new Map<number, SleepBar[]>();
+    bars.forEach(b => {
+      const existing = barsByDay.get(b.dayIndex) || [];
+      existing.push(b);
+      barsByDay.set(b.dayIndex, existing);
+    });
+    
+    barsByDay.forEach((dayBars) => {
+      // Sort by startHour to process in order
+      dayBars.sort((a, b) => a.startHour - b.startHour);
+      
+      const kept: SleepBar[] = [];
+      for (const bar of dayBars) {
+        // Check if this bar overlaps with any already-kept bar
+        const overlapping = kept.find(k => 
+          bar.startHour < k.endHour && bar.endHour > k.startHour
+        );
+        
+        if (overlapping) {
+          // Keep the one with more data (qualityFactors) or higher score
+          const barHasData = !!bar.qualityFactors;
+          const overlapHasData = !!overlapping.qualityFactors;
+          if (barHasData && !overlapHasData) {
+            // Replace the kept one with this better one
+            const idx = kept.indexOf(overlapping);
+            kept[idx] = bar;
+          }
+          // Otherwise keep the existing one (already has data or same quality)
+        } else {
+          kept.push(bar);
+        }
+      }
+      deduped.push(...kept);
+    });
+    
+    return deduped;
   }, [duties, restDaysSleep, daysInMonth]);
 
   // Get duty warnings based on actual duty data
@@ -1196,13 +1235,13 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                   <button
                                     type="button"
                                     className={cn(
-                                      "absolute z-20 flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
+                                      "absolute z-[5] flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
                                       classes.border,
                                       classes.bg
                                     )}
                                     style={{
-                                      top: 1,
-                                      height: 11,
+                                      top: 0,
+                                      height: '100%',
                                       left: `${(bar.startHour / 24) * 100}%`,
                                       width: `${Math.max(barWidth, 1)}%`,
                                       borderRadius,
@@ -1437,8 +1476,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         usedDiscretion ? "ring-2 ring-critical hover:ring-critical/80" : "hover:ring-foreground"
                                       )}
                                       style={{
-                                        top: 13,
-                                        height: 13,
+                                        top: 0,
+                                        height: '100%',
                                         left: `${(bar.startHour / 24) * 100}%`,
                                         width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
                                         borderRadius,
