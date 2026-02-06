@@ -336,9 +336,17 @@ const Index = () => {
             arrivalTimeUtc: isoToZulu(seg.arrival_time),
             blockHours: seg.block_hours,
             performance: segmentPerformances[idx] || duty.avg_performance,
+            // New airport-local time fields
+            departureTimeAirportLocal: seg.departure_time_airport_local,
+            arrivalTimeAirportLocal: seg.arrival_time_airport_local,
+            departureTimezone: seg.departure_timezone,
+            arrivalTimezone: seg.arrival_timezone,
+            departureUtcOffset: seg.departure_utc_offset,
+            arrivalUtcOffset: seg.arrival_utc_offset,
           })),
         };
         }),
+        homeBaseTimezone: result.home_base_timezone ?? undefined,
       });
       
       toast.success('Analysis complete!');

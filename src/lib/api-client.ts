@@ -15,6 +15,15 @@ export interface DutySegment {
   departure_time_local: string;  // Pre-converted to HH:mm in home base timezone
   arrival_time_local: string;    // Pre-converted to HH:mm in home base timezone
   block_hours: number;
+  // New unambiguous time fields
+  departure_time_home_tz: string;       // HH:mm in home base timezone
+  arrival_time_home_tz: string;         // HH:mm in home base timezone
+  departure_time_airport_local: string; // HH:mm in actual airport timezone
+  arrival_time_airport_local: string;   // HH:mm in actual airport timezone
+  departure_timezone: string;           // IANA timezone e.g. "Asia/Kolkata"
+  arrival_timezone: string;             // IANA timezone e.g. "Asia/Qatar"
+  departure_utc_offset: number | null;  // UTC offset hours e.g. 5.5
+  arrival_utc_offset: number | null;    // UTC offset hours e.g. 3.0
 }
 
 // Sleep block from strategic sleep estimator
@@ -91,6 +100,8 @@ export interface Duty {
   release_time_utc: string;
   report_time_local?: string;   // Pre-converted to HH:mm in home base timezone
   release_time_local?: string;  // Pre-converted to HH:mm in home base timezone
+  report_time_home_tz?: string;   // HH:MM in home base timezone (unambiguous naming)
+  release_time_home_tz?: string;  // HH:MM in home base timezone (unambiguous naming)
   duty_hours: number;
   sectors: number;
   segments: DutySegment[];
@@ -149,6 +160,7 @@ export interface AnalysisResult {
   pilot_name: string | null;
   pilot_base: string | null;
   pilot_aircraft: string | null;
+  home_base_timezone: string | null;  // IANA timezone e.g. "Asia/Qatar"
   month: string;
   
   total_duties: number;
