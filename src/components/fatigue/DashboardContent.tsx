@@ -1,6 +1,7 @@
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { SettingsSidebar } from '@/components/fatigue/SettingsSidebar';
 import { StatisticsCards } from '@/components/fatigue/StatisticsCards';
 import { Chronogram } from '@/components/fatigue/Chronogram';
@@ -26,6 +27,8 @@ interface DashboardContentProps {
   onDutySelect: (duty: DutyAnalysis) => void;
   drawerOpen: boolean;
   onDrawerOpenChange: (open: boolean) => void;
+  sidebarOpen: boolean;
+  onSidebarOpenChange: (open: boolean) => void;
 }
 
 export function DashboardContent({
@@ -41,37 +44,65 @@ export function DashboardContent({
   onDutySelect,
   drawerOpen,
   onDrawerOpenChange,
+  sidebarOpen,
+  onSidebarOpenChange,
 }: DashboardContentProps) {
   return (
-    <div className="flex flex-1">
-      {/* Settings Sidebar with Upload */}
-      <SettingsSidebar 
-        settings={settings} 
-        onSettingsChange={onSettingsChange}
-        uploadedFile={uploadedFile}
-        onFileUpload={onFileUpload}
-        onRemoveFile={onRemoveFile}
-        onRunAnalysis={onRunAnalysis}
-        isAnalyzing={isAnalyzing}
-        hasResults={!!analysisResults}
-        pilotInfo={analysisResults ? {
-          name: analysisResults.pilotName,
-          id: analysisResults.pilotId,
-          base: analysisResults.pilotBase || settings.homeBase,
-          aircraft: analysisResults.pilotAircraft,
-        } : undefined}
-      />
+    <div className="flex flex-1 relative">
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => onSidebarOpenChange(false)}
+        />
+      )}
+      
+      {/* Settings Sidebar - slide-in on mobile */}
+      <div className={`
+        fixed inset-y-0 left-0 z-50 w-80 transform transition-transform duration-300 ease-in-out
+        md:relative md:translate-x-0 md:z-0
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        {/* Mobile close button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute right-2 top-2 md:hidden z-10"
+          onClick={() => onSidebarOpenChange(false)}
+        >
+          <X className="h-5 w-5" />
+        </Button>
+        
+        <div className="h-full overflow-y-auto bg-background border-r border-border">
+          <SettingsSidebar 
+            settings={settings} 
+            onSettingsChange={onSettingsChange}
+            uploadedFile={uploadedFile}
+            onFileUpload={onFileUpload}
+            onRemoveFile={onRemoveFile}
+            onRunAnalysis={onRunAnalysis}
+            isAnalyzing={isAnalyzing}
+            hasResults={!!analysisResults}
+            pilotInfo={analysisResults ? {
+              name: analysisResults.pilotName,
+              id: analysisResults.pilotId,
+              base: analysisResults.pilotBase || settings.homeBase,
+              aircraft: analysisResults.pilotAircraft,
+            } : undefined}
+          />
+        </div>
+      </div>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-6xl space-y-6">
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="mx-auto max-w-6xl space-y-4 md:space-y-6">
           {/* Analysis Results */}
           {analysisResults && (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-4 md:space-y-6 animate-fade-in">
               {/* Section 1: Overview - Summary Statistics */}
               <Card variant="glass">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                <CardHeader className="pb-2 md:pb-4">
+                  <CardTitle className="flex items-center gap-2 text-base md:text-lg">
                     <span className="text-primary">📊</span>
                     Overview - Summary Statistics
                   </CardTitle>
@@ -81,13 +112,13 @@ export function DashboardContent({
 
                   {/* Critical Warning */}
                   {analysisResults.statistics.criticalRiskDuties > 0 && (
-                    <div className="mt-4 flex items-start gap-3 rounded-lg border border-critical/50 bg-critical/10 p-4">
-                      <AlertTriangle className="h-5 w-5 flex-shrink-0 text-critical" />
+                    <div className="mt-4 flex items-start gap-2 md:gap-3 rounded-lg border border-critical/50 bg-critical/10 p-3 md:p-4">
+                      <AlertTriangle className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0 text-critical" />
                       <div>
-                        <p className="font-medium text-critical">
-                          CRITICAL: {analysisResults.statistics.criticalRiskDuties} duties with critical risk detected
+                        <p className="font-medium text-critical text-sm md:text-base">
+                          CRITICAL: {analysisResults.statistics.criticalRiskDuties} duties with critical risk
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs md:text-sm text-muted-foreground">
                           SMS reporting required per EASA ORO.FTL.120
                         </p>
                       </div>
@@ -102,12 +133,18 @@ export function DashboardContent({
               {/* Section 3: Route Network Map */}
               <RouteNetworkMapbox duties={analysisResults.duties} homeBase={settings.homeBase} theme={settings.theme} />
 
-              {/* Section 4: Analytics Tabs - Performance Timeline, Body Clock Drift, Sleep Debt Trend */}
+              {/* Section 4: Analytics Tabs */}
               <Tabs defaultValue="performance" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="performance">Performance Timeline</TabsTrigger>
-                  <TabsTrigger value="circadian">Body Clock Drift</TabsTrigger>
-                  <TabsTrigger value="sleepdebt">Sleep Debt Trend</TabsTrigger>
+                <TabsList className="w-full grid grid-cols-3 h-auto">
+                  <TabsTrigger value="performance" className="text-xs md:text-sm py-2">
+                    <span className="hidden sm:inline">Performance </span>Timeline
+                  </TabsTrigger>
+                  <TabsTrigger value="circadian" className="text-xs md:text-sm py-2">
+                    <span className="hidden sm:inline">Body Clock </span>Drift
+                  </TabsTrigger>
+                  <TabsTrigger value="sleepdebt" className="text-xs md:text-sm py-2">
+                    <span className="hidden sm:inline">Sleep Debt </span>Trend
+                  </TabsTrigger>
                 </TabsList>
                 <TabsContent value="performance" className="mt-4">
                   <PerformanceTimeline duties={analysisResults.duties} month={analysisResults.month} />
@@ -142,11 +179,11 @@ export function DashboardContent({
 
           {/* Empty state when no results */}
           {!analysisResults && uploadedFile && (
-            <Card variant="glass" className="p-12 text-center">
+            <Card variant="glass" className="p-8 md:p-12 text-center">
               <div className="space-y-4">
-                <span className="text-6xl">📊</span>
-                <h3 className="text-xl font-semibold">Ready to Analyze</h3>
-                <p className="text-muted-foreground">
+                <span className="text-5xl md:text-6xl">📊</span>
+                <h3 className="text-lg md:text-xl font-semibold">Ready to Analyze</h3>
+                <p className="text-sm md:text-base text-muted-foreground">
                   Click "Run Analysis" in the sidebar to generate your fatigue analysis.
                 </p>
               </div>
@@ -154,11 +191,11 @@ export function DashboardContent({
           )}
 
           {!uploadedFile && (
-            <Card variant="glass" className="p-12 text-center">
+            <Card variant="glass" className="p-8 md:p-12 text-center">
               <div className="space-y-4">
-                <span className="text-6xl">📄</span>
-                <h3 className="text-xl font-semibold">No Roster Uploaded</h3>
-                <p className="text-muted-foreground">
+                <span className="text-5xl md:text-6xl">📄</span>
+                <h3 className="text-lg md:text-xl font-semibold">No Roster Uploaded</h3>
+                <p className="text-sm md:text-base text-muted-foreground">
                   Upload a roster file using the sidebar to get started.
                 </p>
               </div>
