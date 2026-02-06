@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DutyAnalysis } from '@/types/fatigue';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line, ComposedChart } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line, ComposedChart, Area } from 'recharts';
 import { format, eachDayOfInterval, startOfMonth, endOfMonth, isSameDay } from 'date-fns';
 import { Clock } from 'lucide-react';
 import { airportCoordinates } from '@/data/airportCoordinates';
@@ -11,19 +11,17 @@ interface BodyClockDriftChartProps {
   homeBase: string;
 }
 
-// Estimate timezone offset from longitude (rough approximation)
-const getTimezoneFromLongitude = (lng: number): number => {
-  return Math.round(lng / 15); // Each 15° = 1 hour
-};
-
-// Get airport timezone offset relative to home base
-const getAirportOffset = (code: string, homeBaseLng: number): number => {
-  const airport = airportCoordinates[code];
-  if (!airport) return 0;
-  
-  const homeOffset = getTimezoneFromLongitude(homeBaseLng);
-  const destOffset = getTimezoneFromLongitude(airport.lng);
-  return destOffset - homeOffset;
+// Known IANA timezone offsets (fallback for common bases)
+const KNOWN_TZ_OFFSETS: Record<string, number> = {
+  'Asia/Qatar': 3,
+  'Asia/Dubai': 4,
+  'Asia/Kolkata': 5.5,
+  'Asia/Singapore': 8,
+  'Asia/Hong_Kong': 8,
+  'Europe/London': 0,
+  'Europe/Paris': 1,
+  'America/New_York': -5,
+  'America/Los_Angeles': -8,
 };
 
 export function BodyClockDriftChart({ duties, month, homeBase }: BodyClockDriftChartProps) {
@@ -31,12 +29,33 @@ export function BodyClockDriftChart({ duties, month, homeBase }: BodyClockDriftC
   const monthEnd = endOfMonth(month);
   const allDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  // Get home base longitude for reference
+  // Get home base city name for display
   const homeAirport = airportCoordinates[homeBase];
-  const homeBaseLng = homeAirport?.lng || 51.6; // Default to DOH
 
-  // Build chart data with actual east-west movement tracking
-  let lastPhaseShift = 0;
+  // Derive home base UTC offset from first duty's first segment departing from home base
+  // or from known timezone offsets
+  const getHomeBaseOffset = (): number => {
+    // Try to find a duty that departs from home base
+    for (const duty of duties) {
+      if (duty.flightSegments && duty.flightSegments.length > 0) {
+        const firstSeg = duty.flightSegments[0];
+        if (firstSeg.departure === homeBase && firstSeg.departureUtcOffset !== null && firstSeg.departureUtcOffset !== undefined) {
+          return firstSeg.departureUtcOffset;
+        }
+      }
+    }
+    // Fallback: check known airports
+    if (homeBase === 'DOH') return 3; // Qatar
+    if (homeBase === 'DXB') return 4; // Dubai
+    if (homeBase === 'DEL' || homeBase === 'BOM' || homeBase === 'CCJ' || homeBase === 'BLR') return 5.5; // India
+    if (homeBase === 'SIN') return 8; // Singapore
+    if (homeBase === 'LHR') return 0; // London
+    return 3; // Default to DOH
+  };
+
+  const homeBaseOffset = getHomeBaseOffset();
+
+  // Build chart data using actual UTC offsets from flight segments
   let cumulativeShift = 0;
   const adaptationRateEast = 1.0; // Hours per day eastward adaptation
   const adaptationRateWest = 1.5; // Hours per day westward adaptation
@@ -46,47 +65,34 @@ export function BodyClockDriftChart({ duties, month, homeBase }: BodyClockDriftC
     const duty = duties.find(d => isSameDay(d.date, day));
     
     if (duty && duty.flightSegments && duty.flightSegments.length > 0) {
-      // Get the final destination of this duty
       const lastSeg = duty.flightSegments[duty.flightSegments.length - 1];
       const destination = lastSeg.arrival;
       
-      if (destination && destination !== homeBase) {
-        // Calculate timezone shift from home base to destination
-        const tzShift = getAirportOffset(destination, homeBaseLng);
-        
-        // If we have circadianPhaseShift from backend, use it
-        if (duty.circadianPhaseShift !== undefined && duty.circadianPhaseShift !== 0) {
-          cumulativeShift = duty.circadianPhaseShift;
-        } else {
-          // Otherwise calculate from destination
-          cumulativeShift = tzShift;
-        }
-        lastDestination = destination;
-      } else if (destination === homeBase) {
-        // Returning home - body clock still needs time to adapt
-        // Keep the shift but it will decay
-        lastDestination = homeBase;
+      // Prefer backend-calculated circadianPhaseShift if available
+      if (duty.circadianPhaseShift !== undefined && duty.circadianPhaseShift !== 0) {
+        cumulativeShift = duty.circadianPhaseShift;
+      } else if (lastSeg.arrivalUtcOffset !== null && lastSeg.arrivalUtcOffset !== undefined) {
+        // Calculate timezone shift from UTC offsets
+        cumulativeShift = lastSeg.arrivalUtcOffset - homeBaseOffset;
       }
+      // else keep previous shift
       
-      lastPhaseShift = cumulativeShift;
+      lastDestination = destination || lastDestination;
     } else {
       // Rest day - gradual adaptation toward home base (0)
       if (cumulativeShift > 0) {
-        // Eastward shift - adapt at ~1h/day
         cumulativeShift = Math.max(0, cumulativeShift - adaptationRateEast);
       } else if (cumulativeShift < 0) {
-        // Westward shift - adapt at ~1.5h/day
         cumulativeShift = Math.min(0, cumulativeShift + adaptationRateWest);
       }
-      lastPhaseShift = cumulativeShift;
     }
 
     return {
       date: format(day, 'dd'),
       fullDate: format(day, 'MMM dd'),
-      phaseShift: lastPhaseShift,
-      eastShift: lastPhaseShift > 0 ? lastPhaseShift : 0,
-      westShift: lastPhaseShift < 0 ? lastPhaseShift : 0,
+      phaseShift: cumulativeShift,
+      eastShift: cumulativeShift > 0 ? cumulativeShift : 0,
+      westShift: cumulativeShift < 0 ? cumulativeShift : 0,
       isDuty: !!duty,
       destination: duty?.flightSegments?.[duty.flightSegments.length - 1]?.arrival || lastDestination,
     };

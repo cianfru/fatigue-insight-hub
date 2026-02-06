@@ -100,32 +100,63 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {duty.flightSegments.map((segment, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between rounded-lg bg-secondary/50 p-3"
-              >
-                <div className="flex items-center gap-4">
-                  <span className="font-mono text-sm font-medium text-primary">{segment.flightNumber}</span>
-                  <span className="text-sm">
-                    {segment.departure} → {segment.arrival}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex flex-col items-end gap-0.5">
-                    <span className="text-foreground">{segment.departureTime} - {segment.arrivalTime}</span>
-                    {segment.departureTimeUtc && segment.arrivalTimeUtc && (
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        {segment.departureTimeUtc} - {segment.arrivalTimeUtc}
-                      </span>
-                    )}
+            {duty.flightSegments.map((segment, index) => {
+              // Format UTC offset as timezone badge (e.g., "UTC+5:30")
+              const formatUtcOffset = (offset: number | null | undefined): string => {
+                if (offset === null || offset === undefined) return '';
+                const sign = offset >= 0 ? '+' : '';
+                const hours = Math.floor(Math.abs(offset));
+                const minutes = Math.round((Math.abs(offset) - hours) * 60);
+                if (minutes === 0) return `UTC${sign}${offset}`;
+                return `UTC${sign}${offset >= 0 ? '' : '-'}${hours}:${minutes.toString().padStart(2, '0')}`;
+              };
+
+              const depTimeAirport = segment.departureTimeAirportLocal || segment.departureTime;
+              const arrTimeAirport = segment.arrivalTimeAirportLocal || segment.arrivalTime;
+              const depTzBadge = formatUtcOffset(segment.departureUtcOffset);
+              const arrTzBadge = formatUtcOffset(segment.arrivalUtcOffset);
+
+              return (
+                <div
+                  key={index}
+                  className="flex items-center justify-between rounded-lg bg-secondary/50 p-3"
+                >
+                  <div className="flex items-center gap-4">
+                    <span className="font-mono text-sm font-medium text-primary">{segment.flightNumber}</span>
+                    <span className="text-sm">
+                      {segment.departure} → {segment.arrival}
+                    </span>
                   </div>
-                  <Badge variant={segment.performance < 50 ? 'critical' : segment.performance < 60 ? 'warning' : 'success'}>
-                    {segment.performance.toFixed(0)}%
-                  </Badge>
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="flex flex-col items-end gap-0.5">
+                      {/* Primary: Airport-local times with airport codes */}
+                      <span className="text-foreground">
+                        {depTimeAirport} {segment.departure}
+                        {depTzBadge && <span className="text-[9px] text-muted-foreground ml-0.5">({depTzBadge})</span>}
+                        {' - '}
+                        {arrTimeAirport} {segment.arrival}
+                        {arrTzBadge && <span className="text-[9px] text-muted-foreground ml-0.5">({arrTzBadge})</span>}
+                      </span>
+                      {/* Secondary: UTC times */}
+                      {segment.departureTimeUtc && segment.arrivalTimeUtc && (
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          {segment.departureTimeUtc} - {segment.arrivalTimeUtc}
+                        </span>
+                      )}
+                      {/* Tertiary: Home base times */}
+                      {segment.departureTimeAirportLocal && segment.departureTime !== segment.departureTimeAirportLocal && (
+                        <span className="text-[9px] text-muted-foreground">
+                          Home: {segment.departureTime} - {segment.arrivalTime}
+                        </span>
+                      )}
+                    </div>
+                    <Badge variant={segment.performance < 50 ? 'critical' : segment.performance < 60 ? 'warning' : 'success'}>
+                      {segment.performance.toFixed(0)}%
+                    </Badge>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>

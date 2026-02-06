@@ -298,3 +298,20 @@ export async function healthCheck(): Promise<boolean> {
     return false;
   }
 }
+
+export async function getAirportsBatch(codes: string[]): Promise<Array<{
+  code: string;
+  timezone: string;
+  utc_offset_hours: number | null;
+  latitude: number;
+  longitude: number;
+}>> {
+  const response = await fetch(`${API_BASE_URL}/api/airports/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codes }),
+  });
+  
+  if (!response.ok) throw new Error('Failed to fetch airport data');
+  return response.json();
+}
