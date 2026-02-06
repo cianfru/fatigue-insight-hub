@@ -99,9 +99,8 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {duty.flightSegments.map((segment, index) => {
-              // Format UTC offset as timezone badge (e.g., "UTC+5:30")
               const formatUtcOffset = (offset: number | null | undefined): string => {
                 if (offset === null || offset === undefined) return '';
                 const sign = offset >= 0 ? '+' : '';
@@ -119,40 +118,47 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
               return (
                 <div
                   key={index}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg bg-secondary/50 p-2.5 md:p-3 gap-2 sm:gap-4"
+                  className="rounded-xl border border-border/40 bg-secondary/30 p-3 md:p-4 space-y-2.5"
                 >
-                  <div className="flex items-center gap-2 md:gap-4">
-                    <span className="font-mono text-xs md:text-sm font-medium text-primary">{segment.flightNumber}</span>
-                    <span className="text-xs md:text-sm">
-                      {segment.departure} → {segment.arrival}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between sm:justify-end gap-2 md:gap-4 text-xs md:text-sm">
-                    <div className="flex flex-col items-start sm:items-end gap-0.5">
-                      {/* Primary: Airport-local times with airport codes */}
-                      <span className="text-foreground text-[11px] md:text-sm">
-                        {depTimeAirport} {segment.departure}
-                        {depTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground ml-0.5">({depTzBadge})</span>}
-                        {' - '}
-                        {arrTimeAirport} {segment.arrival}
-                        {arrTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground ml-0.5">({arrTzBadge})</span>}
+                  {/* Row 1: Flight number + Route + Performance */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-xs md:text-sm font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded">
+                        {segment.flightNumber}
                       </span>
-                      {/* Secondary: UTC times */}
-                      {segment.departureTimeUtc && segment.arrivalTimeUtc && (
-                        <span className="text-[9px] md:text-[10px] text-muted-foreground font-mono">
-                          {segment.departureTimeUtc} - {segment.arrivalTimeUtc}
-                        </span>
-                      )}
-                      {/* Tertiary: Home base times */}
-                      {segment.departureTimeAirportLocal && segment.departureTime !== segment.departureTimeAirportLocal && (
-                        <span className="text-[8px] md:text-[9px] text-muted-foreground">
-                          Home: {segment.departureTime} - {segment.arrivalTime}
-                        </span>
-                      )}
+                      <span className="text-sm md:text-base font-medium">
+                        {segment.departure} → {segment.arrival}
+                      </span>
                     </div>
                     <Badge variant={segment.performance < 50 ? 'critical' : segment.performance < 60 ? 'warning' : 'success'} className="text-[10px] md:text-xs">
                       {segment.performance.toFixed(0)}%
                     </Badge>
+                  </div>
+
+                  {/* Row 2: Times */}
+                  <div className="space-y-1 pl-1">
+                    {/* Primary: Airport-local times */}
+                    <div className="flex items-center gap-1.5 text-xs md:text-sm text-foreground">
+                      <span>{depTimeAirport}</span>
+                      <span className="text-muted-foreground">{segment.departure}</span>
+                      {depTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground/70">({depTzBadge})</span>}
+                      <span className="text-muted-foreground mx-1">—</span>
+                      <span>{arrTimeAirport}</span>
+                      <span className="text-muted-foreground">{segment.arrival}</span>
+                      {arrTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground/70">({arrTzBadge})</span>}
+                    </div>
+                    {/* Secondary: UTC times */}
+                    {segment.departureTimeUtc && segment.arrivalTimeUtc && (
+                      <p className="text-[10px] md:text-[11px] text-muted-foreground font-mono">
+                        {segment.departureTimeUtc} — {segment.arrivalTimeUtc}
+                      </p>
+                    )}
+                    {/* Tertiary: Home base times */}
+                    {segment.departureTimeAirportLocal && segment.departureTime !== segment.departureTimeAirportLocal && (
+                      <p className="text-[9px] md:text-[10px] text-muted-foreground/70">
+                        Home: {segment.departureTime} — {segment.arrivalTime}
+                      </p>
+                    )}
                   </div>
                 </div>
               );
