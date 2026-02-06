@@ -13,7 +13,7 @@ interface HeaderProps {
 
 export function Header({ theme, onThemeChange, onMenuToggle, showMenuButton }: HeaderProps) {
   return (
-    <header className="border-b border-border bg-card/50 backdrop-blur-xl">
+    <header className="border-b border-border/30 glass-strong relative z-20">
       <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4">
         <div className="flex items-center gap-2 md:gap-4">
           {/* Mobile menu button */}

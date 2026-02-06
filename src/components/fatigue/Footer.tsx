@@ -1,6 +1,6 @@
 export function Footer() {
   return (
-    <footer className="border-t border-border bg-card/30 px-4 md:px-6 py-3 md:py-4">
+    <footer className="border-t border-border/30 glass-subtle px-4 md:px-6 py-3 md:py-4">
       <div className="text-center text-[10px] md:text-xs text-muted-foreground">
         <p className="font-medium">EASA Fatigue Analysis Tool v2.1.2</p>
         <p className="mt-1 hidden sm:block">
