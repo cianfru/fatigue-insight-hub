@@ -172,17 +172,30 @@ const Index = () => {
         ? parseISO(result.duties[0].date) 
         : settings.selectedMonth;
 
-      const parseHHmmToMinutes = (t: string | undefined): number | null => {
+      // Parse time string to minutes. Handles both HH:mm and ISO 8601 formats.
+      const parseTimeToMinutes = (t: string | undefined): number | null => {
         if (!t) return null;
-        const [h, m] = t.split(':').map(Number);
-        if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
-        return h * 60 + m;
+        // Try ISO format first: extract HH:mm from ...THH:mm...
+        const isoMatch = t.match(/T(\d{2}):(\d{2})/);
+        if (isoMatch) {
+          const h = Number(isoMatch[1]);
+          const m = Number(isoMatch[2]);
+          if (Number.isFinite(h) && Number.isFinite(m)) return h * 60 + m;
+        }
+        // Try HH:mm format
+        const parts = t.split(':').map(Number);
+        if (parts.length >= 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
+          return parts[0] * 60 + parts[1];
+        }
+        return null;
       };
 
-      const computeSegmentBlockHours = (seg: { block_hours?: number; departure_time_local?: string; arrival_time_local?: string }) => {
+      const computeSegmentBlockHours = (seg: { block_hours?: number; departure_time_local?: string; arrival_time_local?: string; departure_time?: string; arrival_time?: string }) => {
+        // Use backend block_hours if valid and positive
         if (typeof seg.block_hours === 'number' && Number.isFinite(seg.block_hours) && seg.block_hours > 0) return seg.block_hours;
-        const dep = parseHHmmToMinutes(seg.departure_time_local);
-        const arr = parseHHmmToMinutes(seg.arrival_time_local);
+        // Try local times first, then UTC times as fallback
+        const dep = parseTimeToMinutes(seg.departure_time_local) ?? parseTimeToMinutes(seg.departure_time);
+        const arr = parseTimeToMinutes(seg.arrival_time_local) ?? parseTimeToMinutes(seg.arrival_time);
         if (dep == null || arr == null) return 0;
         let diff = arr - dep;
         if (diff < 0) diff += 24 * 60;
