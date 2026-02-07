@@ -663,9 +663,13 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               sleepStrategy: sleepEstimate.sleepStrategy,
               isPreDuty: true,
               relatedDuty: duty,
+              originalStartHour: startHour,
+              originalEndHour: endHour,
             });
           } else {
-            // Overnight sleep: crosses midnight into different day
+            // Multi-day or overnight sleep
+            const daySpan = endDay - startDay;
+            
             // Part 1: startHour to 24:00 on start day
             if (startDay >= 1 && startDay <= daysInMonth) {
               bars.push({
@@ -683,7 +687,30 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 originalEndHour: endHour,
               });
             }
-            // Part 2: 00:00 to endHour on end day
+            
+            // Intermediate full days (for multi-day rest periods)
+            if (daySpan > 1) {
+              for (let d = startDay + 1; d < endDay; d++) {
+                if (d >= 1 && d <= daysInMonth) {
+                  bars.push({
+                    dayIndex: d,
+                    startHour: 0,
+                    endHour: 24,
+                    recoveryScore,
+                    effectiveSleep: sleepEstimate.effectiveSleepHours,
+                    sleepEfficiency: sleepEstimate.sleepEfficiency,
+                    sleepStrategy: 'recovery',
+                    isPreDuty: true,
+                    relatedDuty: duty,
+                    isOvernightContinuation: true,
+                    originalStartHour: startHour,
+                    originalEndHour: endHour,
+                  });
+                }
+              }
+            }
+            
+            // Last day: 00:00 to endHour
             if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
               bars.push({
                 dayIndex: endDay,

@@ -319,10 +319,27 @@ const Index = () => {
             const sleepEndIso = sleep.sleep_end_iso ?? firstBlock?.sleep_end_iso;
             
             const sleepRecord = sleep as unknown as Record<string, unknown>;
-            const sleepStartDay = sleepRecord.sleep_start_day as number | undefined;
-            const sleepStartHour = sleepRecord.sleep_start_hour as number | undefined;
-            const sleepEndDay = sleepRecord.sleep_end_day as number | undefined;
-            const sleepEndHour = sleepRecord.sleep_end_hour as number | undefined;
+            let sleepStartDay = sleepRecord.sleep_start_day as number | undefined;
+            let sleepStartHour = sleepRecord.sleep_start_hour as number | undefined;
+            let sleepEndDay = sleepRecord.sleep_end_day as number | undefined;
+            let sleepEndHour = sleepRecord.sleep_end_hour as number | undefined;
+            
+            // Derive day/hour from ISO timestamps when backend doesn't provide them
+            const parseIsoToDayHour = (iso: string | undefined): { day: number; hour: number } | null => {
+              if (!iso) return null;
+              const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+              if (m) return { day: Number(m[3]), hour: Number(m[4]) + Number(m[5]) / 60 };
+              return null;
+            };
+            
+            if (sleepStartDay == null && sleepStartIso) {
+              const parsed = parseIsoToDayHour(sleepStartIso as string);
+              if (parsed) { sleepStartDay = parsed.day; sleepStartHour = parsed.hour; }
+            }
+            if (sleepEndDay == null && sleepEndIso) {
+              const parsed = parseIsoToDayHour(sleepEndIso as string);
+              if (parsed) { sleepEndDay = parsed.day; sleepEndHour = parsed.hour; }
+            }
             
             // Extract detailed sleep quality data (snake_case from backend)
             const explanation = sleepRecord.explanation as string | undefined;
