@@ -75,6 +75,13 @@ const parseTimeToHours = (timeStr: string | undefined): number | undefined => {
   return undefined;
 };
 
+// Convert decimal hours to HH:mm string (e.g., 18.5 → "18:30")
+const decimalToHHmm = (h: number): string => {
+  const hours = Math.floor(h);
+  const minutes = Math.round((h - hours) * 60);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
 interface FlightSegmentBar {
   type: 'checkin' | 'flight' | 'ground';
   flightNumber?: string;
@@ -1338,8 +1345,10 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       <div className="flex items-center justify-between text-muted-foreground">
                                         <span>Sleep Window</span>
                                         <span className="font-mono font-medium text-foreground">
-                                          {(bar.originalStartHour ?? bar.startHour).toFixed(0).padStart(2, '0')}:00 → {(bar.originalEndHour ?? bar.endHour).toFixed(0).padStart(2, '0')}:00
-                                          {(bar.isOvernightStart || bar.isOvernightContinuation) && ' (+1d)'}
+                                          {decimalToHHmm(bar.originalStartHour ?? bar.startHour)} → {decimalToHHmm(bar.originalEndHour ?? bar.endHour)}
+                                          {/* Show +1d only when sleep truly crosses midnight */}
+                                          {(bar.isOvernightStart || bar.isOvernightContinuation) && 
+                                           (bar.originalStartHour ?? bar.startHour) > (bar.originalEndHour ?? bar.endHour) && ' (+1d)'}
                                         </span>
                                       </div>
                                       

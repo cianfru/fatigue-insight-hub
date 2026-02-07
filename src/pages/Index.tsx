@@ -168,6 +168,24 @@ const Index = () => {
       console.log('First duty segments:', result.duties[0]?.segments);
       console.log('Sample segment times:', result.duties[0]?.segments[0]?.departure_time, result.duties[0]?.segments[0]?.arrival_time);
       
+      // Debug: log all sleep data from backend for each duty
+      result.duties.forEach((d, i) => {
+        const sleep = (d as any).sleep_quality ?? (d as any).sleep_estimate;
+        if (sleep) {
+          console.log(`[Sleep Debug] Duty ${i} (${d.date}):`, {
+            sleepStartIso: sleep.sleep_start_iso,
+            sleepEndIso: sleep.sleep_end_iso,
+            sleepStartDay: sleep.sleep_start_day,
+            sleepStartHour: sleep.sleep_start_hour,
+            sleepEndDay: sleep.sleep_end_day,
+            sleepEndHour: sleep.sleep_end_hour,
+            totalHours: sleep.total_sleep_hours,
+            effectiveHours: sleep.effective_sleep_hours,
+            strategy: sleep.sleep_strategy,
+          });
+        }
+      });
+      
       const analysisMonth = result.duties.length > 0 
         ? parseISO(result.duties[0].date) 
         : settings.selectedMonth;
