@@ -528,23 +528,29 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         const startHour = sleepEstimate.sleepStartHour!;
         const endHour = sleepEstimate.sleepEndHour!;
         
-        if (startDay === endDay) {
-          // Same-day sleep (e.g., afternoon nap)
-          bars.push({
-            dayIndex: startDay,
-            startHour,
-            endHour,
-            recoveryScore,
-            effectiveSleep: sleepEstimate.effectiveSleepHours,
-            sleepEfficiency: sleepEstimate.sleepEfficiency,
-            sleepStrategy: sleepEstimate.sleepStrategy,
-            isPreDuty: true,
-            relatedDuty: duty,
-          });
-        } else {
-          // Overnight sleep: crosses midnight into different day
-          // Part 1: startHour to 24:00 on start day
-          if (startDay >= 1 && startDay <= daysInMonth) {
+        // Validate: days must be within month range and hours within 0-24
+        const validStart = startDay >= 1 && startDay <= daysInMonth && startHour >= 0 && startHour <= 24;
+        const validEnd = endDay >= 1 && endDay <= daysInMonth && endHour >= 0 && endHour <= 24;
+        
+        if (validStart && validEnd) {
+          if (startDay === endDay && endHour > startHour) {
+            // Same-day sleep (e.g., afternoon nap)
+            bars.push({
+              dayIndex: startDay,
+              startHour,
+              endHour,
+              recoveryScore,
+              effectiveSleep: sleepEstimate.effectiveSleepHours,
+              sleepEfficiency: sleepEstimate.sleepEfficiency,
+              sleepStrategy: sleepEstimate.sleepStrategy,
+              isPreDuty: true,
+              relatedDuty: duty,
+              originalStartHour: startHour,
+              originalEndHour: endHour,
+            });
+          } else if (startDay !== endDay) {
+            // Overnight sleep: crosses midnight into different day
+            // Part 1: startHour to 24:00 on start day
             bars.push({
               dayIndex: startDay,
               startHour,
@@ -559,26 +565,74 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               originalStartHour: startHour,
               originalEndHour: endHour,
             });
+            // Part 2: 00:00 to endHour on end day
+            if (endHour > 0) {
+              bars.push({
+                dayIndex: endDay,
+                startHour: 0,
+                endHour,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+                isOvernightContinuation: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
+              });
+            }
           }
-          // Part 2: 00:00 to endHour on end day
-          if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
+          // If same day but endHour <= startHour, treat as overnight (endDay = startDay + 1)
+          else if (startDay === endDay && endHour <= startHour) {
             bars.push({
-              dayIndex: endDay,
-              startHour: 0,
-              endHour,
+              dayIndex: startDay,
+              startHour,
+              endHour: 24,
               recoveryScore,
               effectiveSleep: sleepEstimate.effectiveSleepHours,
               sleepEfficiency: sleepEstimate.sleepEfficiency,
               sleepStrategy: sleepEstimate.sleepStrategy,
               isPreDuty: true,
               relatedDuty: duty,
-              isOvernightContinuation: true,
+              isOvernightStart: true,
               originalStartHour: startHour,
               originalEndHour: endHour,
             });
+            if (startDay + 1 <= daysInMonth && endHour > 0) {
+              bars.push({
+                dayIndex: startDay + 1,
+                startHour: 0,
+                endHour,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+                isOvernightContinuation: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
+              });
+            }
           }
         }
-      } else {
+        // If validation fails, fall through to ISO/HH:mm fallback
+        else {
+          // Let the else branch below handle it by pretending hasPrecomputed is false
+          // (we re-enter below via the else)
+        }
+        
+        // Skip fallback if we successfully used precomputed values
+        if (validStart && validEnd) {
+          // Enrich bars from this duty now (before moving to next duty)
+          const barsFromThisDuty = bars.filter(b => b.relatedDuty === duty && !b.qualityFactors);
+          barsFromThisDuty.forEach(b => Object.assign(b, sleepBarExtras));
+          return; // forEach continue - skip fallback
+        }
+      }
+      // FALLBACK when precomputed data is missing or invalid
+      {
         // FALLBACK: Parse ISO timestamps (legacy behavior)
         const sleepStartIso = sleepEstimate.sleepStartIso ? parseIsoTimestamp(sleepEstimate.sleepStartIso) : null;
         const sleepEndIso = sleepEstimate.sleepEndIso ? parseIsoTimestamp(sleepEstimate.sleepEndIso) : null;
@@ -1568,7 +1622,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                     </button>
                                   </TooltipTrigger>
 
-                                  <TooltipContent side="right" className="max-w-xs p-3">
+                                  <TooltipContent side="top" align="start" className="max-w-xs p-3 z-[100]">
                                     <div className="space-y-2 text-xs">
                                       <div className={cn(
                                         "font-semibold text-sm border-b pb-1 flex items-center justify-between",

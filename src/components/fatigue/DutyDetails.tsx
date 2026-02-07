@@ -68,7 +68,7 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
             </div>
             <div className="space-y-0.5 md:space-y-1">
               <p className="text-[10px] md:text-xs text-muted-foreground">Block Hours</p>
-              <p className="font-medium text-sm md:text-base">{duty.blockHours.toFixed(1)}h</p>
+              <p className="font-medium text-sm md:text-base">{Math.max(0, duty.blockHours).toFixed(1)}h</p>
             </div>
             <div className="space-y-0.5 md:space-y-1">
               <p className="text-[10px] md:text-xs text-muted-foreground">Min Performance</p>
