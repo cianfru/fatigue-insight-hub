@@ -667,65 +667,82 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               originalEndHour: endHour,
             });
           } else {
-            // Multi-day or overnight sleep
+            // Multi-day span: the backend may send the entire rest period as one block.
+            // Only render the last night of sleep (the night before the duty).
             const daySpan = endDay - startDay;
             
-            // Part 1: startHour to 24:00 on start day
-            if (startDay >= 1 && startDay <= daysInMonth) {
-              bars.push({
-                dayIndex: startDay,
-                startHour,
-                endHour: 24,
-                recoveryScore,
-                effectiveSleep: sleepEstimate.effectiveSleepHours,
-                sleepEfficiency: sleepEstimate.sleepEfficiency,
-                sleepStrategy: sleepEstimate.sleepStrategy,
-                isPreDuty: true,
-                relatedDuty: duty,
-                isOvernightStart: true,
-                originalStartHour: startHour,
-                originalEndHour: endHour,
-              });
-            }
-            
-            // Intermediate full days (for multi-day rest periods)
-            if (daySpan > 1) {
-              for (let d = startDay + 1; d < endDay; d++) {
-                if (d >= 1 && d <= daysInMonth) {
-                  bars.push({
-                    dayIndex: d,
-                    startHour: 0,
-                    endHour: 24,
-                    recoveryScore,
-                    effectiveSleep: sleepEstimate.effectiveSleepHours,
-                    sleepEfficiency: sleepEstimate.sleepEfficiency,
-                    sleepStrategy: 'recovery',
-                    isPreDuty: true,
-                    relatedDuty: duty,
-                    isOvernightContinuation: true,
-                    originalStartHour: startHour,
-                    originalEndHour: endHour,
-                  });
-                }
+            if (daySpan <= 1) {
+              // Normal overnight sleep (1 day crossing)
+              if (startDay >= 1 && startDay <= daysInMonth) {
+                bars.push({
+                  dayIndex: startDay,
+                  startHour,
+                  endHour: 24,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                  isOvernightStart: true,
+                  originalStartHour: startHour,
+                  originalEndHour: endHour,
+                });
               }
-            }
-            
-            // Last day: 00:00 to endHour
-            if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
-              bars.push({
-                dayIndex: endDay,
-                startHour: 0,
-                endHour,
-                recoveryScore,
-                effectiveSleep: sleepEstimate.effectiveSleepHours,
-                sleepEfficiency: sleepEstimate.sleepEfficiency,
-                sleepStrategy: sleepEstimate.sleepStrategy,
-                isPreDuty: true,
-                relatedDuty: duty,
-                isOvernightContinuation: true,
-                originalStartHour: startHour,
-                originalEndHour: endHour,
-              });
+              if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
+                bars.push({
+                  dayIndex: endDay,
+                  startHour: 0,
+                  endHour,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                  isOvernightContinuation: true,
+                  originalStartHour: startHour,
+                  originalEndHour: endHour,
+                });
+              }
+            } else {
+              // Multi-day rest period (>1 day span): only render the last night before the duty.
+              // Estimate sleep start as ~22:00 on the night before endDay, ending at endHour on endDay.
+              const lastNightDay = endDay - 1;
+              const estimatedSleepStart = 22; // Reasonable default for pre-duty sleep
+              
+              if (lastNightDay >= 1 && lastNightDay <= daysInMonth) {
+                bars.push({
+                  dayIndex: lastNightDay,
+                  startHour: estimatedSleepStart,
+                  endHour: 24,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                  isOvernightStart: true,
+                  originalStartHour: estimatedSleepStart,
+                  originalEndHour: endHour,
+                });
+              }
+              if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
+                bars.push({
+                  dayIndex: endDay,
+                  startHour: 0,
+                  endHour,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                  isOvernightContinuation: true,
+                  originalStartHour: estimatedSleepStart,
+                  originalEndHour: endHour,
+                });
+              }
             }
           }
         } else {
