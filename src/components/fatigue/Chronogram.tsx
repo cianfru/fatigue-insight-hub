@@ -1888,6 +1888,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               pilotBase={pilotBase}
               onDutySelect={onDutySelect}
               selectedDuty={selectedDuty}
+              restDaysSleep={restDaysSleep}
             />
           </TabsContent>
         </Tabs>
