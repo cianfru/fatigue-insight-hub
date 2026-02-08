@@ -1,12 +1,12 @@
-import { AlertTriangle, Plane, AlertCircle, Clock, Timer, Zap, TrendingDown } from 'lucide-react';
+import { Plane, Timer, Zap, TrendingDown, AlertTriangle, AlertCircle, Clock } from 'lucide-react';
 import { DutyStatistics } from '@/types/fatigue';
+import { cn } from '@/lib/utils';
 
 interface StatisticsCardsProps {
   statistics: DutyStatistics;
 }
 
 export function StatisticsCards({ statistics }: StatisticsCardsProps) {
-  // Format hours as HH:MM
   const formatHoursMinutes = (hours: number): string => {
     if (!Number.isFinite(hours) || hours < 0) return '0:00';
     const h = Math.floor(hours);
@@ -14,138 +14,75 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
     return `${h}:${String(m).padStart(2, '0')}`;
   };
 
-  // Pinch events are critical performance dips during high-workload phases
-  // Realistic thresholds: 0 = excellent, 1-3 = concerning, 4+ = problematic
-  const getPinchEventVariant = (count: number): 'success' | 'warning' | 'critical' => {
-    if (count === 0) return 'success';
-    if (count <= 3) return 'warning';
-    return 'critical';
-  };
-
   return (
-    <div className="space-y-3 md:space-y-4">
-      {/* Primary Stats Row - Flight Activity */}
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
-        <StatCard
-          label="Total Duties"
-          value={statistics.totalDuties.toString()}
-          icon={<Plane className="h-3.5 w-3.5 md:h-4 md:w-4" />}
-          variant="neutral"
-        />
-        <StatCard
-          label="Total Sectors"
-          value={statistics.totalSectors.toString()}
-          icon={<Plane className="h-3.5 w-3.5 md:h-4 md:w-4" />}
-          variant="neutral"
-        />
-        <StatCard
-          label="Duty Hours"
-          value={formatHoursMinutes(statistics.totalDutyHours)}
-          icon={<Timer className="h-3.5 w-3.5 md:h-4 md:w-4" />}
-          variant="neutral"
-        />
-        <StatCard
-          label="Block Hours"
-          value={formatHoursMinutes(statistics.totalBlockHours)}
-          icon={<Timer className="h-3.5 w-3.5 md:h-4 md:w-4" />}
-          variant="neutral"
-        />
+    <div className="space-y-2">
+      {/* Flight Activity Ribbon */}
+      <div className="flex items-stretch gap-px rounded-lg overflow-hidden border border-border/50 bg-border/20">
+        <RibbonStat label="Duties" value={statistics.totalDuties.toString()} icon={<Plane className="h-3.5 w-3.5" />} />
+        <RibbonStat label="Sectors" value={statistics.totalSectors.toString()} icon={<Plane className="h-3.5 w-3.5" />} />
+        <RibbonStat label="Duty Hrs" value={formatHoursMinutes(statistics.totalDutyHours)} icon={<Timer className="h-3.5 w-3.5" />} />
+        <RibbonStat label="Block Hrs" value={formatHoursMinutes(statistics.totalBlockHours)} icon={<Timer className="h-3.5 w-3.5" />} />
       </div>
 
-      {/* Secondary Stats Row - Fatigue Metrics */}
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3 md:grid-cols-5">
-        <StatCard
+      {/* Fatigue Metrics Ribbon */}
+      <div className="flex items-stretch gap-px rounded-lg overflow-hidden border border-border/50 bg-border/20">
+        <RibbonStat
           label="Pinch Events"
           value={statistics.totalPinchEvents.toString()}
-          icon={<Zap className="h-3.5 w-3.5 md:h-4 md:w-4" />}
-          variant={getPinchEventVariant(statistics.totalPinchEvents)}
-          subtitle="fatigue peaks"
+          icon={<Zap className="h-3.5 w-3.5" />}
+          variant={statistics.totalPinchEvents === 0 ? 'success' : statistics.totalPinchEvents <= 3 ? 'warning' : 'critical'}
         />
-        <StatCard
+        <RibbonStat
           label="Worst Score"
           value={`${Math.round(statistics.worstPerformance)}%`}
-          icon={<TrendingDown className="h-3.5 w-3.5 md:h-4 md:w-4" />}
+          icon={<TrendingDown className="h-3.5 w-3.5" />}
           variant={statistics.worstPerformance >= 70 ? 'success' : statistics.worstPerformance >= 60 ? 'warning' : 'critical'}
-          subtitle="min performance"
         />
-        <StatCard
+        <RibbonStat
           label="High Risk"
           value={statistics.highRiskDuties.toString()}
-          icon={<AlertTriangle className="h-3.5 w-3.5 md:h-4 md:w-4" />}
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
           variant={statistics.highRiskDuties === 0 ? 'success' : 'warning'}
-          subtitle="duties"
         />
-        <StatCard
-          label="Critical Risk"
+        <RibbonStat
+          label="Critical"
           value={statistics.criticalRiskDuties.toString()}
-          icon={<AlertCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />}
+          icon={<AlertCircle className="h-3.5 w-3.5" />}
           variant={statistics.criticalRiskDuties === 0 ? 'success' : 'critical'}
-          subtitle="duties"
         />
-        <StatCard
+        <RibbonStat
           label="Sleep Debt"
           value={`${statistics.maxSleepDebt.toFixed(1)}h`}
-          icon={<Clock className="h-3.5 w-3.5 md:h-4 md:w-4" />}
+          icon={<Clock className="h-3.5 w-3.5" />}
           variant={statistics.maxSleepDebt <= 2 ? 'success' : statistics.maxSleepDebt <= 4 ? 'warning' : 'critical'}
-          subtitle="maximum"
         />
       </div>
     </div>
   );
 }
 
-interface StatCardProps {
+interface RibbonStatProps {
   label: string;
   value: string;
   icon: React.ReactNode;
-  variant: 'neutral' | 'success' | 'warning' | 'critical';
-  subtitle?: string;
+  variant?: 'neutral' | 'success' | 'warning' | 'critical';
 }
 
-function StatCard({ label, value, icon, variant, subtitle }: StatCardProps) {
+function RibbonStat({ label, value, icon, variant = 'neutral' }: RibbonStatProps) {
   const variantStyles = {
-    neutral: {
-      text: 'text-foreground',
-      icon: 'text-muted-foreground',
-      bg: 'bg-muted/30',
-    },
-    success: {
-      text: 'text-success',
-      icon: 'text-success',
-      bg: 'bg-success/10',
-    },
-    warning: {
-      text: 'text-warning',
-      icon: 'text-warning',
-      bg: 'bg-warning/10',
-    },
-    critical: {
-      text: 'text-critical',
-      icon: 'text-critical',
-      bg: 'bg-critical/10',
-    },
+    neutral: { value: 'text-foreground', icon: 'text-muted-foreground' },
+    success: { value: 'text-success', icon: 'text-success' },
+    warning: { value: 'text-warning', icon: 'text-warning' },
+    critical: { value: 'text-critical', icon: 'text-critical' },
   };
-
   const styles = variantStyles[variant];
 
   return (
-    <div className="group relative overflow-hidden rounded-lg md:rounded-xl border border-border/50 bg-card/50 p-3 md:p-4 backdrop-blur-sm transition-all hover:border-border hover:bg-card/80">
-      {/* Icon Badge */}
-      <div className={`absolute right-2 top-2 md:right-3 md:top-3 rounded-full p-1.5 md:p-2 ${styles.bg}`}>
-        <span className={styles.icon}>{icon}</span>
-      </div>
-      
-      {/* Content */}
-      <div className="space-y-0.5 md:space-y-1">
-        <p className="text-[10px] md:text-xs font-medium text-muted-foreground">{label}</p>
-        <p className={`text-xl md:text-2xl font-semibold tracking-tight ${styles.text}`}>
-          {value}
-        </p>
-        {subtitle && (
-          <p className="text-[9px] md:text-[10px] uppercase tracking-wider text-muted-foreground/70">
-            {subtitle}
-          </p>
-        )}
+    <div className="flex-1 flex items-center gap-2 px-3 py-2.5 bg-card/60 min-w-0">
+      <span className={cn("flex-shrink-0", styles.icon)}>{icon}</span>
+      <div className="min-w-0">
+        <div className={cn("text-base font-semibold tabular-nums leading-tight", styles.value)}>{value}</div>
+        <div className="text-[11px] text-muted-foreground truncate">{label}</div>
       </div>
     </div>
   );

@@ -100,7 +100,7 @@ export function DashboardContent({
           {analysisResults && (
             <div className="space-y-4 md:space-y-6 animate-fade-in">
               {/* Section 1: Overview - Summary Statistics */}
-              <Card variant="glass">
+              <Card variant="glass" className="data-view-card">
                 <CardHeader className="pb-2 md:pb-4">
                   <CardTitle className="flex items-center gap-2 text-base md:text-lg">
                     <span className="text-primary">📊</span>

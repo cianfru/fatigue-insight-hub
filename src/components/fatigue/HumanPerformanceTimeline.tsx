@@ -10,6 +10,7 @@ import { DutyAnalysis, DutyStatistics, RestDaySleep, FlightPhase, SleepQualityFa
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useChronogramZoom } from '@/hooks/useChronogramZoom';
+import { TimelineLegend } from './TimelineLegend';
 
 interface HumanPerformanceTimelineProps {
   duties: DutyAnalysis[];
@@ -660,6 +661,7 @@ export function HumanPerformanceTimeline({
     return { warnings, risk: duty.overallRisk };
   };
 
+  const ROW_HEIGHT = 40;
   const hours = Array.from({ length: 8 }, (_, i) => i * 3);
 
   if (dutyBars.length === 0) {
@@ -748,52 +750,8 @@ export function HumanPerformanceTimeline({
         </CollapsibleContent>
       </Collapsible>
 
-      {/* Circadian zone legend */}
-      <div className="flex flex-wrap gap-3 text-[10px]">
-        <span className="flex items-center gap-1">
-          <Moon className="h-3 w-3 text-wocl" />
-          <span className="text-muted-foreground">WOCL (shifts with TZ)</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <Zap className="h-3 w-3 text-critical" />
-          <span className="text-muted-foreground">Nadir</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <Sun className="h-3 w-3 text-warning" />
-          <span className="text-muted-foreground">WMZ (peak)</span>
-        </span>
-        <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
-        <span className="flex items-center gap-1">
-          <span className="h-3 w-6 rounded opacity-70" style={{ backgroundColor: 'hsl(120, 70%, 45%)' }} />
-          <span className="text-muted-foreground">Check-in</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="h-3 w-6 rounded" style={{ backgroundColor: 'hsl(120, 70%, 45%)' }} />
-          <span className="text-muted-foreground">✈️ Flight</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="h-3 w-6 rounded bg-muted opacity-50" />
-          <span className="text-muted-foreground">Ground</span>
-        </span>
-        <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
-        <span className="flex items-center gap-1">
-          <span className="h-3 w-6 rounded border border-dashed" style={{ backgroundColor: 'hsl(120, 70%, 45%, 0.15)', borderColor: 'hsl(120, 70%, 45%)' }} />
-          <span className="text-muted-foreground">🛏️ Sleep/Recovery</span>
-        </span>
-        <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
-        <span className="flex items-center gap-1">
-          <span className="h-3 w-3 rounded border-2 border-dashed border-muted-foreground" />
-          <span className="text-muted-foreground">FDP Limit</span>
-        </span>
-        {discretionCount > 0 && (
-          <>
-            <span className="flex items-center gap-1">
-              <span className="h-3 w-3 rounded bg-critical ring-2 ring-critical/50" />
-              <span className="text-muted-foreground">Discretion</span>
-            </span>
-          </>
-        )}
-      </div>
+      {/* Collapsible Legend */}
+      <TimelineLegend showDiscretion={discretionCount > 0} variant="elapsed" />
 
       {/* Timeline Grid */}
       <div
@@ -844,29 +802,35 @@ export function HumanPerformanceTimeline({
                 const phaseShift = circadian?.phaseShift || 0;
                 const hasDuty = dutyBars.some(bar => bar.dayIndex === dayNum);
                 const dayWarnings = getDayWarnings(dayNum);
+                const riskClass = dayWarnings?.risk === 'CRITICAL' ? 'risk-border-critical'
+                  : dayWarnings?.risk === 'HIGH' ? 'risk-border-high'
+                  : dayWarnings?.risk === 'MODERATE' ? 'risk-border-moderate'
+                  : hasDuty ? 'risk-border-low' : '';
 
                 return (
                   <div
                     key={idx}
                     className={cn(
-                      "flex h-7 items-center justify-end pr-2 text-xs",
-                      !hasDuty && "opacity-50"
+                      "flex items-center justify-end pr-2 text-[11px]",
+                      !hasDuty && "opacity-40",
+                      riskClass
                     )}
+                    style={{ height: `${ROW_HEIGHT}px` }}
                   >
                     <div className="text-right">
                       {dayWarnings && dayWarnings.warnings.length > 0 && (
                         <div className={cn(
-                          "text-[8px] leading-tight truncate max-w-[55px]",
+                          "text-[9px] leading-tight truncate max-w-[55px]",
                           dayWarnings.risk === 'CRITICAL' && "text-critical",
                           dayWarnings.risk === 'HIGH' && "text-high",
                           dayWarnings.risk === 'MODERATE' && "text-warning",
                           dayWarnings.risk === 'LOW' && "text-muted-foreground"
                         )}>
-                          ⚠ {dayWarnings.warnings[0]}
+                          {dayWarnings.warnings[0]}
                         </div>
                       )}
-                      <div className="text-foreground font-medium">Day {dayNum}</div>
-                      <div className="text-[8px] text-muted-foreground">{format(day, 'EEE d')}</div>
+                      <div className="text-foreground font-medium text-[11px]">Day {dayNum}</div>
+                      <div className="text-[9px] text-muted-foreground">{format(day, 'EEE d')}</div>
                       {phaseShift !== 0 && (
                         <div className={cn(
                           "text-[9px] font-semibold",
@@ -911,17 +875,17 @@ export function HumanPerformanceTimeline({
                   const woclWraps = woclEnd < woclStart;
 
                   return (
-                    <div key={dayIdx} className="relative h-7 border-b border-border/20">
-                      {/* WOCL shading */}
+                    <div key={dayIdx} className="relative border-b border-border/20" style={{ height: `${ROW_HEIGHT}px` }}>
+                      {/* WOCL hatched pattern */}
                       {!woclWraps ? (
                         <div
-                          className="absolute top-0 bottom-0 bg-wocl/15"
+                          className="absolute top-0 bottom-0 wocl-hatch"
                           style={{ left: `${(woclStart / 24) * 100}%`, width: `${((woclEnd - woclStart) / 24) * 100}%` }}
                         />
                       ) : (
                         <>
-                          <div className="absolute top-0 bottom-0 bg-wocl/15" style={{ left: `${(woclStart / 24) * 100}%`, right: 0 }} />
-                          <div className="absolute top-0 bottom-0 bg-wocl/15" style={{ left: 0, width: `${(woclEnd / 24) * 100}%` }} />
+                          <div className="absolute top-0 bottom-0 wocl-hatch" style={{ left: `${(woclStart / 24) * 100}%`, right: 0 }} />
+                          <div className="absolute top-0 bottom-0 wocl-hatch" style={{ left: 0, width: `${(woclEnd / 24) * 100}%` }} />
                         </>
                       )}
 
@@ -967,10 +931,7 @@ export function HumanPerformanceTimeline({
                               <PopoverTrigger asChild>
                                 <button
                                   type="button"
-                                  className={cn(
-                                    "absolute z-[5] flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
-                                    classes.border, classes.bg
-                                  )}
+                                  className="absolute z-[5] flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all border-primary/20 bg-primary/5"
                                   style={{
                                     top: 0, height: '100%',
                                     left: `${(bar.startHour / 24) * 100}%`,
@@ -1365,49 +1326,19 @@ export function HumanPerformanceTimeline({
               </div>
             </div>
 
-            {/* Right legend: phase shift + color gradient */}
-            <div className="ml-4 flex w-20 flex-shrink-0 flex-col">
-              <div className="h-8 text-[10px] text-muted-foreground text-center">Phase | Score</div>
-              <div className="flex gap-1">
-                {/* Phase shift labels */}
-                <div className="flex flex-col" style={{ height: `${allDays.length * 28}px` }}>
-                  {allDays.map((_, idx) => {
-                    const dayNum = idx + 1;
-                    const circadian = circadianStates.get(dayNum);
-                    const phaseShift = circadian?.phaseShift || 0;
-                    const direction = phaseShift > 0 ? 'E' : phaseShift < 0 ? 'W' : '—';
-                    return (
-                      <div key={idx} className="h-7 flex items-center text-[9px] text-muted-foreground">
-                        {phaseShift !== 0 ? (
-                          <div className={cn("font-medium",
-                            phaseShift > 3 && "text-warning",
-                            phaseShift < -3 && "text-primary"
-                          )}>
-                            {Math.abs(phaseShift).toFixed(1)}h {direction}
-                          </div>
-                        ) : (
-                          <div className="text-success/70">✓</div>
-                        )}
-                      </div>
-                    );
-                  })}
+            {/* Compact right legend */}
+            <div className="ml-3 flex w-10 flex-shrink-0 flex-col">
+              <div style={{ height: `${ROW_HEIGHT}px` }} />
+              <div className="flex gap-1" style={{ height: `${allDays.length * ROW_HEIGHT}px` }}>
+                <div className="w-2.5 rounded-sm overflow-hidden">
+                  <div className="h-full w-full" style={{
+                    background: 'linear-gradient(to bottom, hsl(120, 70%, 45%), hsl(90, 70%, 50%), hsl(55, 90%, 55%), hsl(40, 95%, 50%), hsl(25, 95%, 50%), hsl(0, 80%, 50%))',
+                  }} />
                 </div>
-
-                {/* Gradient bar */}
-                <div className="flex gap-1" style={{ height: `${allDays.length * 28}px` }}>
-                  <div className="w-3 rounded-sm overflow-hidden">
-                    <div className="h-full w-full" style={{
-                      background: 'linear-gradient(to bottom, hsl(120, 70%, 45%), hsl(90, 70%, 50%), hsl(55, 90%, 55%), hsl(40, 95%, 50%), hsl(25, 95%, 50%), hsl(0, 80%, 50%))',
-                    }} />
-                  </div>
-                  <div className="flex flex-col justify-between text-[9px] text-muted-foreground">
-                    <span>100</span>
-                    <span>80</span>
-                    <span>60</span>
-                    <span>40</span>
-                    <span>20</span>
-                    <span>0</span>
-                  </div>
+                <div className="flex flex-col justify-between text-[9px] text-muted-foreground">
+                  <span>100</span>
+                  <span>60</span>
+                  <span>0</span>
                 </div>
               </div>
             </div>

@@ -12,6 +12,7 @@ import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useChronogramZoom } from '@/hooks/useChronogramZoom';
 import { HumanPerformanceTimeline } from './HumanPerformanceTimeline';
+import { TimelineLegend } from './TimelineLegend';
 
 // Helper to calculate recovery score from sleep estimate
 const getRecoveryScore = (estimate: NonNullable<DutyAnalysis['sleepEstimate']>): number => {
@@ -1059,6 +1060,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     };
   };
 
+  // Row height constant for consistency
+  const ROW_HEIGHT = 40; // Increased from 28px for breathing room
   const hours = Array.from({ length: 8 }, (_, i) => i * 3); // 00, 03, 06, 09, 12, 15, 18, 21
 
   const [activeTab, setActiveTab] = useState<'homebase' | 'elapsed'>('homebase');
@@ -1168,103 +1171,62 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               </div>
             </div>
             
-            {/* Stats row */}
-            <div className="mb-4 flex items-center justify-center gap-4 text-xs flex-wrap">
+            {/* Stats ribbon */}
+            <div className="mb-3 flex items-center justify-center gap-4 text-[11px] flex-wrap">
               <span>Duties: <strong>{statistics.totalDuties}</strong></span>
               <span>High Risk: <strong className="text-high">{statistics.highRiskDuties}</strong></span>
               <span>Critical: <strong className="text-critical">{statistics.criticalRiskDuties}</strong></span>
               {discretionCount > 0 && (
-                <Badge variant="destructive" className="flex items-center gap-1">
+                <Badge variant="destructive" className="flex items-center gap-1 text-[10px]">
                   <AlertTriangle className="h-3 w-3" />
-                  {discretionCount} Discretion Used
+                  {discretionCount} Discretion
                 </Badge>
               )}
             </div>
             
-            {/* Legend */}
-            <div className="mb-4 flex items-center justify-center gap-4 text-xs flex-wrap">
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-8 rounded bg-wocl/30" />
-                WOCL
-              </span>
-              <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
-              <span className="flex items-center gap-1">
-                <span className="h-3 w-6 rounded opacity-70" style={{ backgroundColor: 'hsl(120, 70%, 45%)' }} />
-                Check-in
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-3 w-6 rounded" style={{ backgroundColor: 'hsl(120, 70%, 45%)' }} />
-                ✈️ Flight
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-3 w-6 rounded bg-muted opacity-50" />
-                Ground
-              </span>
-              <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
-              <span className="flex items-center gap-1">
-                <span 
-                  className="h-3 w-6 rounded border border-dashed" 
-                  style={{ 
-                    backgroundColor: 'hsl(120, 70%, 45%, 0.15)',
-                    borderColor: 'hsl(120, 70%, 45%)'
-                  }} 
-                />
-                🛏️ Sleep/Recovery
-              </span>
-              <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
-              <span className="flex items-center gap-1">
-                <span className="h-3 w-3 rounded border-2 border-dashed border-muted-foreground" />
-                FDP Limit
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-3 w-3 rounded bg-critical ring-2 ring-critical/50" />
-                Discretion
-              </span>
+            {/* Collapsible Legend */}
+            <div className="mb-3">
+              <TimelineLegend showDiscretion={discretionCount > 0} variant="homebase" />
             </div>
 
             {/* Timeline Grid */}
             <div className="flex">
               {/* Y-axis labels (all days of month) */}
-              <div className="w-32 flex-shrink-0">
-                <div className="h-8" /> {/* Header spacer */}
+              <div className="w-28 flex-shrink-0">
+                <div style={{ height: `${ROW_HEIGHT}px` }} /> {/* Header spacer */}
                 {allDays.map((day) => {
                   const dayNum = day.getDate();
                   const dayWarnings = getDayWarnings(dayNum);
                   const hasDuty = dutyBars.some(bar => bar.dayIndex === dayNum);
+                  const riskClass = dayWarnings?.risk === 'CRITICAL' ? 'risk-border-critical'
+                    : dayWarnings?.risk === 'HIGH' ? 'risk-border-high'
+                    : dayWarnings?.risk === 'MODERATE' ? 'risk-border-moderate'
+                    : hasDuty ? 'risk-border-low' : '';
                   return (
                     <div
                       key={dayNum}
                       className={cn(
-                        "relative flex h-7 items-center gap-1 pr-2 text-xs",
-                        !hasDuty && "opacity-50"
+                        "relative flex items-center gap-1 pr-2 text-[11px]",
+                        !hasDuty && "opacity-40",
+                        riskClass
                       )}
+                      style={{ height: `${ROW_HEIGHT}px` }}
                     >
-                      <div className="flex flex-col items-start min-w-[60px]">
+                      <div className="flex flex-col items-start min-w-[50px] pl-1">
                         {dayWarnings && dayWarnings.warnings.length > 0 && (
                           <span className={cn(
-                            "text-[8px] leading-tight truncate max-w-[60px]",
+                            "text-[9px] leading-tight truncate max-w-[50px]",
                             dayWarnings.risk === 'CRITICAL' && "text-critical",
                             dayWarnings.risk === 'HIGH' && "text-high",
                             dayWarnings.risk === 'MODERATE' && "text-warning",
                             dayWarnings.risk === 'LOW' && "text-muted-foreground"
                           )}>
-                            ⚠ {dayWarnings.warnings[0]}
-                          </span>
-                        )}
-                        {dayWarnings && dayWarnings.warnings.length > 1 && (
-                          <span className={cn(
-                            "text-[8px] leading-tight truncate max-w-[60px]",
-                            dayWarnings.risk === 'CRITICAL' && "text-critical",
-                            dayWarnings.risk === 'HIGH' && "text-high",
-                            dayWarnings.risk === 'MODERATE' && "text-warning",
-                            dayWarnings.risk === 'LOW' && "text-muted-foreground"
-                          )}>
-                            ⚠ {dayWarnings.warnings[1]}
+                            {dayWarnings.warnings[0]}
                           </span>
                         )}
                       </div>
                       <span className={cn(
-                        "ml-auto font-medium",
+                        "ml-auto font-medium text-[11px]",
                         hasDuty ? "text-foreground" : "text-muted-foreground"
                       )}>
                         {format(day, 'EEE d')}
@@ -1277,11 +1239,11 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               {/* Main chart area */}
               <div className="relative flex-1">
                 {/* X-axis header */}
-                <div className="flex h-8 border-b border-border">
+                <div className="flex border-b border-border" style={{ height: `${ROW_HEIGHT}px` }}>
                   {hours.map((hour) => (
                     <div
                       key={hour}
-                      className="flex-1 text-center text-[10px] text-muted-foreground"
+                      className="flex-1 text-center text-[11px] text-muted-foreground flex items-center justify-center"
                       style={{ width: `${(3/24) * 100}%` }}
                     >
                       {hour.toString().padStart(2, '0')}:00
@@ -1291,9 +1253,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
                 {/* Grid with WOCL shading and duty bars */}
                 <div className="relative">
-                  {/* WOCL shading */}
+                  {/* WOCL hatched pattern */}
                   <div
-                    className="absolute top-0 bottom-0 bg-wocl/20"
+                    className="absolute top-0 bottom-0 wocl-hatch"
                     style={{
                       left: `${(WOCL_START / 24) * 100}%`,
                       width: `${((WOCL_END - WOCL_START) / 24) * 100}%`,
@@ -1319,7 +1281,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                     return (
                       <div
                         key={dayNum}
-                        className="relative h-7 border-b border-border/20"
+                        className="relative border-b border-border/20"
+                        style={{ height: `${ROW_HEIGHT}px` }}
                       >
                         {/* Sleep/Rest bars for this day showing recovery - SEPARATE LANE at top */}
                         {sleepBars
@@ -1337,13 +1300,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                             return (
                               <Popover key={`sleep-${barIndex}`}>
                                 <PopoverTrigger asChild>
-                                  <button
+                              <button
                                     type="button"
-                                    className={cn(
-                                      "absolute z-[5] flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
-                                      classes.border,
-                                      classes.bg
-                                    )}
+                                    className="absolute z-[5] flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all border-primary/20 bg-primary/5"
                                     style={{
                                       top: 0,
                                       height: '100%',
@@ -1820,12 +1779,11 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 </div>
               </div>
 
-              {/* Color legend - aligned with chart height */}
-              <div className="ml-4 flex w-16 flex-shrink-0 flex-col">
-                  <div className="h-8 text-[10px] text-muted-foreground text-center">Score</div>
-                  <div className="flex gap-1" style={{ height: `${allDays.length * 28}px` }}>
-                    {/* Gradient bar */}
-                    <div className="w-3 rounded-sm overflow-hidden">
+              {/* Color legend - compact, aligned with chart height */}
+              <div className="ml-3 flex w-10 flex-shrink-0 flex-col">
+                  <div style={{ height: `${ROW_HEIGHT}px` }} />
+                  <div className="flex gap-1" style={{ height: `${allDays.length * ROW_HEIGHT}px` }}>
+                    <div className="w-2.5 rounded-sm overflow-hidden">
                       <div
                         className="h-full w-full"
                         style={{
@@ -1833,13 +1791,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                         }}
                       />
                     </div>
-                    {/* Labels aligned with gradient */}
                     <div className="flex flex-col justify-between text-[9px] text-muted-foreground">
                       <span>100</span>
-                      <span>80</span>
                       <span>60</span>
-                      <span>40</span>
-                      <span>20</span>
                       <span>0</span>
                     </div>
                   </div>
