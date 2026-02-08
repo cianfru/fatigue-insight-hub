@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/button';
 import { DutyAnalysis } from '@/types/fatigue';
 import { Globe, Plane, MapPin, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { ComposableMap, Geographies, Geography, Line, Marker, ZoomableGroup } from 'react-simple-maps';
-import { airportCoordinates, getAirportCoordinates } from '@/data/airportCoordinates';
-import { useState } from 'react';
+import { AirportData } from '@/data/airportCoordinates';
+import { getMultipleAirportsAsync, getAirportFromCache } from '@/lib/airport-api';
+import { useState, useMemo, useEffect } from 'react';
 
 interface RegionPreset {
   name: string;
@@ -90,30 +91,40 @@ export function RouteNetwork({ duties, homeBase = 'DOH' }: RouteNetworkProps) {
 
   const routes = Array.from(routeMap.values());
 
-  // Get unique airports with coordinates
-  const airportSet = new Set<string>();
-  routes.forEach((r) => {
-    airportSet.add(r.from);
-    airportSet.add(r.to);
-  });
+  // Collect all unique airport codes
+  const allCodes = useMemo(() => {
+    const airportSet = new Set<string>();
+    routes.forEach((r) => {
+      airportSet.add(r.from);
+      airportSet.add(r.to);
+    });
+    return Array.from(airportSet);
+  }, [routes]);
 
-  const airports = Array.from(airportSet)
-    .map(code => getAirportCoordinates(code))
-    .filter((a): a is NonNullable<typeof a> => a !== null);
+  // Fetch all airports from backend
+  const [airports, setAirports] = useState<AirportData[]>([]);
+  useEffect(() => {
+    if (allCodes.length === 0) return;
+    getMultipleAirportsAsync(allCodes).then(map => {
+      setAirports(Array.from(map.values()));
+    });
+  }, [allCodes]);
 
-  // Get route lines with coordinates
-  const routeLines = routes
-    .map(route => {
-      const from = getAirportCoordinates(route.from);
-      const to = getAirportCoordinates(route.to);
-      if (!from || !to) return null;
-      return {
-        ...route,
-        fromCoords: [from.lng, from.lat] as [number, number],
-        toCoords: [to.lng, to.lat] as [number, number],
-      };
-    })
-    .filter((r): r is NonNullable<typeof r> => r !== null);
+  // Build route lines from cached data (available after fetch above)
+  const routeLines = useMemo(() => {
+    return routes
+      .map(route => {
+        const from = getAirportFromCache(route.from);
+        const to = getAirportFromCache(route.to);
+        if (!from || !to) return null;
+        return {
+          ...route,
+          fromCoords: [from.lng, from.lat] as [number, number],
+          toCoords: [to.lng, to.lat] as [number, number],
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+  }, [routes, airports]); // airports dependency ensures re-computation after fetch
 
   // Get route color based on performance
   const getRouteColor = (performance: number) => {
@@ -273,7 +284,7 @@ export function RouteNetwork({ duties, homeBase = 'DOH' }: RouteNetworkProps) {
                   <span className="font-bold">{hoveredAirport}</span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {getAirportCoordinates(hoveredAirport)?.city}, {getAirportCoordinates(hoveredAirport)?.country}
+                  {getAirportFromCache(hoveredAirport)?.city}, {getAirportFromCache(hoveredAirport)?.country}
                 </p>
               </div>
             )}
