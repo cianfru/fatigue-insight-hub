@@ -3,14 +3,15 @@ import { DutyAnalysis } from '@/types/fatigue';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line, ComposedChart, Area } from 'recharts';
 import { format, eachDayOfInterval, startOfMonth, endOfMonth, isSameDay } from 'date-fns';
 import { Clock } from 'lucide-react';
-import { airportCoordinates } from '@/data/airportCoordinates';
+import { useEffect, useState } from 'react';
+import { AirportData } from '@/data/airportCoordinates';
+import { getAirportCoordinatesAsync } from '@/lib/airport-api';
 
 interface BodyClockDriftChartProps {
   duties: DutyAnalysis[];
   month: Date;
   homeBase: string;
 }
-
 // Known IANA timezone offsets (fallback for common bases)
 const KNOWN_TZ_OFFSETS: Record<string, number> = {
   'Asia/Qatar': 3,
@@ -29,8 +30,11 @@ export function BodyClockDriftChart({ duties, month, homeBase }: BodyClockDriftC
   const monthEnd = endOfMonth(month);
   const allDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  // Get home base city name for display
-  const homeAirport = airportCoordinates[homeBase];
+  // Fetch home airport data from backend
+  const [homeAirport, setHomeAirport] = useState<AirportData | null>(null);
+  useEffect(() => {
+    getAirportCoordinatesAsync(homeBase).then(setHomeAirport);
+  }, [homeBase]);
 
   // Derive home base UTC offset from first duty's first segment departing from home base
   // or from known timezone offsets

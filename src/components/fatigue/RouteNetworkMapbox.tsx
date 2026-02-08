@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DutyAnalysis } from '@/types/fatigue';
 import { Globe, Plane, MapPin, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react';
-import { getAirportCoordinates, AirportData } from '@/data/airportCoordinates';
+import { AirportData } from '@/data/airportCoordinates';
 import { getMultipleAirportsAsync } from '@/lib/airport-api';
 
 interface RegionPreset {
@@ -115,7 +115,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
     return Array.from(airportSet);
   }, [routes]);
 
-  // Fetch airport coordinates (including from external API for unknown airports)
+  // Fetch airport coordinates from backend for all codes
   useEffect(() => {
     async function fetchAirports() {
       if (allAirportCodes.length === 0) {
@@ -124,50 +124,35 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         return;
       }
 
-      // First, get what we have from static data
-      const knownAirports: AirportData[] = [];
-      const unknownCodes: string[] = [];
+      setIsLoadingAirports(true);
 
-      for (const code of allAirportCodes) {
-        const staticData = getAirportCoordinates(code);
-        if (staticData) {
-          knownAirports.push(staticData);
-        } else {
-          unknownCodes.push(code);
-        }
-      }
+      try {
+        const fetchedAirports = await getMultipleAirportsAsync(allAirportCodes);
 
-      // If we have unknown airports, fetch them from the API
-      if (unknownCodes.length > 0) {
-        setIsLoadingAirports(true);
-        console.log('[RouteNetworkMapbox] Fetching unknown airports:', unknownCodes);
+        const airportList: AirportData[] = [];
+        const stillMissing: string[] = [];
 
-        try {
-          const fetchedAirports = await getMultipleAirportsAsync(unknownCodes);
-          
-          // Add fetched airports to known list
-          fetchedAirports.forEach((data) => {
-            knownAirports.push(data);
-          });
-
-          // Track which airports are still missing
-          const stillMissing = unknownCodes.filter(code => !fetchedAirports.has(code));
-          setMissingAirports(stillMissing);
-
-          if (stillMissing.length > 0) {
-            console.warn('[RouteNetworkMapbox] Could not find coordinates for:', stillMissing);
+        for (const code of allAirportCodes) {
+          const data = fetchedAirports.get(code);
+          if (data) {
+            airportList.push(data);
+          } else {
+            stillMissing.push(code);
           }
-        } catch (error) {
-          console.error('[RouteNetworkMapbox] Error fetching airports:', error);
-          setMissingAirports(unknownCodes);
-        } finally {
-          setIsLoadingAirports(false);
         }
-      } else {
-        setMissingAirports([]);
-      }
 
-      setAirports(knownAirports);
+        setAirports(airportList);
+        setMissingAirports(stillMissing);
+
+        if (stillMissing.length > 0) {
+          console.warn('[RouteNetworkMapbox] Could not find coordinates for:', stillMissing);
+        }
+      } catch (error) {
+        console.error('[RouteNetworkMapbox] Error fetching airports:', error);
+        setMissingAirports(allAirportCodes);
+      } finally {
+        setIsLoadingAirports(false);
+      }
     }
 
     fetchAirports();
