@@ -814,7 +814,10 @@ export function HumanPerformanceTimeline({
             {pilotName && <h2 className="text-lg font-semibold text-foreground">{pilotName}</h2>}
             {pilotBase && <div className="text-sm text-muted-foreground">Base: {pilotBase}</div>}
             <div className="mt-1 text-sm font-medium">
-              {format(month, 'MMMM yyyy')} - Circadian Phase Tracking
+              {format(month, 'MMMM yyyy')} — Human Performance · Elapsed Time from t=0
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              Body clock adapts ~1.0h/day east, ~1.5h/day west · WOCL/Nadir/WMZ markers shift with accumulated timezone crossings
             </div>
           </div>
 
@@ -862,13 +865,14 @@ export function HumanPerformanceTimeline({
                           ⚠ {dayWarnings.warnings[0]}
                         </div>
                       )}
-                      <div className="text-foreground font-medium">{format(day, 'EEE d')}</div>
+                      <div className="text-foreground font-medium">Day {dayNum}</div>
+                      <div className="text-[8px] text-muted-foreground">{format(day, 'EEE d')}</div>
                       {phaseShift !== 0 && (
                         <div className={cn(
-                          "text-[9px]",
+                          "text-[9px] font-semibold",
                           phaseShift > 0 ? "text-warning" : "text-primary"
                         )}>
-                          {phaseShift > 0 ? '+' : ''}{phaseShift.toFixed(1)}h
+                          {phaseShift > 0 ? '→E ' : '→W '}{phaseShift > 0 ? '+' : ''}{phaseShift.toFixed(1)}h
                         </div>
                       )}
                     </div>
@@ -1411,7 +1415,7 @@ export function HumanPerformanceTimeline({
 
           {/* X-axis label */}
           <div className="mt-2 text-center text-xs text-muted-foreground">
-            Time of Day (Body Clock Reference — shifts with timezone crossings)
+            Biological Time (Circadian Phase-Adjusted) · Markers shift with timezone crossings
           </div>
         </div>
       </div>
