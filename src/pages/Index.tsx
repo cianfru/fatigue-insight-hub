@@ -2,14 +2,13 @@ import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Header } from '@/components/fatigue/Header';
 import { Footer } from '@/components/fatigue/Footer';
-import { WelcomePage } from '@/components/fatigue/WelcomePage';
 import { DashboardContent } from '@/components/fatigue/DashboardContent';
-import { MathematicalModelPage } from '@/components/fatigue/MathematicalModelPage';
-import { FatigueSciencePage } from '@/components/fatigue/FatigueSciencePage';
+import { InsightsContent } from '@/components/fatigue/InsightsContent';
+import { LearnPage } from '@/components/fatigue/LearnPage';
+import { AboutPage } from '@/components/fatigue/AboutPage';
 import { LandingPage } from '@/components/landing/LandingPage';
 import { AuroraBackground } from '@/components/ui/aurora-background';
 
-import { ResearchReferencesPage } from '@/components/fatigue/ResearchReferencesPage';
 import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { mockAnalysisResults } from '@/data/mockAnalysisData';
 import { useTheme } from '@/hooks/useTheme';
@@ -49,11 +48,9 @@ const Index = () => {
   }): number[] => {
     if (duty.segments.length === 0) return [];
     if (duty.segments.length === 1) {
-      // Single sector - use average performance
       return [duty.avg_performance];
     }
 
-    // Parse ISO timestamps to get minutes since duty start
     const parseIsoToDate = (iso: string): Date | null => {
       try {
         return parseISO(iso);
@@ -64,40 +61,30 @@ const Index = () => {
 
     const reportTime = parseIsoToDate(duty.report_time_utc);
     if (!reportTime) {
-      // Fallback if parsing fails
       return duty.segments.map(() => duty.avg_performance);
     }
 
-    // Calculate cumulative flight hours at each segment's landing
     const segmentEndHours: number[] = [];
     let cumulativeHours = 0;
 
-    duty.segments.forEach((seg, idx) => {
+    duty.segments.forEach((seg) => {
       const arrivalTime = parseIsoToDate(seg.arrival_time);
       if (arrivalTime) {
-        // Hours from report to this segment's arrival
         const hoursFromReport = (arrivalTime.getTime() - reportTime.getTime()) / (1000 * 60 * 60);
         segmentEndHours.push(hoursFromReport);
       } else {
-        // Fallback: estimate based on cumulative block hours
         const blockHours = seg.block_hours || 1;
-        cumulativeHours += blockHours + 0.5; // Add ground time estimate
+        cumulativeHours += blockHours + 0.5;
         segmentEndHours.push(cumulativeHours);
       }
     });
 
-    // Estimate performance at each segment's landing
-    // Use linear degradation from first segment (higher) to last segment (duty.landing_performance)
     const finalLanding = duty.landing_performance ?? duty.min_performance;
     const totalDutyHours = duty.duty_hours;
-
-    // Estimate starting performance (before first landing)
-    // Assuming ~5-8% degradation over the duty, first segment should be higher
     const performanceDrop = duty.avg_performance - finalLanding;
     const estimatedStartPerf = Math.min(100, duty.avg_performance + performanceDrop * 0.5);
 
     return segmentEndHours.map((hoursElapsed) => {
-      // Linear interpolation from start to final landing
       const fraction = totalDutyHours > 0 ? hoursElapsed / totalDutyHours : 0;
       const performance = estimatedStartPerf - (estimatedStartPerf - finalLanding) * fraction;
       return Math.max(0, Math.min(100, performance));
@@ -115,7 +102,6 @@ const Index = () => {
 
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [actualFileObject, setActualFileObject] = useState<File | null>(null);
-
   const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(null);
   const [selectedDuty, setSelectedDuty] = useState<DutyAnalysis | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -155,52 +141,37 @@ const Index = () => {
     setIsAnalyzing(true);
     
     try {
-      console.log('Starting analysis...');
-      
       const result = await analyzeRoster(
         actualFileObject,
         settings.pilotId,
         settings.homeBase,
         settings.configPreset
       );
-      
-      console.log('Analysis complete:', result);
-      console.log('First duty segments:', result.duties[0]?.segments);
-      console.log('Sample segment times:', result.duties[0]?.segments[0]?.departure_time, result.duties[0]?.segments[0]?.arrival_time);
-      
-      // Debug: log all sleep data from backend for each duty
+
+      // Debug logging
       result.duties.forEach((d, i) => {
         const sleep = (d as any).sleep_quality ?? (d as any).sleep_estimate;
         if (sleep) {
           console.log(`[Sleep Debug] Duty ${i} (${d.date}):`, {
-            sleepStartIso: sleep.sleep_start_iso,
-            sleepEndIso: sleep.sleep_end_iso,
-            sleepStartDay: sleep.sleep_start_day,
-            sleepStartHour: sleep.sleep_start_hour,
-            sleepEndDay: sleep.sleep_end_day,
-            sleepEndHour: sleep.sleep_end_hour,
             totalHours: sleep.total_sleep_hours,
             effectiveHours: sleep.effective_sleep_hours,
             strategy: sleep.sleep_strategy,
           });
         }
       });
-      
+
       const analysisMonth = result.duties.length > 0 
         ? parseISO(result.duties[0].date) 
         : settings.selectedMonth;
 
-      // Parse time string to minutes. Handles both HH:mm and ISO 8601 formats.
       const parseTimeToMinutes = (t: string | undefined): number | null => {
         if (!t) return null;
-        // Try ISO format first: extract HH:mm from ...THH:mm...
         const isoMatch = t.match(/T(\d{2}):(\d{2})/);
         if (isoMatch) {
           const h = Number(isoMatch[1]);
           const m = Number(isoMatch[2]);
           if (Number.isFinite(h) && Number.isFinite(m)) return h * 60 + m;
         }
-        // Try HH:mm format
         const parts = t.split(':').map(Number);
         if (parts.length >= 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
           return parts[0] * 60 + parts[1];
@@ -209,9 +180,7 @@ const Index = () => {
       };
 
       const computeSegmentBlockHours = (seg: { block_hours?: number; departure_time_local?: string; arrival_time_local?: string; departure_time?: string; arrival_time?: string }) => {
-        // Use backend block_hours if valid and positive
         if (typeof seg.block_hours === 'number' && Number.isFinite(seg.block_hours) && seg.block_hours > 0) return seg.block_hours;
-        // Try local times first, then UTC times as fallback
         const dep = parseTimeToMinutes(seg.departure_time_local) ?? parseTimeToMinutes(seg.departure_time);
         const arr = parseTimeToMinutes(seg.arrival_time_local) ?? parseTimeToMinutes(seg.arrival_time);
         if (dep == null || arr == null) return 0;
@@ -225,9 +194,6 @@ const Index = () => {
         0
       );
 
-      console.log('total_block_hours (backend):', result.total_block_hours);
-      console.log('computedBlockHoursFromSegments:', computedBlockHoursFromSegments);
-      
       setAnalysisResults({
         generatedAt: new Date(),
         month: analysisMonth,
@@ -269,17 +235,13 @@ const Index = () => {
           sleepEfficiency: restDay.sleep_efficiency,
           strategyType: restDay.strategy_type,
           confidence: restDay.confidence,
-          // Quality factor breakdown from backend
           explanation: restDay.explanation,
           confidenceBasis: restDay.confidence_basis,
           qualityFactors: restDay.quality_factors,
           references: restDay.references,
         })),
         duties: result.duties.map(duty => {
-          // Calculate per-segment performance based on temporal position
           const segmentPerformances = calculateSegmentPerformances(duty);
-
-          // Extract sleep environment and quality from duty level or nested in sleep data
           const sleep = duty.sleep_quality ?? duty.sleep_estimate;
           const sleepEnvironment = duty.sleep_environment ?? sleep?.sleep_environment;
           const sleepQuality = duty.sleep_quality_label ?? sleep?.sleep_quality_label;
@@ -310,96 +272,90 @@ const Index = () => {
             usedDiscretion: duty.used_discretion,
             sleepEnvironment,
             sleepQuality,
-          sleepEstimate: sleep ? (() => {
-            if (!sleep) return undefined;
-            
-            const sleepBlocks = (sleep as unknown as Record<string, unknown>).sleep_blocks as Array<{ sleep_start_iso?: string; sleep_end_iso?: string }> | undefined;
-            const firstBlock = sleepBlocks?.[0];
-            const sleepStartIso = sleep.sleep_start_iso ?? firstBlock?.sleep_start_iso;
-            const sleepEndIso = sleep.sleep_end_iso ?? firstBlock?.sleep_end_iso;
-            
-            const sleepRecord = sleep as unknown as Record<string, unknown>;
-            let sleepStartDay = sleepRecord.sleep_start_day as number | undefined;
-            let sleepStartHour = sleepRecord.sleep_start_hour as number | undefined;
-            let sleepEndDay = sleepRecord.sleep_end_day as number | undefined;
-            let sleepEndHour = sleepRecord.sleep_end_hour as number | undefined;
-            
-            // Derive day/hour from ISO timestamps when backend doesn't provide them
-            const parseIsoToDayHour = (iso: string | undefined): { day: number; hour: number } | null => {
-              if (!iso) return null;
-              const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
-              if (m) return { day: Number(m[3]), hour: Number(m[4]) + Number(m[5]) / 60 };
-              return null;
-            };
-            
-            if (sleepStartDay == null && sleepStartIso) {
-              const parsed = parseIsoToDayHour(sleepStartIso as string);
-              if (parsed) { sleepStartDay = parsed.day; sleepStartHour = parsed.hour; }
-            }
-            if (sleepEndDay == null && sleepEndIso) {
-              const parsed = parseIsoToDayHour(sleepEndIso as string);
-              if (parsed) { sleepEndDay = parsed.day; sleepEndHour = parsed.hour; }
-            }
-            
-            // Extract detailed sleep quality data (snake_case from backend)
-            const explanation = sleepRecord.explanation as string | undefined;
-            const confidenceBasis = sleepRecord.confidence_basis as string | undefined;
-            const qualityFactors = sleepRecord.quality_factors as {
-              base_efficiency: number;
-              wocl_boost: number;
-              late_onset_penalty: number;
-              recovery_boost: number;
-              time_pressure_factor: number;
-              insufficient_penalty: number;
-            } | undefined;
-            const references = sleepRecord.references as Array<{
-              key: string;
-              short: string;
-              full: string;
-            }> | undefined;
-            
-            return {
-              totalSleepHours: sleep.total_sleep_hours,
-              effectiveSleepHours: sleep.effective_sleep_hours,
-              sleepEfficiency: sleep.sleep_efficiency,
-              woclOverlapHours: sleep.wocl_overlap_hours,
-              sleepStrategy: sleep.sleep_strategy,
-              confidence: sleep.confidence,
-              warnings: sleep.warnings,
-              sleepStartTime: sleep.sleep_start_time,
-              sleepEndTime: sleep.sleep_end_time,
-              sleepStartIso,
-              sleepEndIso,
-              sleepStartDay,
-              sleepStartHour,
-              sleepEndDay,
-              sleepEndHour,
-              // Detailed sleep quality info
-              explanation,
-              confidenceBasis,
-              qualityFactors,
-              references,
-            };
-          })() : undefined,
-          flightSegments: duty.segments.map((seg, idx) => ({
-            flightNumber: seg.flight_number,
-            departure: seg.departure,
-            arrival: seg.arrival,
-            departureTime: seg.departure_time_local,
-            arrivalTime: seg.arrival_time_local,
-            departureTimeUtc: isoToZulu(seg.departure_time),
-            arrivalTimeUtc: isoToZulu(seg.arrival_time),
-            blockHours: seg.block_hours,
-            performance: segmentPerformances[idx] || duty.avg_performance,
-            // New airport-local time fields
-            departureTimeAirportLocal: seg.departure_time_airport_local,
-            arrivalTimeAirportLocal: seg.arrival_time_airport_local,
-            departureTimezone: seg.departure_timezone,
-            arrivalTimezone: seg.arrival_timezone,
-            departureUtcOffset: seg.departure_utc_offset,
-            arrivalUtcOffset: seg.arrival_utc_offset,
-          })),
-        };
+            sleepEstimate: sleep ? (() => {
+              const sleepBlocks = (sleep as unknown as Record<string, unknown>).sleep_blocks as Array<{ sleep_start_iso?: string; sleep_end_iso?: string }> | undefined;
+              const firstBlock = sleepBlocks?.[0];
+              const sleepStartIso = sleep.sleep_start_iso ?? firstBlock?.sleep_start_iso;
+              const sleepEndIso = sleep.sleep_end_iso ?? firstBlock?.sleep_end_iso;
+              
+              const sleepRecord = sleep as unknown as Record<string, unknown>;
+              let sleepStartDay = sleepRecord.sleep_start_day as number | undefined;
+              let sleepStartHour = sleepRecord.sleep_start_hour as number | undefined;
+              let sleepEndDay = sleepRecord.sleep_end_day as number | undefined;
+              let sleepEndHour = sleepRecord.sleep_end_hour as number | undefined;
+              
+              const parseIsoToDayHour = (iso: string | undefined): { day: number; hour: number } | null => {
+                if (!iso) return null;
+                const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+                if (m) return { day: Number(m[3]), hour: Number(m[4]) + Number(m[5]) / 60 };
+                return null;
+              };
+              
+              if (sleepStartDay == null && sleepStartIso) {
+                const parsed = parseIsoToDayHour(sleepStartIso as string);
+                if (parsed) { sleepStartDay = parsed.day; sleepStartHour = parsed.hour; }
+              }
+              if (sleepEndDay == null && sleepEndIso) {
+                const parsed = parseIsoToDayHour(sleepEndIso as string);
+                if (parsed) { sleepEndDay = parsed.day; sleepEndHour = parsed.hour; }
+              }
+              
+              const explanation = sleepRecord.explanation as string | undefined;
+              const confidenceBasis = sleepRecord.confidence_basis as string | undefined;
+              const qualityFactors = sleepRecord.quality_factors as {
+                base_efficiency: number;
+                wocl_boost: number;
+                late_onset_penalty: number;
+                recovery_boost: number;
+                time_pressure_factor: number;
+                insufficient_penalty: number;
+              } | undefined;
+              const references = sleepRecord.references as Array<{
+                key: string;
+                short: string;
+                full: string;
+              }> | undefined;
+              
+              return {
+                totalSleepHours: sleep.total_sleep_hours,
+                effectiveSleepHours: sleep.effective_sleep_hours,
+                sleepEfficiency: sleep.sleep_efficiency,
+                woclOverlapHours: sleep.wocl_overlap_hours,
+                sleepStrategy: sleep.sleep_strategy,
+                confidence: sleep.confidence,
+                warnings: sleep.warnings,
+                sleepStartTime: sleep.sleep_start_time,
+                sleepEndTime: sleep.sleep_end_time,
+                sleepStartIso,
+                sleepEndIso,
+                sleepStartDay,
+                sleepStartHour,
+                sleepEndDay,
+                sleepEndHour,
+                explanation,
+                confidenceBasis,
+                qualityFactors,
+                references,
+              };
+            })() : undefined,
+            flightSegments: duty.segments.map((seg, idx) => ({
+              flightNumber: seg.flight_number,
+              departure: seg.departure,
+              arrival: seg.arrival,
+              departureTime: seg.departure_time_local,
+              arrivalTime: seg.arrival_time_local,
+              departureTimeUtc: isoToZulu(seg.departure_time),
+              arrivalTimeUtc: isoToZulu(seg.arrival_time),
+              blockHours: seg.block_hours,
+              performance: segmentPerformances[idx] || duty.avg_performance,
+              departureTimeAirportLocal: seg.departure_time_airport_local,
+              arrivalTimeAirportLocal: seg.arrival_time_airport_local,
+              departureTimezone: seg.departure_timezone,
+              arrivalTimezone: seg.arrival_timezone,
+              departureUtcOffset: seg.departure_utc_offset,
+              arrivalUtcOffset: seg.arrival_utc_offset,
+            })),
+          };
         }),
         homeBaseTimezone: result.home_base_timezone ?? undefined,
       });
@@ -424,7 +380,6 @@ const Index = () => {
     setDrawerOpen(true);
   };
 
-  // Show landing page first
   if (showLanding) {
     return <LandingPage onEnter={() => setShowLanding(false)} />;
   }
@@ -433,89 +388,82 @@ const Index = () => {
     <div className="relative flex min-h-screen flex-col bg-background">
       <AuroraBackground />
       <div className="relative z-10 flex min-h-screen flex-col">
-      <Header 
-        theme={settings.theme} 
-        onThemeChange={(theme) => handleSettingsChange({ theme })}
-        onMenuToggle={() => setSidebarOpen(true)}
-        showMenuButton={true}
-      />
-      
-      {/* Main Navigation Tabs */}
-      <Tabs defaultValue="overview" className="flex flex-1 flex-col">
-        <div className="border-b border-border/30 glass-subtle overflow-x-auto">
-          <div className="px-2 md:px-6">
-            <TabsList className="h-10 md:h-12 w-full justify-start gap-0 md:gap-1 rounded-none border-0 bg-transparent p-0">
-              <TabsTrigger 
-                value="overview" 
-                className="rounded-none border-b-2 border-transparent px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-              >
-                Overview
-              </TabsTrigger>
-              <TabsTrigger 
-                value="dashboard" 
-                className="rounded-none border-b-2 border-transparent px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-              >
-                Dashboard
-              </TabsTrigger>
-              <TabsTrigger 
-                value="model" 
-                className="rounded-none border-b-2 border-transparent px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-              >
-                Model
-              </TabsTrigger>
-              <TabsTrigger 
-                value="science" 
-                className="rounded-none border-b-2 border-transparent px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-              >
-                Science
-              </TabsTrigger>
-              <TabsTrigger 
-                value="research" 
-                className="rounded-none border-b-2 border-transparent px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-              >
-                References
-              </TabsTrigger>
-            </TabsList>
+        <Header 
+          theme={settings.theme} 
+          onThemeChange={(theme) => handleSettingsChange({ theme })}
+          onMenuToggle={() => setSidebarOpen(true)}
+          showMenuButton={true}
+        />
+        
+        {/* 4-Tab Navigation */}
+        <Tabs defaultValue="analysis" className="flex flex-1 flex-col">
+          <div className="border-b border-border/30 glass-subtle overflow-x-auto">
+            <div className="px-2 md:px-6">
+              <TabsList className="h-10 md:h-12 w-full justify-start gap-0 md:gap-1 rounded-none border-0 bg-transparent p-0">
+                <TabsTrigger 
+                  value="analysis" 
+                  className="rounded-none border-b-2 border-transparent px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                >
+                  Analysis
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="insights" 
+                  className="rounded-none border-b-2 border-transparent px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                >
+                  Insights
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="learn" 
+                  className="rounded-none border-b-2 border-transparent px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                >
+                  Learn
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="about" 
+                  className="rounded-none border-b-2 border-transparent px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                >
+                  About
+                </TabsTrigger>
+              </TabsList>
+            </div>
           </div>
-        </div>
 
-        <TabsContent value="overview" className="flex-1 mt-0">
-          <WelcomePage />
-        </TabsContent>
+          <TabsContent value="analysis" className="flex-1 mt-0">
+            <DashboardContent
+              settings={settings}
+              onSettingsChange={handleSettingsChange}
+              uploadedFile={uploadedFile}
+              onFileUpload={handleFileUpload}
+              onRemoveFile={handleRemoveFile}
+              onRunAnalysis={handleRunAnalysis}
+              isAnalyzing={isAnalyzing}
+              analysisResults={analysisResults}
+              selectedDuty={selectedDuty}
+              onDutySelect={handleDutySelect}
+              drawerOpen={drawerOpen}
+              onDrawerOpenChange={setDrawerOpen}
+              sidebarOpen={sidebarOpen}
+              onSidebarOpenChange={setSidebarOpen}
+            />
+          </TabsContent>
 
-        <TabsContent value="dashboard" className="flex-1 mt-0">
-          <DashboardContent
-            settings={settings}
-            onSettingsChange={handleSettingsChange}
-            uploadedFile={uploadedFile}
-            onFileUpload={handleFileUpload}
-            onRemoveFile={handleRemoveFile}
-            onRunAnalysis={handleRunAnalysis}
-            isAnalyzing={isAnalyzing}
-            analysisResults={analysisResults}
-            selectedDuty={selectedDuty}
-            onDutySelect={handleDutySelect}
-            drawerOpen={drawerOpen}
-            onDrawerOpenChange={setDrawerOpen}
-            sidebarOpen={sidebarOpen}
-            onSidebarOpenChange={setSidebarOpen}
-          />
-        </TabsContent>
+          <TabsContent value="insights" className="flex-1 mt-0">
+            <InsightsContent 
+              analysisResults={analysisResults} 
+              settings={settings} 
+            />
+          </TabsContent>
 
-        <TabsContent value="model" className="flex-1 mt-0">
-          <MathematicalModelPage />
-        </TabsContent>
+          <TabsContent value="learn" className="flex-1 mt-0">
+            <LearnPage />
+          </TabsContent>
 
-        <TabsContent value="science" className="flex-1 mt-0">
-          <FatigueSciencePage />
-        </TabsContent>
+          <TabsContent value="about" className="flex-1 mt-0">
+            <AboutPage />
+          </TabsContent>
+        </Tabs>
 
-        <TabsContent value="research" className="flex-1 mt-0">
-          <ResearchReferencesPage />
-        </TabsContent>
-      </Tabs>
-
-      <Footer />
+        <Footer />
       </div>
     </div>
   );
