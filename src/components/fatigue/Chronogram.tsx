@@ -465,7 +465,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
   // Uses ISO timestamps for accurate date/day positioning when available
   const sleepBars = useMemo(() => {
     const bars: SleepBar[] = [];
-    
+
+    console.warn('🔍 [Chronogram] Component rendering - processing', duties.length, 'duties');
+
     // Helper to parse HH:mm to decimal hours
     const parseTime = (timeStr: string): number => {
       const [h, m] = timeStr.split(':').map(Number);
@@ -508,7 +510,10 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         : duty.date.getDate();
       const sleepEstimate = duty.sleepEstimate;
 
-      if (!sleepEstimate) return;
+      if (!sleepEstimate) {
+        console.warn('⚠️ [Chronogram] Duty has no sleep estimate:', duty.dateString);
+        return;
+      }
 
       const recoveryScore = getRecoveryScore(sleepEstimate);
 
