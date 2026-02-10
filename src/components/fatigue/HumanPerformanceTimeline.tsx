@@ -590,7 +590,7 @@ export function HumanPerformanceTimeline({
           const startHour = sleepStartIso.hour;
           let endHour = sleepEndIso.hour;
           const startDay = sleepStartIso.dayOfMonth;
-          
+
           // For continuous elapsed time: if sleep crosses days, adjust endHour
           const daySpan = sleepEndIso.dayOfMonth - startDay;
           if (daySpan > 0) {
