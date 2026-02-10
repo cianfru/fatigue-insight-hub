@@ -364,12 +364,10 @@ const Index = () => {
       
     } catch (error) {
       console.error('Analysis failed:', error);
-      toast.error('Analysis failed: ' + (error as Error).message);
-      
-      setAnalysisResults({
-        ...mockAnalysisResults,
-        month: settings.selectedMonth,
-      });
+      const errMsg = (error as Error).message;
+      console.error('[Analysis] API call failed:', errMsg, error);
+      toast.error('Analysis failed: ' + errMsg);
+      // Do NOT fall back to mock data — let the user see the failure
     } finally {
       setIsAnalyzing(false);
     }
