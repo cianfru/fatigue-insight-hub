@@ -35,6 +35,10 @@ const ADAPTATION_RATE_WEST = 1.5;
 
 const DEFAULT_CHECK_IN_MINUTES = 60;
 
+// Minimum sleep bar width in percentage for visibility in continuous timeline
+// Lower than the old 1% threshold since we're now spanning multiple days
+const MIN_SLEEP_BAR_WIDTH_PCT = 0.1;
+
 const parseTimeToHours = (timeStr: string | undefined): number | undefined => {
   if (!timeStr) return undefined;
   const parts = timeStr.split(':').map(Number);
@@ -398,7 +402,7 @@ export function HumanPerformanceTimeline({
     });
 
     return bars;
-  }, [duties]);
+  }, [duties, daysInMonth]);
 
   // ── FDP limit markers ──
   const fdpLimitMarkers = useMemo(() => {
@@ -411,7 +415,7 @@ export function HumanPerformanceTimeline({
       markers.push({ dayIndex: bar.dayIndex, hour: fdpEndHour, maxFdp, duty: bar.duty });
     });
     return markers;
-  }, [dutyBars]);
+  }, [dutyBars, daysInMonth]);
 
   // ── Sleep bars (mirroring Chronogram logic exactly) ──
   const sleepBars = useMemo(() => {
@@ -796,6 +800,10 @@ export function HumanPerformanceTimeline({
                   : dayWarnings?.risk === 'MODERATE' ? 'risk-border-moderate'
                   : hasDuty ? 'risk-border-low' : '';
 
+                // Calculate elapsed time ranges for this day
+                const elapsedStart = idx * 24;
+                const elapsedEnd = (idx + 1) * 24;
+
                 return (
                   <div
                     key={idx}
@@ -818,7 +826,7 @@ export function HumanPerformanceTimeline({
                           {dayWarnings.warnings[0]}
                         </div>
                       )}
-                      <div className="text-foreground font-medium text-[11px]">{(idx * 24)}h-{((idx + 1) * 24)}h</div>
+                      <div className="text-foreground font-medium text-[11px]">{elapsedStart}h-{elapsedEnd}h</div>
                       <div className="text-[9px] text-muted-foreground">{format(day, 'EEE d')}</div>
                       {phaseShift !== 0 && (
                         <div className={cn(
@@ -958,7 +966,7 @@ export function HumanPerformanceTimeline({
                                   style={{
                                     top: 0, height: '100%',
                                     left: `${(sleepElapsedStart / totalElapsedHours) * 100}%`,
-                                    width: `${Math.max(barWidth, 0.1)}%`,
+                                    width: `${Math.max(barWidth, MIN_SLEEP_BAR_WIDTH_PCT)}%`,
                                     borderRadius,
                                   }}
                                 >
