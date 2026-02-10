@@ -66,11 +66,21 @@ export interface SleepEstimate {
   // ISO timestamps for precise date/time positioning - optional top-level convenience fields
   sleep_start_iso?: string | null;
   sleep_end_iso?: string | null;
-  // Pre-computed day/hour values (timezone-safe - already converted by backend)
-  sleep_start_day?: number | null;   // Day of month (1-31)
-  sleep_start_hour?: number | null;  // Hour (0-24, decimal)
-  sleep_end_day?: number | null;     // Day of month (1-31)
-  sleep_end_hour?: number | null;    // Hour (0-24, decimal)
+  // Pre-computed day/hour values in LOCATION timezone
+  sleep_start_day?: number | null;
+  sleep_start_hour?: number | null;
+  sleep_end_day?: number | null;
+  sleep_end_hour?: number | null;
+  // Pre-computed day/hour values in HOME BASE timezone (for chronogram positioning)
+  sleep_start_day_home_tz?: number | null;
+  sleep_start_hour_home_tz?: number | null;
+  sleep_end_day_home_tz?: number | null;
+  sleep_end_hour_home_tz?: number | null;
+  sleep_start_time_home_tz?: string | null;
+  sleep_end_time_home_tz?: string | null;
+  // Location context
+  location_timezone?: string | null;
+  environment?: 'home' | 'hotel' | 'layover' | null;
 
   // Detailed sleep quality explanation (new backend fields)
   explanation?: string;
@@ -141,6 +151,15 @@ export interface RestDaySleepBlock {
   duration_hours: number;
   effective_hours: number;
   quality_factor: number;
+  // Home base timezone positioning
+  sleep_start_day_home_tz?: number | null;
+  sleep_start_hour_home_tz?: number | null;
+  sleep_end_day_home_tz?: number | null;
+  sleep_end_hour_home_tz?: number | null;
+  sleep_start_time_home_tz?: string | null;
+  sleep_end_time_home_tz?: string | null;
+  location_timezone?: string | null;
+  environment?: 'home' | 'hotel' | 'layover' | null;
 }
 
 // Rest day sleep entry from backend
