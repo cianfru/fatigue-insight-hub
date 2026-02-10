@@ -229,6 +229,14 @@ const Index = () => {
             durationHours: block.duration_hours,
             effectiveHours: block.effective_hours,
             qualityFactor: block.quality_factor,
+            sleepStartDayHomeTz: block.sleep_start_day_home_tz ?? undefined,
+            sleepStartHourHomeTz: block.sleep_start_hour_home_tz ?? undefined,
+            sleepEndDayHomeTz: block.sleep_end_day_home_tz ?? undefined,
+            sleepEndHourHomeTz: block.sleep_end_hour_home_tz ?? undefined,
+            sleepStartTimeHomeTz: block.sleep_start_time_home_tz ?? undefined,
+            sleepEndTimeHomeTz: block.sleep_end_time_home_tz ?? undefined,
+            locationTimezone: block.location_timezone ?? undefined,
+            environment: block.environment ?? undefined,
           })),
           totalSleepHours: restDay.total_sleep_hours,
           effectiveSleepHours: restDay.effective_sleep_hours,
@@ -284,6 +292,16 @@ const Index = () => {
               let sleepEndDay = sleepRecord.sleep_end_day as number | undefined;
               let sleepEndHour = sleepRecord.sleep_end_hour as number | undefined;
               
+              // Home base timezone fields (for chronogram positioning)
+              const sleepStartDayHomeTz = sleepRecord.sleep_start_day_home_tz as number | undefined;
+              const sleepStartHourHomeTz = sleepRecord.sleep_start_hour_home_tz as number | undefined;
+              const sleepEndDayHomeTz = sleepRecord.sleep_end_day_home_tz as number | undefined;
+              const sleepEndHourHomeTz = sleepRecord.sleep_end_hour_home_tz as number | undefined;
+              const sleepStartTimeHomeTz = sleepRecord.sleep_start_time_home_tz as string | undefined;
+              const sleepEndTimeHomeTz = sleepRecord.sleep_end_time_home_tz as string | undefined;
+              const locationTimezone = sleepRecord.location_timezone as string | undefined;
+              const sleepEnvironment2 = sleepRecord.environment as 'home' | 'hotel' | 'layover' | undefined;
+              
               const parseIsoToDayHour = (iso: string | undefined): { day: number; hour: number } | null => {
                 if (!iso) return null;
                 const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
@@ -332,6 +350,14 @@ const Index = () => {
                 sleepStartHour,
                 sleepEndDay,
                 sleepEndHour,
+                sleepStartDayHomeTz,
+                sleepStartHourHomeTz,
+                sleepEndDayHomeTz,
+                sleepEndHourHomeTz,
+                sleepStartTimeHomeTz,
+                sleepEndTimeHomeTz,
+                locationTimezone,
+                environment: sleepEnvironment2,
                 explanation,
                 confidenceBasis,
                 qualityFactors,

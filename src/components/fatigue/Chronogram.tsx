@@ -522,19 +522,27 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         woclOverlapHours: sleepEstimate.woclOverlapHours,
       };
       
-      // PREFER pre-computed day/hour values if available (timezone-safe from backend)
-      const hasPrecomputed = 
+      // PREFER home-base timezone day/hour values for chronogram positioning
+      // This ensures sleep bars align with duty bars (which are already in home TZ)
+      const hasHomeTz = 
+        sleepEstimate.sleepStartDayHomeTz != null && 
+        sleepEstimate.sleepStartHourHomeTz != null && 
+        sleepEstimate.sleepEndDayHomeTz != null && 
+        sleepEstimate.sleepEndHourHomeTz != null;
+      
+      // Fallback to location-timezone precomputed values if home_tz not available
+      const hasPrecomputed = hasHomeTz || (
         sleepEstimate.sleepStartDay != null && 
         sleepEstimate.sleepStartHour != null && 
         sleepEstimate.sleepEndDay != null && 
-        sleepEstimate.sleepEndHour != null;
+        sleepEstimate.sleepEndHour != null);
       
       if (hasPrecomputed) {
-        // Use backend-computed day/hour values directly (no timezone conversion needed)
-        const startDay = sleepEstimate.sleepStartDay!;
-        const endDay = sleepEstimate.sleepEndDay!;
-        const startHour = sleepEstimate.sleepStartHour!;
-        const endHour = sleepEstimate.sleepEndHour!;
+        // Use home-base timezone values when available, fall back to location values
+        const startDay = sleepEstimate.sleepStartDayHomeTz ?? sleepEstimate.sleepStartDay!;
+        const endDay = sleepEstimate.sleepEndDayHomeTz ?? sleepEstimate.sleepEndDay!;
+        const startHour = sleepEstimate.sleepStartHourHomeTz ?? sleepEstimate.sleepStartHour!;
+        const endHour = sleepEstimate.sleepEndHourHomeTz ?? sleepEstimate.sleepEndHour!;
         
         // Validate: days must be within month range and hours within 0-24
         const validStart = startDay >= 1 && startDay <= daysInMonth && startHour >= 0 && startHour <= 24;
@@ -871,41 +879,50 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           const efficiencyBonus = block.qualityFactor * 20;
           const recoveryScore = Math.min(100, Math.max(0, baseScore + efficiencyBonus));
           
-          // Use ISO timestamps for accurate positioning.
-          // IMPORTANT: Parse directly from ISO string to avoid browser timezone conversion.
-          const parseIso = (isoStr: string): { dayOfMonth: number; hour: number } | null => {
-            if (!isoStr) return null;
-
-            // Fast-path for standard ISO strings: YYYY-MM-DDTHH:mm...
-            const m = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
-            if (m) {
-              const dayOfMonth = Number(m[3]);
-              const hour = Number(m[4]) + Number(m[5]) / 60;
-              if (!Number.isFinite(dayOfMonth) || !Number.isFinite(hour)) return null;
-              return { dayOfMonth, hour };
-            }
-
-            // Fallback for unexpected formats
-            try {
-              const date = new Date(isoStr);
-              if (Number.isNaN(date.getTime())) return null;
-              return {
-                dayOfMonth: date.getDate(),
-                hour: date.getHours() + date.getMinutes() / 60,
-              };
-            } catch {
-              return null;
-            }
-          };
+          // PREFER home-base timezone positioning for rest day blocks too
+          const hasHomeTzBlock = 
+            block.sleepStartDayHomeTz != null && 
+            block.sleepStartHourHomeTz != null && 
+            block.sleepEndDayHomeTz != null && 
+            block.sleepEndHourHomeTz != null;
           
-          const sleepStartIso = parseIso(block.sleepStartIso);
-          const sleepEndIso = parseIso(block.sleepEndIso);
+          let startDay: number;
+          let endDay: number;
+          let startHour: number;
+          let endHour: number;
           
-          if (sleepStartIso && sleepEndIso) {
-            const startDay = sleepStartIso.dayOfMonth;
-            const endDay = sleepEndIso.dayOfMonth;
-            const startHour = sleepStartIso.hour;
-            const endHour = sleepEndIso.hour;
+          if (hasHomeTzBlock) {
+            startDay = block.sleepStartDayHomeTz!;
+            endDay = block.sleepEndDayHomeTz!;
+            startHour = block.sleepStartHourHomeTz!;
+            endHour = block.sleepEndHourHomeTz!;
+          } else {
+            // Fallback: parse ISO timestamps (location timezone)
+            const parseIso = (isoStr: string): { dayOfMonth: number; hour: number } | null => {
+              if (!isoStr) return null;
+              const m = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+              if (m) {
+                const dayOfMonth = Number(m[3]);
+                const hour = Number(m[4]) + Number(m[5]) / 60;
+                if (!Number.isFinite(dayOfMonth) || !Number.isFinite(hour)) return null;
+                return { dayOfMonth, hour };
+              }
+              try {
+                const date = new Date(isoStr);
+                if (Number.isNaN(date.getTime())) return null;
+                return { dayOfMonth: date.getDate(), hour: date.getHours() + date.getMinutes() / 60 };
+              } catch { return null; }
+            };
+            
+            const sleepStartIso = parseIso(block.sleepStartIso);
+            const sleepEndIso = parseIso(block.sleepEndIso);
+            
+            if (!sleepStartIso || !sleepEndIso) return;
+            startDay = sleepStartIso.dayOfMonth;
+            endDay = sleepEndIso.dayOfMonth;
+            startHour = sleepStartIso.hour;
+            endHour = sleepEndIso.hour;
+          }
             
             // Create a pseudo-duty for tooltip display purposes
             const pseudoDuty: DutyAnalysis = {
@@ -980,7 +997,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 });
               }
             }
-          }
         });
       });
     }

@@ -479,11 +479,18 @@ export function HumanPerformanceTimeline({
         woclOverlapHours: sleepEstimate.woclOverlapHours,
       };
 
-      const hasPrecomputed =
+      // PREFER home-base timezone day/hour values for positioning
+      const hasHomeTz =
+        sleepEstimate.sleepStartDayHomeTz != null &&
+        sleepEstimate.sleepStartHourHomeTz != null &&
+        sleepEstimate.sleepEndDayHomeTz != null &&
+        sleepEstimate.sleepEndHourHomeTz != null;
+
+      const hasPrecomputed = hasHomeTz || (
         sleepEstimate.sleepStartDay != null &&
         sleepEstimate.sleepStartHour != null &&
         sleepEstimate.sleepEndDay != null &&
-        sleepEstimate.sleepEndHour != null;
+        sleepEstimate.sleepEndHour != null);
 
       const addSleepBar = (dayIndex: number, startHour: number, endHour: number, isOvernightStart?: boolean, isOvernightContinuation?: boolean, origStart?: number, origEnd?: number) => {
         bars.push({
@@ -500,10 +507,10 @@ export function HumanPerformanceTimeline({
       };
 
       if (hasPrecomputed) {
-        const startDay = sleepEstimate.sleepStartDay!;
-        const endDay = sleepEstimate.sleepEndDay!;
-        const startHour = sleepEstimate.sleepStartHour!;
-        const endHour = sleepEstimate.sleepEndHour!;
+        const startDay = sleepEstimate.sleepStartDayHomeTz ?? sleepEstimate.sleepStartDay!;
+        const endDay = sleepEstimate.sleepEndDayHomeTz ?? sleepEstimate.sleepEndDay!;
+        const startHour = sleepEstimate.sleepStartHourHomeTz ?? sleepEstimate.sleepStartHour!;
+        const endHour = sleepEstimate.sleepEndHourHomeTz ?? sleepEstimate.sleepEndHour!;
         const validStart = startDay >= 1 && startDay <= daysInMonth && startHour >= 0 && startHour <= 24;
         const validEnd = endDay >= 1 && endDay <= daysInMonth && endHour >= 0 && endHour <= 24;
 

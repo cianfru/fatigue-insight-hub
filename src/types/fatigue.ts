@@ -129,11 +129,21 @@ export interface DutyAnalysis {
     // ISO timestamps for precise date/time positioning
     sleepStartIso?: string;
     sleepEndIso?: string;
-    // Pre-computed day/hour values (timezone-safe - already converted by backend)
+    // Pre-computed day/hour values in LOCATION timezone (legacy)
     sleepStartDay?: number;   // Day of month (1-31)
     sleepStartHour?: number;  // Hour (0-24, decimal)
     sleepEndDay?: number;     // Day of month (1-31)
     sleepEndHour?: number;    // Hour (0-24, decimal)
+    // Pre-computed day/hour values in HOME BASE timezone (use for chronogram positioning)
+    sleepStartDayHomeTz?: number;
+    sleepStartHourHomeTz?: number;
+    sleepEndDayHomeTz?: number;
+    sleepEndHourHomeTz?: number;
+    sleepStartTimeHomeTz?: string;  // HH:mm in home base timezone
+    sleepEndTimeHomeTz?: string;    // HH:mm in home base timezone
+    // Location context for display
+    locationTimezone?: string;      // IANA timezone e.g. "Europe/London"
+    environment?: 'home' | 'hotel' | 'layover';
     // Detailed sleep quality data from backend
     explanation?: string;
     confidenceBasis?: string;
@@ -180,6 +190,15 @@ export interface RestDaySleepBlock {
   durationHours: number;
   effectiveHours: number;
   qualityFactor: number;
+  // Home base timezone positioning
+  sleepStartDayHomeTz?: number;
+  sleepStartHourHomeTz?: number;
+  sleepEndDayHomeTz?: number;
+  sleepEndHourHomeTz?: number;
+  sleepStartTimeHomeTz?: string;
+  sleepEndTimeHomeTz?: string;
+  locationTimezone?: string;
+  environment?: 'home' | 'hotel' | 'layover';
 }
 
 // Rest day sleep (transformed from backend)
