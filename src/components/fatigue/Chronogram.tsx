@@ -503,15 +503,15 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     
     duties.forEach((duty) => {
       // Extract day-of-month from dateString to avoid timezone issues
-      const dutyDayOfMonth = duty.dateString
-        ? Number(duty.dateString.split('-')[2])
+      const dutyDayOfMonth = duty.dateString 
+        ? Number(duty.dateString.split('-')[2]) 
         : duty.date.getDate();
       const sleepEstimate = duty.sleepEstimate;
 
       if (!sleepEstimate) return;
 
       const recoveryScore = getRecoveryScore(sleepEstimate);
-
+      
       // Common quality factor fields for all sleep bars from this duty
       const sleepBarExtras = {
         qualityFactors: sleepEstimate.qualityFactors,
@@ -521,38 +521,13 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         references: sleepEstimate.references,
         woclOverlapHours: sleepEstimate.woclOverlapHours,
       };
-
-      // DEBUG: Log sleep timing data to help diagnose overlaps
-      console.log('[Chronogram Debug]', {
-        dutyDate: duty.dateString,
-        dutyDayOfMonth,
-        sleepStrategy: sleepEstimate.sleepStrategy,
-        hasHomeTz: {
-          startDay: sleepEstimate.sleepStartDayHomeTz,
-          startHour: sleepEstimate.sleepStartHourHomeTz,
-          endDay: sleepEstimate.sleepEndDayHomeTz,
-          endHour: sleepEstimate.sleepEndHourHomeTz,
-        },
-        hasLocationTz: {
-          startDay: sleepEstimate.sleepStartDay,
-          startHour: sleepEstimate.sleepStartHour,
-          endDay: sleepEstimate.sleepEndDay,
-          endHour: sleepEstimate.sleepEndHour,
-        },
-        isoTimestamps: {
-          start: sleepEstimate.sleepStartIso,
-          end: sleepEstimate.sleepEndIso,
-        },
-        locationTimezone: sleepEstimate.locationTimezone,
-        environment: sleepEstimate.environment,
-      });
-
+      
       // PREFER home-base timezone day/hour values for chronogram positioning
       // This ensures sleep bars align with duty bars (which are already in home TZ)
-      const hasHomeTz =
-        sleepEstimate.sleepStartDayHomeTz != null &&
-        sleepEstimate.sleepStartHourHomeTz != null &&
-        sleepEstimate.sleepEndDayHomeTz != null &&
+      const hasHomeTz = 
+        sleepEstimate.sleepStartDayHomeTz != null && 
+        sleepEstimate.sleepStartHourHomeTz != null && 
+        sleepEstimate.sleepEndDayHomeTz != null && 
         sleepEstimate.sleepEndHourHomeTz != null;
       
       // Fallback to location-timezone precomputed values if home_tz not available
@@ -568,44 +543,11 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         const endDay = sleepEstimate.sleepEndDayHomeTz ?? sleepEstimate.sleepEndDay!;
         const startHour = sleepEstimate.sleepStartHourHomeTz ?? sleepEstimate.sleepStartHour!;
         const endHour = sleepEstimate.sleepEndHourHomeTz ?? sleepEstimate.sleepEndHour!;
-
+        
         // Validate: days must be within month range and hours within 0-24
         const validStart = startDay >= 1 && startDay <= daysInMonth && startHour >= 0 && startHour <= 24;
         const validEnd = endDay >= 1 && endDay <= daysInMonth && endHour >= 0 && endHour <= 24;
-
-        // VALIDATION: Check for potential timezone issues
-        const usingHomeTz = sleepEstimate.sleepStartDayHomeTz != null;
-        const usingLocationTz = !usingHomeTz && sleepEstimate.sleepStartDay != null;
-        if (usingLocationTz) {
-          console.warn('[Chronogram] Using location timezone fallback - may cause overlaps!', {
-            dutyDate: duty.dateString,
-            locationTz: sleepEstimate.locationTimezone,
-          });
-        }
-
-        // VALIDATION: Check if sleep ends after it starts
-        const sleepDuration = (endDay - startDay) * 24 + (endHour - startHour);
-        if (sleepDuration <= 0) {
-          console.error('[Chronogram] Invalid sleep window - ends before it starts!', {
-            dutyDate: duty.dateString,
-            startDay,
-            startHour,
-            endDay,
-            endHour,
-            duration: sleepDuration,
-          });
-        }
-
-        // VALIDATION: Check if sleep duration is unrealistic
-        if (sleepDuration > 20) {
-          console.warn('[Chronogram] Suspicious sleep duration > 20 hours', {
-            dutyDate: duty.dateString,
-            duration: sleepDuration,
-            startDay,
-            endDay,
-          });
-        }
-
+        
         if (validStart && validEnd) {
           if (startDay === endDay && endHour > startHour) {
             // Same-day sleep (e.g., afternoon nap)
@@ -1073,44 +1015,22 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     barsByDay.forEach((dayBars) => {
       // Sort by startHour to process in order
       dayBars.sort((a, b) => a.startHour - b.startHour);
-
+      
       const kept: SleepBar[] = [];
       for (const bar of dayBars) {
         // Check if this bar overlaps with any already-kept bar
-        const overlapping = kept.find(k =>
+        const overlapping = kept.find(k => 
           bar.startHour < k.endHour && bar.endHour > k.startHour
         );
-
+        
         if (overlapping) {
           // Keep the one with more data (qualityFactors) or higher score
           const barHasData = !!bar.qualityFactors;
           const overlapHasData = !!overlapping.qualityFactors;
-
-          console.warn('[Chronogram] Detected overlapping sleep bars on same day - deduplicating', {
-            dayIndex: bar.dayIndex,
-            bar1: {
-              start: bar.startHour,
-              end: bar.endHour,
-              strategy: bar.sleepStrategy,
-              hasData: barHasData,
-              dutyDate: bar.relatedDuty?.dateString,
-            },
-            bar2: {
-              start: overlapping.startHour,
-              end: overlapping.endHour,
-              strategy: overlapping.sleepStrategy,
-              hasData: overlapHasData,
-              dutyDate: overlapping.relatedDuty?.dateString,
-            },
-          });
-
           if (barHasData && !overlapHasData) {
             // Replace the kept one with this better one
             const idx = kept.indexOf(overlapping);
             kept[idx] = bar;
-            console.log('[Chronogram] → Replaced with bar having quality data');
-          } else {
-            console.log('[Chronogram] → Kept existing bar');
           }
           // Otherwise keep the existing one (already has data or same quality)
         } else {
