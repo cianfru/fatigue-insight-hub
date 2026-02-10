@@ -379,63 +379,39 @@ export function HumanPerformanceTimeline({
         const startHour = startH + startM / 60;
         const reportHour = parseTimeToHours(duty.reportTimeLocal);
         const checkInHour = Math.max(0, reportHour ?? (startHour - DEFAULT_CHECK_IN_MINUTES / 60));
-        const endHour = endH + endM / 60;
+        let endHour = endH + endM / 60;
 
+        // For continuous elapsed time: if duty crosses midnight, adjust endHour to be > 24
         const isOvernight = endHour < startHour || (startHour >= 16 && endHour < 10);
-
         if (isOvernight) {
-          bars.push({
-            dayIndex: dayOfMonth,
-            startHour: checkInHour,
-            endHour: 24,
-            duty,
-            isOvernightStart: true,
-            segments: calculateSegments(duty, false),
-          });
-          if (dayOfMonth < daysInMonth && endHour > 0) {
-            bars.push({
-              dayIndex: dayOfMonth + 1,
-              startHour: 0,
-              endHour: endHour,
-              duty,
-              isOvernightContinuation: true,
-              segments: calculateSegments(duty, true),
-            });
-          }
-        } else {
-          bars.push({
-            dayIndex: dayOfMonth,
-            startHour: checkInHour,
-            endHour: endHour,
-            duty,
-            segments: calculateSegments(duty, false),
-          });
+          endHour += 24;
         }
+
+        bars.push({
+          dayIndex: dayOfMonth,
+          startHour: checkInHour,
+          endHour: endHour,
+          duty,
+          segments: calculateSegments(duty, false),
+        });
       }
     });
 
     return bars;
-  }, [duties, daysInMonth]);
+  }, [duties]);
 
   // ── FDP limit markers ──
   const fdpLimitMarkers = useMemo(() => {
     const markers: FdpLimitMarker[] = [];
     dutyBars.forEach((bar) => {
-      if (bar.isOvernightContinuation) return;
       const maxFdp = bar.duty.maxFdpHours;
       if (!maxFdp) return;
+      // In continuous elapsed time, just add the maxFdp to startHour
       const fdpEndHour = bar.startHour + maxFdp;
-      if (fdpEndHour <= 24) {
-        markers.push({ dayIndex: bar.dayIndex, hour: fdpEndHour, maxFdp, duty: bar.duty });
-      } else {
-        const nextDayHour = fdpEndHour - 24;
-        if (bar.dayIndex < daysInMonth) {
-          markers.push({ dayIndex: bar.dayIndex + 1, hour: nextDayHour, maxFdp, duty: bar.duty });
-        }
-      }
+      markers.push({ dayIndex: bar.dayIndex, hour: fdpEndHour, maxFdp, duty: bar.duty });
     });
     return markers;
-  }, [dutyBars, daysInMonth]);
+  }, [dutyBars]);
 
   // ── Sleep bars (mirroring Chronogram logic exactly) ──
   const sleepBars = useMemo(() => {
@@ -492,14 +468,13 @@ export function HumanPerformanceTimeline({
         sleepEstimate.sleepEndDay != null &&
         sleepEstimate.sleepEndHour != null);
 
-      const addSleepBar = (dayIndex: number, startHour: number, endHour: number, isOvernightStart?: boolean, isOvernightContinuation?: boolean, origStart?: number, origEnd?: number) => {
+      const addSleepBar = (dayIndex: number, startHour: number, endHour: number, origStart?: number, origEnd?: number) => {
         bars.push({
           dayIndex, startHour, endHour, recoveryScore,
           effectiveSleep: sleepEstimate.effectiveSleepHours,
           sleepEfficiency: sleepEstimate.sleepEfficiency,
           sleepStrategy: sleepEstimate.sleepStrategy,
           isPreDuty: true, relatedDuty: duty,
-          isOvernightStart, isOvernightContinuation,
           originalStartHour: origStart ?? startHour,
           originalEndHour: origEnd ?? endHour,
           ...sleepBarExtras,
@@ -510,20 +485,17 @@ export function HumanPerformanceTimeline({
         const startDay = sleepEstimate.sleepStartDayHomeTz ?? sleepEstimate.sleepStartDay!;
         const endDay = sleepEstimate.sleepEndDayHomeTz ?? sleepEstimate.sleepEndDay!;
         const startHour = sleepEstimate.sleepStartHourHomeTz ?? sleepEstimate.sleepStartHour!;
-        const endHour = sleepEstimate.sleepEndHourHomeTz ?? sleepEstimate.sleepEndHour!;
+        let endHour = sleepEstimate.sleepEndHourHomeTz ?? sleepEstimate.sleepEndHour!;
         const validStart = startDay >= 1 && startDay <= daysInMonth && startHour >= 0 && startHour <= 24;
         const validEnd = endDay >= 1 && endDay <= daysInMonth && endHour >= 0 && endHour <= 24;
 
         if (validStart && validEnd) {
-          if (startDay === endDay && endHour > startHour) {
-            addSleepBar(startDay, startHour, endHour);
-          } else if (startDay !== endDay) {
-            addSleepBar(startDay, startHour, 24, true, false, startHour, endHour);
-            if (endHour > 0) addSleepBar(endDay, 0, endHour, false, true, startHour, endHour);
-          } else if (startDay === endDay && endHour <= startHour) {
-            addSleepBar(startDay, startHour, 24, true, false, startHour, endHour);
-            if (startDay + 1 <= daysInMonth && endHour > 0) addSleepBar(startDay + 1, 0, endHour, false, true, startHour, endHour);
+          // For continuous elapsed time: adjust for overnight sleep
+          if (startDay !== endDay || (startDay === endDay && endHour <= startHour)) {
+            // Sleep crosses midnight - adjust endHour to be > 24
+            endHour += 24;
           }
+          addSleepBar(startDay, startHour, endHour, sleepEstimate.sleepStartHourHomeTz ?? sleepEstimate.sleepStartHour!, sleepEstimate.sleepEndHourHomeTz ?? sleepEstimate.sleepEndHour!);
           return;
         }
       }
@@ -535,35 +507,30 @@ export function HumanPerformanceTimeline({
 
         if (sleepStartIso && sleepEndIso) {
           const startDay = sleepStartIso.dayOfMonth;
-          const endDay = sleepEndIso.dayOfMonth;
           const startHour = sleepStartIso.hour;
-          const endHour = sleepEndIso.hour;
+          let endHour = sleepEndIso.hour;
 
-          if (startDay === endDay) {
-            addSleepBar(startDay, startHour, endHour);
-          } else {
-            const daySpan = endDay - startDay;
-            if (daySpan <= 1) {
-              if (startDay >= 1 && startDay <= daysInMonth) addSleepBar(startDay, startHour, 24, true, false, startHour, endHour);
-              if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) addSleepBar(endDay, 0, endHour, false, true, startHour, endHour);
-            } else {
-              const lastNightDay = endDay - 1;
-              const estimatedStart = 22;
-              if (lastNightDay >= 1 && lastNightDay <= daysInMonth) addSleepBar(lastNightDay, estimatedStart, 24, true, false, estimatedStart, endHour);
-              if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) addSleepBar(endDay, 0, endHour, false, true, estimatedStart, endHour);
-            }
+          // For continuous elapsed time: if sleep crosses days, adjust endHour
+          const daySpan = sleepEndIso.dayOfMonth - startDay;
+          if (daySpan > 0) {
+            endHour += daySpan * 24;
+          } else if (daySpan === 0 && endHour < startHour) {
+            // Same calendar day but crosses midnight
+            endHour += 24;
           }
+
+          addSleepBar(startDay, startHour, endHour, sleepStartIso.hour, sleepEndIso.hour);
         } else {
           // HH:mm fallback
           const sleepStart = sleepEstimate.sleepStartTime ? parseTime(sleepEstimate.sleepStartTime) : null;
           const sleepEnd = sleepEstimate.sleepEndTime ? parseTime(sleepEstimate.sleepEndTime) : null;
           if (sleepStart !== null && sleepEnd !== null) {
+            let endHour = sleepEnd;
             if (sleepStart > sleepEnd) {
-              if (dutyDayOfMonth > 1) addSleepBar(dutyDayOfMonth - 1, sleepStart, 24, true);
-              addSleepBar(dutyDayOfMonth, 0, sleepEnd, false, true);
-            } else {
-              addSleepBar(dutyDayOfMonth, sleepStart, sleepEnd);
+              endHour += 24;
             }
+            const startDay = dutyDayOfMonth > 1 ? dutyDayOfMonth - 1 : dutyDayOfMonth;
+            addSleepBar(startDay, sleepStart, endHour);
           }
         }
       }
@@ -603,28 +570,33 @@ export function HumanPerformanceTimeline({
             smsReportable: false, flightSegments: [],
           };
 
-          const makeSleepBar = (dayIndex: number, startHour: number, endHour: number, isOvernightStart?: boolean, isOvernightContinuation?: boolean) => {
+          const makeSleepBar = (dayIndex: number, startHour: number, endHour: number) => {
             bars.push({
               dayIndex, startHour, endHour, recoveryScore,
               effectiveSleep: block.effectiveHours,
               sleepEfficiency: block.qualityFactor,
               sleepStrategy: restDay.strategyType,
               isPreDuty: false, relatedDuty: pseudoDuty,
-              isOvernightStart, isOvernightContinuation,
               originalStartHour: sleepStartIso!.hour,
               originalEndHour: sleepEndIso!.hour,
               ...restDayExtras,
             });
           };
 
-          if (sleepStartIso.dayOfMonth === sleepEndIso.dayOfMonth) {
-            makeSleepBar(sleepStartIso.dayOfMonth, sleepStartIso.hour, sleepEndIso.hour);
-          } else {
-            if (sleepStartIso.dayOfMonth >= 1 && sleepStartIso.dayOfMonth <= daysInMonth)
-              makeSleepBar(sleepStartIso.dayOfMonth, sleepStartIso.hour, 24, true);
-            if (sleepEndIso.dayOfMonth >= 1 && sleepEndIso.dayOfMonth <= daysInMonth && sleepEndIso.hour > 0)
-              makeSleepBar(sleepEndIso.dayOfMonth, 0, sleepEndIso.hour, false, true);
+          const startHour = sleepStartIso.hour;
+          let endHour = sleepEndIso.hour;
+          const startDay = sleepStartIso.dayOfMonth;
+          
+          // For continuous elapsed time: if sleep crosses days, adjust endHour
+          const daySpan = sleepEndIso.dayOfMonth - startDay;
+          if (daySpan > 0) {
+            endHour += daySpan * 24;
+          } else if (daySpan === 0 && endHour < startHour) {
+            // Same calendar day but crosses midnight
+            endHour += 24;
           }
+          
+          makeSleepBar(startDay, startHour, endHour);
         });
       });
     }
@@ -669,7 +641,17 @@ export function HumanPerformanceTimeline({
   };
 
   const ROW_HEIGHT = 40;
-  const hours = Array.from({ length: 8 }, (_, i) => i * 3);
+  
+  // For elapsed time view: calculate total elapsed hours and generate labels
+  const totalElapsedHours = daysInMonth * 24;
+  const elapsedTimeLabels = useMemo(() => {
+    // Generate labels at 24h intervals (0h, 24h, 48h, 72h, ...)
+    const labels: number[] = [];
+    for (let h = 0; h <= totalElapsedHours; h += 24) {
+      labels.push(h);
+    }
+    return labels;
+  }, [totalElapsedHours]);
 
   if (dutyBars.length === 0) {
     return (
@@ -836,7 +818,7 @@ export function HumanPerformanceTimeline({
                           {dayWarnings.warnings[0]}
                         </div>
                       )}
-                      <div className="text-foreground font-medium text-[11px]">Day {dayNum}</div>
+                      <div className="text-foreground font-medium text-[11px]">{(idx * 24)}h-{((idx + 1) * 24)}h</div>
                       <div className="text-[9px] text-muted-foreground">{format(day, 'EEE d')}</div>
                       {phaseShift !== 0 && (
                         <div className={cn(
@@ -854,15 +836,18 @@ export function HumanPerformanceTimeline({
 
             {/* Main chart area */}
             <div className="relative flex-1">
-              {/* X-axis header */}
-              <div className="flex h-8 border-b border-border">
-                {hours.map((hour) => (
+              {/* X-axis header - Elapsed Time */}
+              <div className="flex h-8 border-b border-border items-center">
+                {elapsedTimeLabels.map((elapsedHours) => (
                   <div
-                    key={hour}
-                    className="flex-1 text-center text-[10px] text-muted-foreground"
-                    style={{ width: `${(3 / 24) * 100}%` }}
+                    key={elapsedHours}
+                    className="absolute text-center text-[10px] text-muted-foreground font-medium"
+                    style={{ 
+                      left: `${(elapsedHours / totalElapsedHours) * 100}%`,
+                      transform: 'translateX(-50%)'
+                    }}
                   >
-                    {hour.toString().padStart(2, '0')}:00
+                    {elapsedHours}h
                   </div>
                 ))}
               </div>
@@ -880,6 +865,14 @@ export function HumanPerformanceTimeline({
                   const wmzEnd = circadian?.wmzEnd ?? WMZ_END;
 
                   const woclWraps = woclEnd < woclStart;
+                  
+                  // Convert to elapsed time for continuous timeline
+                  const dayElapsedStart = dayIdx * 24;
+                  const woclElapsedStart = dayElapsedStart + woclStart;
+                  const woclElapsedEnd = dayElapsedStart + (woclWraps ? woclEnd + 24 : woclEnd);
+                  const nadirElapsed = dayElapsedStart + nadirHour;
+                  const wmzElapsedStart = dayElapsedStart + wmzStart;
+                  const wmzElapsedEnd = dayElapsedStart + wmzEnd;
 
                   return (
                     <div key={dayIdx} className="relative border-b border-border/20" style={{ height: `${ROW_HEIGHT}px` }}>
@@ -887,12 +880,31 @@ export function HumanPerformanceTimeline({
                       {!woclWraps ? (
                         <div
                           className="absolute top-0 bottom-0 wocl-hatch"
-                          style={{ left: `${(woclStart / 24) * 100}%`, width: `${((woclEnd - woclStart) / 24) * 100}%` }}
+                          style={{ 
+                            left: `${(woclElapsedStart / totalElapsedHours) * 100}%`, 
+                            width: `${((woclElapsedEnd - woclElapsedStart) / totalElapsedHours) * 100}%` 
+                          }}
                         />
                       ) : (
                         <>
-                          <div className="absolute top-0 bottom-0 wocl-hatch" style={{ left: `${(woclStart / 24) * 100}%`, right: 0 }} />
-                          <div className="absolute top-0 bottom-0 wocl-hatch" style={{ left: 0, width: `${(woclEnd / 24) * 100}%` }} />
+                          {/* WOCL wraps: draw from start to end of day */}
+                          <div 
+                            className="absolute top-0 bottom-0 wocl-hatch" 
+                            style={{ 
+                              left: `${(woclElapsedStart / totalElapsedHours) * 100}%`, 
+                              width: `${((dayElapsedStart + 24 - woclElapsedStart) / totalElapsedHours) * 100}%` 
+                            }} 
+                          />
+                          {/* WOCL wraps: draw from start of next day to end */}
+                          {dayIdx < daysInMonth - 1 && (
+                            <div 
+                              className="absolute top-0 bottom-0 wocl-hatch" 
+                              style={{ 
+                                left: `${((dayIdx + 1) * 24 / totalElapsedHours) * 100}%`, 
+                                width: `${(woclEnd / totalElapsedHours) * 100}%` 
+                              }} 
+                            />
+                          )}
                         </>
                       )}
 
@@ -900,24 +912,28 @@ export function HumanPerformanceTimeline({
                       {wmzStart < wmzEnd && (
                         <div
                           className="absolute top-0 bottom-0 bg-warning/5 border-l border-r border-warning/20"
-                          style={{ left: `${(wmzStart / 24) * 100}%`, width: `${((wmzEnd - wmzStart) / 24) * 100}%` }}
+                          style={{ 
+                            left: `${(wmzElapsedStart / totalElapsedHours) * 100}%`, 
+                            width: `${((wmzElapsedEnd - wmzElapsedStart) / totalElapsedHours) * 100}%` 
+                          }}
                         />
                       )}
 
                       {/* Nadir marker */}
                       <div
                         className="absolute top-0 bottom-0 w-px bg-critical/40"
-                        style={{ left: `${(nadirHour / 24) * 100}%` }}
+                        style={{ left: `${(nadirElapsed / totalElapsedHours) * 100}%` }}
                       >
                         <div className="absolute -top-0.5 -left-1.5 text-[8px] text-critical">▼</div>
                       </div>
 
-                      {/* Grid lines */}
-                      <div className="absolute inset-0 flex pointer-events-none">
-                        {Array.from({ length: 24 }, (_, hour) => (
+                      {/* Grid lines - continuous every hour */}
+                      <div className="absolute inset-0 pointer-events-none">
+                        {Array.from({ length: totalElapsedHours + 1 }, (_, hour) => (
                           <div
                             key={hour}
-                            className={cn("flex-1 border-r", hour % 3 === 0 ? "border-border/40" : "border-border/15")}
+                            className={cn("absolute top-0 bottom-0 border-r", hour % 24 === 0 ? "border-border/40" : hour % 3 === 0 ? "border-border/25" : "border-border/10")}
+                            style={{ left: `${(hour / totalElapsedHours) * 100}%` }}
                           />
                         ))}
                       </div>
@@ -926,13 +942,13 @@ export function HumanPerformanceTimeline({
                       {sleepBars
                         .filter((bar) => bar.dayIndex === dayNum)
                         .map((bar, barIndex) => {
-                          const barWidth = ((bar.endHour - bar.startHour) / 24) * 100;
+                          // Convert to elapsed time
+                          const sleepElapsedStart = (bar.dayIndex - 1) * 24 + bar.startHour;
+                          const sleepElapsedEnd = (bar.dayIndex - 1) * 24 + bar.endHour;
+                          const barWidth = ((sleepElapsedEnd - sleepElapsedStart) / totalElapsedHours) * 100;
                           const classes = getRecoveryClasses(bar.recoveryScore);
-                          const borderRadius = bar.isOvernightStart
-                            ? '2px 0 0 2px'
-                            : bar.isOvernightContinuation
-                              ? '0 2px 2px 0'
-                              : '2px';
+                          // No more overnight splits, so all bars get normal border radius
+                          const borderRadius = '2px';
                           return (
                             <Popover key={`sleep-${barIndex}`}>
                               <PopoverTrigger asChild>
@@ -941,14 +957,12 @@ export function HumanPerformanceTimeline({
                                   className="absolute z-[5] flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all border-primary/20 bg-primary/5"
                                   style={{
                                     top: 0, height: '100%',
-                                    left: `${(bar.startHour / 24) * 100}%`,
-                                    width: `${Math.max(barWidth, 1)}%`,
+                                    left: `${(sleepElapsedStart / totalElapsedHours) * 100}%`,
+                                    width: `${Math.max(barWidth, 0.1)}%`,
                                     borderRadius,
-                                    borderRight: bar.isOvernightStart ? 'none' : undefined,
-                                    borderLeft: bar.isOvernightContinuation ? 'none' : undefined,
                                   }}
                                 >
-                                  {barWidth > 6 && (
+                                  {barWidth > 0.5 && (
                                     <div className={cn("flex items-center gap-0.5 text-[8px] font-medium", classes.text)}>
                                       <span>{getStrategyIcon(bar.sleepStrategy)}</span>
                                       <span>{Math.round(bar.recoveryScore)}%</span>
@@ -1108,11 +1122,12 @@ export function HumanPerformanceTimeline({
                           const usedDiscretion = bar.duty.usedDiscretion;
                           const maxFdp = bar.duty.maxFdpHours;
                           const actualFdp = bar.duty.actualFdpHours || bar.duty.dutyHours;
-                          const borderRadius = bar.isOvernightStart
-                            ? '2px 0 0 2px'
-                            : bar.isOvernightContinuation
-                              ? '0 2px 2px 0'
-                              : '2px';
+                          // Convert to elapsed time
+                          const dutyElapsedStart = (bar.dayIndex - 1) * 24 + bar.startHour;
+                          const dutyElapsedEnd = (bar.dayIndex - 1) * 24 + bar.endHour;
+                          const dutyWidth = ((dutyElapsedEnd - dutyElapsedStart) / totalElapsedHours) * 100;
+                          // No more overnight splits
+                          const borderRadius = '2px';
 
                           return (
                             <TooltipProvider key={barIndex} delayDuration={100}>
@@ -1127,8 +1142,8 @@ export function HumanPerformanceTimeline({
                                     )}
                                     style={{
                                       top: 0, height: '100%',
-                                      left: `${(bar.startHour / 24) * 100}%`,
-                                      width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
+                                      left: `${(dutyElapsedStart / totalElapsedHours) * 100}%`,
+                                      width: `${Math.max(dutyWidth, 0.2)}%`,
                                       borderRadius,
                                     }}
                                   >
@@ -1319,14 +1334,18 @@ export function HumanPerformanceTimeline({
                       {/* FDP Limit markers */}
                       {fdpLimitMarkers
                         .filter((marker) => marker.dayIndex === dayNum)
-                        .map((marker, markerIndex) => (
-                          <div
-                            key={`fdp-${markerIndex}`}
-                            className="absolute top-0 bottom-0 border-r-2 border-dashed border-muted-foreground/50 pointer-events-none z-30"
-                            style={{ left: `${(marker.hour / 24) * 100}%` }}
-                            title={`Max FDP: ${marker.maxFdp}h`}
-                          />
-                        ))}
+                        .map((marker, markerIndex) => {
+                          // Convert to elapsed time
+                          const fdpElapsed = (marker.dayIndex - 1) * 24 + marker.hour;
+                          return (
+                            <div
+                              key={`fdp-${markerIndex}`}
+                              className="absolute top-0 bottom-0 border-r-2 border-dashed border-muted-foreground/50 pointer-events-none z-30"
+                              style={{ left: `${(fdpElapsed / totalElapsedHours) * 100}%` }}
+                              title={`Max FDP: ${marker.maxFdp}h`}
+                            />
+                          );
+                        })}
                     </div>
                   );
                 })}
