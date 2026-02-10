@@ -523,7 +523,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       };
 
       // DEBUG: Log sleep timing data to help diagnose overlaps
-      console.log('[Chronogram Debug]', {
+      console.warn('🔍 [Chronogram Debug]', {
         dutyDate: duty.dateString,
         dutyDayOfMonth,
         sleepStrategy: sleepEstimate.sleepStrategy,
