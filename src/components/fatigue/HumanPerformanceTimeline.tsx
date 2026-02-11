@@ -1,13 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Info, AlertTriangle, RotateCcw, Brain, Moon, Sun, Zap, ZoomIn, Battery } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Info, AlertTriangle, RotateCcw, Brain, Battery, ZoomIn } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { DutyAnalysis, DutyStatistics, RestDaySleep, FlightPhase, SleepQualityFactors, SleepReference } from '@/types/fatigue';
-import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
+import { DutyAnalysis, RestDaySleep, FlightPhase, SleepQualityFactors, SleepReference } from '@/types/fatigue';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useChronogramZoom } from '@/hooks/useChronogramZoom';
 import { TimelineLegend } from './TimelineLegend';
@@ -22,16 +22,14 @@ interface HumanPerformanceTimelineProps {
   restDaysSleep?: RestDaySleep[];
 }
 
-// Circadian markers in biological time
+// Circadian adaptation rates (hours/day)
+const ADAPTATION_RATE_EAST = 1.0;
+const ADAPTATION_RATE_WEST = 1.5;
+
+// Default WOCL window (02:00-06:00 body clock time)
 const WOCL_START = 2;
 const WOCL_END = 6;
 const NADIR_HOUR = 4.5;
-const WMZ_START = 20;
-const WMZ_END = 22;
-
-// Circadian adaptation rates
-const ADAPTATION_RATE_EAST = 1.0;
-const ADAPTATION_RATE_WEST = 1.5;
 
 const DEFAULT_CHECK_IN_MINUTES = 60;
 
@@ -45,9 +43,9 @@ const parseTimeToHours = (timeStr: string | undefined): number | undefined => {
 };
 
 const decimalToHHmm = (h: number): string => {
-  const hours = Math.floor(h);
-  const minutes = Math.round((h - hours) * 60);
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  const hrs = Math.floor(((h % 24) + 24) % 24);
+  const mins = Math.round((h - Math.floor(h)) * 60);
+  return `${String(hrs).padStart(2, '0')}:${String(Math.abs(mins)).padStart(2, '0')}`;
 };
 
 const getPerformanceColor = (performance: number): string => {
@@ -90,52 +88,40 @@ const getStrategyIcon = (strategy: string): string => {
   }
 };
 
-interface CircadianState {
-  phaseShift: number;
-  woclStart: number;
-  woclEnd: number;
-  nadirHour: number;
-  wmzStart: number;
-  wmzEnd: number;
+// ── Elapsed-time bar types ──
+
+interface ElapsedDutyBar {
+  rowIndex: number;       // Which 24h row (0-based)
+  startHourInRow: number; // 0-24 within the row
+  endHourInRow: number;   // 0-24 within the row
+  duty: DutyAnalysis;
+  isOverflowStart?: boolean;     // Bar continues to next row
+  isOverflowContinuation?: boolean; // Bar started on previous row
+  segments: ElapsedSegment[];
 }
 
-interface FlightSegmentBar {
+interface ElapsedSegment {
   type: 'checkin' | 'flight' | 'ground';
   flightNumber?: string;
   departure?: string;
   arrival?: string;
-  startHour: number;
-  endHour: number;
+  widthPercent: number;
   performance: number;
-  phases?: {
-    phase: FlightPhase;
-    performance: number;
-    widthPercent: number;
-  }[];
+  phases?: { phase: FlightPhase; performance: number; widthPercent: number }[];
 }
 
-interface DutyBar {
-  dayIndex: number;
-  startHour: number;
-  endHour: number;
-  duty: DutyAnalysis;
-  isOvernightStart?: boolean;
-  isOvernightContinuation?: boolean;
-  segments: FlightSegmentBar[];
-}
-
-interface SleepBar {
-  dayIndex: number;
-  startHour: number;
-  endHour: number;
+interface ElapsedSleepBar {
+  rowIndex: number;
+  startHourInRow: number;
+  endHourInRow: number;
   recoveryScore: number;
   effectiveSleep: number;
   sleepEfficiency: number;
   sleepStrategy: string;
   isPreDuty: boolean;
   relatedDuty: DutyAnalysis;
-  isOvernightStart?: boolean;
-  isOvernightContinuation?: boolean;
+  isOverflowStart?: boolean;
+  isOverflowContinuation?: boolean;
   originalStartHour?: number;
   originalEndHour?: number;
   qualityFactors?: SleepQualityFactors;
@@ -146,11 +132,10 @@ interface SleepBar {
   woclOverlapHours?: number;
 }
 
-interface FdpLimitMarker {
-  dayIndex: number;
-  hour: number;
-  maxFdp: number;
-  duty: DutyAnalysis;
+interface WoclBand {
+  rowIndex: number;
+  startHourInRow: number;
+  endHourInRow: number;
 }
 
 export function HumanPerformanceTimeline({
@@ -165,411 +150,324 @@ export function HumanPerformanceTimeline({
   const [infoOpen, setInfoOpen] = useState(false);
 
   const { zoom, containerRef, resetZoom, isZoomed } = useChronogramZoom({
-    minScaleX: 1,
-    maxScaleX: 4,
-    minScaleY: 1,
-    maxScaleY: 3,
+    minScaleX: 1, maxScaleX: 4, minScaleY: 1, maxScaleY: 3,
   });
 
   const showFlightPhases = zoom.scaleX >= 2;
-
-  const daysInMonth = getDaysInMonth(month);
-  const monthStart = startOfMonth(month);
-
-  const allDays = useMemo(() => {
-    return Array.from({ length: daysInMonth }, (_, i) => addDays(monthStart, i));
-  }, [daysInMonth, monthStart]);
 
   const discretionCount = useMemo(() =>
     duties.filter(d => d.usedDiscretion).length
   , [duties]);
 
-  // ── Circadian adaptation states ──
-  const circadianStates = useMemo(() => {
-    const states: Map<number, CircadianState> = new Map();
-    const sortedDuties = [...duties].sort((a, b) => a.date.getTime() - b.date.getTime());
-    let currentPhaseShift = 0;
-    let lastDutyDay = 0;
+  // ── T=0 reference: midnight of the first duty day ──
+  const t0 = useMemo(() => {
+    if (duties.length === 0) return new Date(month);
+    const sorted = [...duties].sort((a, b) => a.date.getTime() - b.date.getTime());
+    const firstDuty = sorted[0];
+    // T=0 = midnight of the first duty day (in home base timezone context)
+    const d = new Date(firstDuty.date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [duties, month]);
 
-    for (let day = 1; day <= daysInMonth; day++) {
-      states.set(day, {
-        phaseShift: 0,
-        woclStart: WOCL_START,
-        woclEnd: WOCL_END,
-        nadirHour: NADIR_HOUR,
-        wmzStart: WMZ_START,
-        wmzEnd: WMZ_END,
-      });
-    }
-
-    sortedDuties.forEach((duty) => {
-      const dayOfMonth = duty.dateString
-        ? Number(duty.dateString.split('-')[2])
-        : duty.date.getDate();
-
-      if (lastDutyDay > 0 && dayOfMonth > lastDutyDay + 1) {
-        const restDays = dayOfMonth - lastDutyDay - 1;
-        const adaptationRate = currentPhaseShift > 0 ? ADAPTATION_RATE_EAST : ADAPTATION_RATE_WEST;
-        const adaptation = Math.min(Math.abs(currentPhaseShift), restDays * adaptationRate);
-        currentPhaseShift = currentPhaseShift > 0
-          ? currentPhaseShift - adaptation
-          : currentPhaseShift + adaptation;
-      }
-
-      const dutyShift = duty.circadianPhaseShift || 0;
-      currentPhaseShift += dutyShift;
-      currentPhaseShift = Math.max(-12, Math.min(12, currentPhaseShift));
-
-      for (let day = dayOfMonth; day <= daysInMonth; day++) {
-        let adaptedShift = currentPhaseShift;
-        if (day > dayOfMonth) {
-          const daysAfter = day - dayOfMonth;
-          const adaptationRate = currentPhaseShift > 0 ? ADAPTATION_RATE_EAST : ADAPTATION_RATE_WEST;
-          const adaptation = Math.min(Math.abs(currentPhaseShift), daysAfter * adaptationRate);
-          adaptedShift = currentPhaseShift > 0
-            ? currentPhaseShift - adaptation
-            : currentPhaseShift + adaptation;
-        }
-
-        const wrap = (h: number) => ((h % 24) + 24) % 24;
-        states.set(day, {
-          phaseShift: adaptedShift,
-          woclStart: wrap(WOCL_START + adaptedShift),
-          woclEnd: wrap(WOCL_END + adaptedShift),
-          nadirHour: wrap(NADIR_HOUR + adaptedShift),
-          wmzStart: wrap(WMZ_START + adaptedShift),
-          wmzEnd: wrap(WMZ_END + adaptedShift),
-        });
-      }
-
-      lastDutyDay = dayOfMonth;
-    });
-
-    return states;
-  }, [duties, daysInMonth]);
-
-  // ── Calculate flight segment bars (same logic as Chronogram) ──
-  const calculateSegments = (duty: DutyAnalysis, isOvernightContinuation: boolean): FlightSegmentBar[] => {
-    const segments: FlightSegmentBar[] = [];
-    const flightSegs = duty.flightSegments;
-    if (flightSegs.length === 0) return [];
-
-    if (isOvernightContinuation) {
-      let lastEndHour = 0;
-      flightSegs.forEach((seg) => {
-        const [depH, depM] = seg.departureTime.split(':').map(Number);
-        const [arrH, arrM] = seg.arrivalTime.split(':').map(Number);
-        const depHour = depH + depM / 60;
-        const arrHour = arrH + arrM / 60;
-
-        if (arrHour < depHour) {
-          segments.push({
-            type: 'flight',
-            flightNumber: seg.flightNumber,
-            departure: seg.departure,
-            arrival: seg.arrival,
-            startHour: 0,
-            endHour: arrHour,
-            performance: seg.performance,
-          });
-          lastEndHour = arrHour;
-        } else if (depHour < 12 && arrHour < 12) {
-          if (depHour > lastEndHour + 0.25) {
-            segments.push({ type: 'ground', startHour: lastEndHour, endHour: depHour, performance: duty.avgPerformance });
-          }
-          segments.push({
-            type: 'flight',
-            flightNumber: seg.flightNumber,
-            departure: seg.departure,
-            arrival: seg.arrival,
-            startHour: depHour,
-            endHour: arrHour,
-            performance: seg.performance,
-          });
-          lastEndHour = arrHour;
-        }
-      });
-      return segments;
-    }
-
-    const [firstDepH, firstDepM] = flightSegs[0].departureTime.split(':').map(Number);
-    const firstDepHour = firstDepH + firstDepM / 60;
-    const reportHour = parseTimeToHours(duty.reportTimeLocal);
-    const checkInHour = Math.max(0, reportHour ?? (firstDepHour - DEFAULT_CHECK_IN_MINUTES / 60));
-
-    segments.push({
-      type: 'checkin',
-      startHour: checkInHour,
-      endHour: firstDepHour,
-      performance: Math.min(100, duty.avgPerformance + 10),
-    });
-
-    let passedMidnight = false;
-    flightSegs.forEach((seg, index) => {
-      if (passedMidnight) return;
-
-      const [depH, depM] = seg.departureTime.split(':').map(Number);
-      const [arrH, arrM] = seg.arrivalTime.split(':').map(Number);
-      const depHour = depH + depM / 60;
-      let arrHour = arrH + arrM / 60;
-
-      if (index > 0) {
-        const prevSeg = flightSegs[index - 1];
-        const [prevArrH, prevArrM] = prevSeg.arrivalTime.split(':').map(Number);
-        const prevArrHour = prevArrH + prevArrM / 60;
-
-        if (prevArrHour > depHour) {
-          if (prevArrHour < 23.75) {
-            segments.push({ type: 'ground', startHour: prevArrHour, endHour: 24, performance: duty.avgPerformance });
-          }
-          passedMidnight = true;
-          return;
-        }
-
-        if (depHour > prevArrHour + 0.25) {
-          segments.push({ type: 'ground', startHour: prevArrHour, endHour: depHour, performance: duty.avgPerformance });
-        }
-      }
-
-      if (arrHour < depHour) {
-        arrHour = 24;
-        passedMidnight = true;
-      }
-
-      const phases: FlightSegmentBar['phases'] = [
-        { phase: 'takeoff' as FlightPhase, performance: seg.performance + 5, widthPercent: 15 },
-        { phase: 'climb' as FlightPhase, performance: seg.performance + 3, widthPercent: 10 },
-        { phase: 'cruise' as FlightPhase, performance: seg.performance, widthPercent: 50 },
-        { phase: 'descent' as FlightPhase, performance: seg.performance - 2, widthPercent: 10 },
-        { phase: 'approach' as FlightPhase, performance: seg.performance - 4, widthPercent: 10 },
-        { phase: 'landing' as FlightPhase, performance: duty.landingPerformance || seg.performance - 5, widthPercent: 5 },
-      ];
-
-      segments.push({
-        type: 'flight',
-        flightNumber: seg.flightNumber,
-        departure: seg.departure,
-        arrival: seg.arrival,
-        startHour: depHour,
-        endHour: arrHour,
-        performance: seg.performance,
-        phases,
-      });
-    });
-
-    return segments;
+  // Convert a Date + HH:mm time to elapsed hours from T=0
+  const toElapsed = (date: Date, hourOfDay: number): number => {
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayOffsetMs = dayStart.getTime() - t0.getTime();
+    const dayOffsetHours = dayOffsetMs / (1000 * 60 * 60);
+    return dayOffsetHours + hourOfDay;
   };
 
-  // ── Duty bars ──
-  const dutyBars = useMemo(() => {
-    const bars: DutyBar[] = [];
+  // Convert dayOfMonth + hourOfDay to elapsed hours from T=0
+  const dayHourToElapsed = (dayOfMonth: number, hourOfDay: number): number => {
+    const d = new Date(month.getFullYear(), month.getMonth(), dayOfMonth);
+    d.setHours(0, 0, 0, 0);
+    const offsetMs = d.getTime() - t0.getTime();
+    return offsetMs / (1000 * 60 * 60) + hourOfDay;
+  };
+
+  // ── Circadian phase shifts (accumulated timezone crossings) ──
+  const circadianShifts = useMemo(() => {
+    // Track accumulated phase shift per elapsed-24h-row
+    const sorted = [...duties].sort((a, b) => a.date.getTime() - b.date.getTime());
+    const shifts: Map<number, number> = new Map(); // rowIndex -> phaseShift
+    let currentShift = 0;
+    let lastDutyElapsed = 0;
+
+    sorted.forEach((duty) => {
+      const dayOfMonth = duty.dateString ? Number(duty.dateString.split('-')[2]) : duty.date.getDate();
+      const reportHour = parseTimeToHours(duty.reportTimeLocal) ?? 0;
+      const elapsed = dayHourToElapsed(dayOfMonth, reportHour);
+      
+      // Rest days between duties: body clock adapts
+      if (lastDutyElapsed > 0) {
+        const restHours = elapsed - lastDutyElapsed;
+        const restDays = restHours / 24;
+        if (restDays > 0.5) {
+          const rate = currentShift > 0 ? ADAPTATION_RATE_EAST : ADAPTATION_RATE_WEST;
+          const adaptation = Math.min(Math.abs(currentShift), restDays * rate);
+          currentShift += currentShift > 0 ? -adaptation : adaptation;
+        }
+      }
+
+      currentShift += duty.circadianPhaseShift || 0;
+      currentShift = Math.max(-12, Math.min(12, currentShift));
+
+      const row = Math.floor(elapsed / 24);
+      shifts.set(row, currentShift);
+      lastDutyElapsed = elapsed + duty.dutyHours;
+    });
+
+    return shifts;
+  }, [duties, month, t0]);
+
+  const getPhaseShiftForRow = (row: number): number => {
+    // Find the most recent shift at or before this row
+    let shift = 0;
+    for (const [r, s] of circadianShifts) {
+      if (r <= row) shift = s;
+    }
+    return shift;
+  };
+
+  // ── Compute elapsed duty bars ──
+  const { dutyBars, totalRows } = useMemo(() => {
+    const bars: ElapsedDutyBar[] = [];
+    let maxElapsed = 0;
 
     duties.forEach((duty) => {
-      const dayOfMonth = duty.dateString
-        ? Number(duty.dateString.split('-')[2])
-        : duty.date.getDate();
+      const dayOfMonth = duty.dateString ? Number(duty.dateString.split('-')[2]) : duty.date.getDate();
+      if (duty.flightSegments.length === 0) return;
 
-      if (duty.flightSegments.length > 0) {
-        const firstSegment = duty.flightSegments[0];
-        const lastSegment = duty.flightSegments[duty.flightSegments.length - 1];
+      const firstSeg = duty.flightSegments[0];
+      const lastSeg = duty.flightSegments[duty.flightSegments.length - 1];
+      const [startH, startM] = firstSeg.departureTime.split(':').map(Number);
+      const [endH, endM] = lastSeg.arrivalTime.split(':').map(Number);
 
-        const [startH, startM] = firstSegment.departureTime.split(':').map(Number);
-        const [endH, endM] = lastSegment.arrivalTime.split(':').map(Number);
+      const depHour = startH + startM / 60;
+      const reportHour = parseTimeToHours(duty.reportTimeLocal);
+      const checkInHour = Math.max(0, reportHour ?? (depHour - DEFAULT_CHECK_IN_MINUTES / 60));
+      let arrHour = endH + endM / 60;
+      
+      // Handle overnight: arrival next day
+      if (arrHour < depHour) arrHour += 24;
 
-        const startHour = startH + startM / 60;
-        const reportHour = parseTimeToHours(duty.reportTimeLocal);
-        const checkInHour = Math.max(0, reportHour ?? (startHour - DEFAULT_CHECK_IN_MINUTES / 60));
-        const endHour = endH + endM / 60;
+      const elapsedStart = dayHourToElapsed(dayOfMonth, checkInHour);
+      const elapsedEnd = dayHourToElapsed(dayOfMonth, arrHour);
+      maxElapsed = Math.max(maxElapsed, elapsedEnd);
 
-        const isOvernight = endHour < startHour || (startHour >= 16 && endHour < 10);
+      const startRow = Math.floor(elapsedStart / 24);
+      const startInRow = elapsedStart % 24;
+      const endRow = Math.floor(elapsedEnd / 24);
+      const endInRow = elapsedEnd % 24;
 
-        if (isOvernight) {
-          bars.push({
-            dayIndex: dayOfMonth,
-            startHour: checkInHour,
-            endHour: 24,
-            duty,
-            isOvernightStart: true,
-            segments: calculateSegments(duty, false),
+      // Build segments for display
+      const buildSegments = (barStartElapsed: number, barEndElapsed: number): ElapsedSegment[] => {
+        const segs: ElapsedSegment[] = [];
+        const barDuration = barEndElapsed - barStartElapsed;
+        if (barDuration <= 0) return segs;
+
+        // Check-in
+        const checkInEnd = dayHourToElapsed(dayOfMonth, depHour);
+        const checkInStartClamped = Math.max(elapsedStart, barStartElapsed);
+        const checkInEndClamped = Math.min(checkInEnd, barEndElapsed);
+        if (checkInEndClamped > checkInStartClamped) {
+          segs.push({
+            type: 'checkin',
+            widthPercent: ((checkInEndClamped - checkInStartClamped) / barDuration) * 100,
+            performance: Math.min(100, duty.avgPerformance + 10),
           });
-          if (dayOfMonth < daysInMonth && endHour > 0) {
-            bars.push({
-              dayIndex: dayOfMonth + 1,
-              startHour: 0,
-              endHour: endHour,
-              duty,
-              isOvernightContinuation: true,
-              segments: calculateSegments(duty, true),
+        }
+
+        // Flights
+        let prevArrElapsed = checkInEnd;
+        duty.flightSegments.forEach((seg) => {
+          const [dH, dM] = seg.departureTime.split(':').map(Number);
+          const [aH, aM] = seg.arrivalTime.split(':').map(Number);
+          let segDepElapsed = dayHourToElapsed(dayOfMonth, dH + dM / 60);
+          let segArrElapsed = dayHourToElapsed(dayOfMonth, aH + aM / 60);
+          if (segArrElapsed < segDepElapsed) segArrElapsed += 24;
+
+          // Ground time
+          const groundStart = Math.max(prevArrElapsed, barStartElapsed);
+          const groundEnd = Math.min(segDepElapsed, barEndElapsed);
+          if (groundEnd > groundStart + 0.1) {
+            segs.push({
+              type: 'ground',
+              widthPercent: ((groundEnd - groundStart) / barDuration) * 100,
+              performance: duty.avgPerformance,
             });
           }
-        } else {
-          bars.push({
-            dayIndex: dayOfMonth,
-            startHour: checkInHour,
-            endHour: endHour,
-            duty,
-            segments: calculateSegments(duty, false),
-          });
-        }
-      }
-    });
 
-    return bars;
-  }, [duties, daysInMonth]);
+          // Flight
+          const flightStart = Math.max(segDepElapsed, barStartElapsed);
+          const flightEnd = Math.min(segArrElapsed, barEndElapsed);
+          if (flightEnd > flightStart) {
+            const phases = [
+              { phase: 'takeoff' as FlightPhase, performance: seg.performance + 5, widthPercent: 15 },
+              { phase: 'climb' as FlightPhase, performance: seg.performance + 3, widthPercent: 10 },
+              { phase: 'cruise' as FlightPhase, performance: seg.performance, widthPercent: 50 },
+              { phase: 'descent' as FlightPhase, performance: seg.performance - 2, widthPercent: 10 },
+              { phase: 'approach' as FlightPhase, performance: seg.performance - 4, widthPercent: 10 },
+              { phase: 'landing' as FlightPhase, performance: duty.landingPerformance || seg.performance - 5, widthPercent: 5 },
+            ];
+            segs.push({
+              type: 'flight',
+              flightNumber: seg.flightNumber,
+              departure: seg.departure,
+              arrival: seg.arrival,
+              widthPercent: ((flightEnd - flightStart) / barDuration) * 100,
+              performance: seg.performance,
+              phases,
+            });
+          }
 
-  // ── FDP limit markers ──
-  const fdpLimitMarkers = useMemo(() => {
-    const markers: FdpLimitMarker[] = [];
-    dutyBars.forEach((bar) => {
-      if (bar.isOvernightContinuation) return;
-      const maxFdp = bar.duty.maxFdpHours;
-      if (!maxFdp) return;
-      const fdpEndHour = bar.startHour + maxFdp;
-      if (fdpEndHour <= 24) {
-        markers.push({ dayIndex: bar.dayIndex, hour: fdpEndHour, maxFdp, duty: bar.duty });
+          prevArrElapsed = segArrElapsed;
+        });
+
+        return segs;
+      };
+
+      if (startRow === endRow) {
+        bars.push({
+          rowIndex: startRow,
+          startHourInRow: startInRow,
+          endHourInRow: endInRow,
+          duty,
+          segments: buildSegments(elapsedStart, elapsedEnd),
+        });
       } else {
-        const nextDayHour = fdpEndHour - 24;
-        if (bar.dayIndex < daysInMonth) {
-          markers.push({ dayIndex: bar.dayIndex + 1, hour: nextDayHour, maxFdp, duty: bar.duty });
-        }
+        // Split across 24h boundary
+        const splitPoint = (startRow + 1) * 24;
+        bars.push({
+          rowIndex: startRow,
+          startHourInRow: startInRow,
+          endHourInRow: 24,
+          duty,
+          isOverflowStart: true,
+          segments: buildSegments(elapsedStart, splitPoint),
+        });
+        bars.push({
+          rowIndex: endRow,
+          startHourInRow: 0,
+          endHourInRow: endInRow,
+          duty,
+          isOverflowContinuation: true,
+          segments: buildSegments(splitPoint, elapsedEnd),
+        });
       }
     });
-    return markers;
-  }, [dutyBars, daysInMonth]);
 
-  // ── Sleep bars (mirroring Chronogram logic exactly) ──
+    // Also account for rest days and sleep extending the timeline
+    let lastDay = 0;
+    duties.forEach(d => {
+      const dom = d.dateString ? Number(d.dateString.split('-')[2]) : d.date.getDate();
+      lastDay = Math.max(lastDay, dom);
+    });
+    if (restDaysSleep) {
+      restDaysSleep.forEach(r => {
+        const dom = r.date.getDate();
+        lastDay = Math.max(lastDay, dom);
+      });
+    }
+    const lastElapsed = dayHourToElapsed(lastDay, 24);
+    maxElapsed = Math.max(maxElapsed, lastElapsed);
+
+    const totalRows = Math.max(1, Math.ceil(maxElapsed / 24));
+    return { dutyBars: bars, totalRows };
+  }, [duties, restDaysSleep, month, t0]);
+
+  // ── Compute elapsed sleep bars ──
   const sleepBars = useMemo(() => {
-    const bars: SleepBar[] = [];
+    const bars: ElapsedSleepBar[] = [];
 
-    const parseTime = (timeStr: string): number => {
-      const [h, m] = timeStr.split(':').map(Number);
-      return h + (m || 0) / 60;
-    };
+    const addSleep = (
+      elapsedStart: number, elapsedEnd: number,
+      props: Omit<ElapsedSleepBar, 'rowIndex' | 'startHourInRow' | 'endHourInRow' | 'isOverflowStart' | 'isOverflowContinuation'>
+    ) => {
+      if (elapsedEnd <= elapsedStart || elapsedStart < 0) return;
+      const startRow = Math.floor(elapsedStart / 24);
+      const endRow = Math.floor(elapsedEnd / 24);
+      const startInRow = elapsedStart % 24;
+      const endInRow = elapsedEnd % 24 || 24;
 
-    const parseIsoTimestamp = (isoStr: string): { dayOfMonth: number; hour: number } | null => {
-      if (!isoStr) return null;
-      const m = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
-      if (m) {
-        const dayOfMonth = Number(m[3]);
-        const hour = Number(m[4]) + Number(m[5]) / 60;
-        if (!Number.isFinite(dayOfMonth) || !Number.isFinite(hour)) return null;
-        return { dayOfMonth, hour };
+      if (startRow === endRow) {
+        bars.push({ ...props, rowIndex: startRow, startHourInRow: startInRow, endHourInRow: endInRow });
+      } else {
+        bars.push({ ...props, rowIndex: startRow, startHourInRow: startInRow, endHourInRow: 24, isOverflowStart: true });
+        bars.push({ ...props, rowIndex: endRow, startHourInRow: 0, endHourInRow: endInRow, isOverflowContinuation: true });
       }
-      try {
-        const date = new Date(isoStr);
-        if (Number.isNaN(date.getTime())) return null;
-        return { dayOfMonth: date.getDate(), hour: date.getHours() + date.getMinutes() / 60 };
-      } catch { return null; }
     };
 
     duties.forEach((duty) => {
-      const dutyDayOfMonth = duty.dateString
-        ? Number(duty.dateString.split('-')[2])
-        : duty.date.getDate();
-      const sleepEstimate = duty.sleepEstimate;
-      if (!sleepEstimate) return;
+      const dayOfMonth = duty.dateString ? Number(duty.dateString.split('-')[2]) : duty.date.getDate();
+      const est = duty.sleepEstimate;
+      if (!est) return;
 
-      const recoveryScore = getRecoveryScore(sleepEstimate);
-      const sleepBarExtras = {
-        qualityFactors: sleepEstimate.qualityFactors,
-        explanation: sleepEstimate.explanation,
-        confidenceBasis: sleepEstimate.confidenceBasis,
-        confidence: sleepEstimate.confidence,
-        references: sleepEstimate.references,
-        woclOverlapHours: sleepEstimate.woclOverlapHours,
+      const recoveryScore = getRecoveryScore(est);
+      const extras = {
+        recoveryScore,
+        effectiveSleep: est.effectiveSleepHours,
+        sleepEfficiency: est.sleepEfficiency,
+        sleepStrategy: est.sleepStrategy,
+        isPreDuty: true,
+        relatedDuty: duty,
+        qualityFactors: est.qualityFactors,
+        explanation: est.explanation,
+        confidenceBasis: est.confidenceBasis,
+        confidence: est.confidence,
+        references: est.references,
+        woclOverlapHours: est.woclOverlapHours,
       };
 
-      // PREFER home-base timezone day/hour values for positioning
-      const hasHomeTz =
-        sleepEstimate.sleepStartDayHomeTz != null &&
-        sleepEstimate.sleepStartHourHomeTz != null &&
-        sleepEstimate.sleepEndDayHomeTz != null &&
-        sleepEstimate.sleepEndHourHomeTz != null;
+      // Use home-tz precomputed values
+      const hasHomeTz = est.sleepStartDayHomeTz != null && est.sleepStartHourHomeTz != null &&
+        est.sleepEndDayHomeTz != null && est.sleepEndHourHomeTz != null;
 
-      const hasPrecomputed = hasHomeTz || (
-        sleepEstimate.sleepStartDay != null &&
-        sleepEstimate.sleepStartHour != null &&
-        sleepEstimate.sleepEndDay != null &&
-        sleepEstimate.sleepEndHour != null);
-
-      const addSleepBar = (dayIndex: number, startHour: number, endHour: number, isOvernightStart?: boolean, isOvernightContinuation?: boolean, origStart?: number, origEnd?: number) => {
-        bars.push({
-          dayIndex, startHour, endHour, recoveryScore,
-          effectiveSleep: sleepEstimate.effectiveSleepHours,
-          sleepEfficiency: sleepEstimate.sleepEfficiency,
-          sleepStrategy: sleepEstimate.sleepStrategy,
-          isPreDuty: true, relatedDuty: duty,
-          isOvernightStart, isOvernightContinuation,
-          originalStartHour: origStart ?? startHour,
-          originalEndHour: origEnd ?? endHour,
-          ...sleepBarExtras,
+      if (hasHomeTz) {
+        const elStart = dayHourToElapsed(est.sleepStartDayHomeTz!, est.sleepStartHourHomeTz!);
+        const elEnd = dayHourToElapsed(est.sleepEndDayHomeTz!, est.sleepEndHourHomeTz!);
+        addSleep(elStart, elEnd, {
+          ...extras,
+          originalStartHour: est.sleepStartHourHomeTz!,
+          originalEndHour: est.sleepEndHourHomeTz!,
         });
-      };
+        return;
+      }
 
-      if (hasPrecomputed) {
-        const startDay = sleepEstimate.sleepStartDayHomeTz ?? sleepEstimate.sleepStartDay!;
-        const endDay = sleepEstimate.sleepEndDayHomeTz ?? sleepEstimate.sleepEndDay!;
-        const startHour = sleepEstimate.sleepStartHourHomeTz ?? sleepEstimate.sleepStartHour!;
-        const endHour = sleepEstimate.sleepEndHourHomeTz ?? sleepEstimate.sleepEndHour!;
-        const validStart = startDay >= 1 && startDay <= daysInMonth && startHour >= 0 && startHour <= 24;
-        const validEnd = endDay >= 1 && endDay <= daysInMonth && endHour >= 0 && endHour <= 24;
-
-        if (validStart && validEnd) {
-          if (startDay === endDay && endHour > startHour) {
-            addSleepBar(startDay, startHour, endHour);
-          } else if (startDay !== endDay) {
-            addSleepBar(startDay, startHour, 24, true, false, startHour, endHour);
-            if (endHour > 0) addSleepBar(endDay, 0, endHour, false, true, startHour, endHour);
-          } else if (startDay === endDay && endHour <= startHour) {
-            addSleepBar(startDay, startHour, 24, true, false, startHour, endHour);
-            if (startDay + 1 <= daysInMonth && endHour > 0) addSleepBar(startDay + 1, 0, endHour, false, true, startHour, endHour);
-          }
+      // Fallback: ISO or HH:mm
+      if (est.sleepStartIso && est.sleepEndIso) {
+        const parseIso = (iso: string) => {
+          const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+          if (m) return { day: Number(m[3]), hour: Number(m[4]) + Number(m[5]) / 60 };
+          return null;
+        };
+        const s = parseIso(est.sleepStartIso);
+        const e = parseIso(est.sleepEndIso);
+        if (s && e) {
+          let elStart = dayHourToElapsed(s.day, s.hour);
+          let elEnd = dayHourToElapsed(e.day, e.hour);
+          if (elEnd <= elStart) elEnd += 24;
+          addSleep(elStart, elEnd, { ...extras, originalStartHour: s.hour, originalEndHour: e.hour });
           return;
         }
       }
 
-      // Fallback: ISO timestamps
-      {
-        const sleepStartIso = sleepEstimate.sleepStartIso ? parseIsoTimestamp(sleepEstimate.sleepStartIso) : null;
-        const sleepEndIso = sleepEstimate.sleepEndIso ? parseIsoTimestamp(sleepEstimate.sleepEndIso) : null;
-
-        if (sleepStartIso && sleepEndIso) {
-          const startDay = sleepStartIso.dayOfMonth;
-          const endDay = sleepEndIso.dayOfMonth;
-          const startHour = sleepStartIso.hour;
-          const endHour = sleepEndIso.hour;
-
-          if (startDay === endDay) {
-            addSleepBar(startDay, startHour, endHour);
-          } else {
-            const daySpan = endDay - startDay;
-            if (daySpan <= 1) {
-              if (startDay >= 1 && startDay <= daysInMonth) addSleepBar(startDay, startHour, 24, true, false, startHour, endHour);
-              if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) addSleepBar(endDay, 0, endHour, false, true, startHour, endHour);
-            } else {
-              const lastNightDay = endDay - 1;
-              const estimatedStart = 22;
-              if (lastNightDay >= 1 && lastNightDay <= daysInMonth) addSleepBar(lastNightDay, estimatedStart, 24, true, false, estimatedStart, endHour);
-              if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) addSleepBar(endDay, 0, endHour, false, true, estimatedStart, endHour);
-            }
-          }
-        } else {
-          // HH:mm fallback
-          const sleepStart = sleepEstimate.sleepStartTime ? parseTime(sleepEstimate.sleepStartTime) : null;
-          const sleepEnd = sleepEstimate.sleepEndTime ? parseTime(sleepEstimate.sleepEndTime) : null;
-          if (sleepStart !== null && sleepEnd !== null) {
-            if (sleepStart > sleepEnd) {
-              if (dutyDayOfMonth > 1) addSleepBar(dutyDayOfMonth - 1, sleepStart, 24, true);
-              addSleepBar(dutyDayOfMonth, 0, sleepEnd, false, true);
-            } else {
-              addSleepBar(dutyDayOfMonth, sleepStart, sleepEnd);
-            }
-          }
+      // HH:mm fallback
+      if (est.sleepStartTime && est.sleepEndTime) {
+        const sH = parseTimeToHours(est.sleepStartTime)!;
+        const eH = parseTimeToHours(est.sleepEndTime)!;
+        let elStart = dayHourToElapsed(dayOfMonth, sH);
+        let elEnd = dayHourToElapsed(dayOfMonth, eH);
+        if (sH > eH) {
+          elStart = dayHourToElapsed(dayOfMonth - 1, sH);
         }
+        addSleep(elStart, elEnd, { ...extras, originalStartHour: sH, originalEndHour: eH });
       }
     });
 
-    // Rest day sleep bars
+    // Rest day sleep
     if (restDaysSleep) {
       restDaysSleep.forEach((restDay) => {
         const restDayExtras = {
@@ -581,71 +479,86 @@ export function HumanPerformanceTimeline({
         };
         restDay.sleepBlocks.forEach((block) => {
           const baseScore = (block.effectiveHours / 8) * 100;
-          const efficiencyBonus = block.qualityFactor * 20;
-          const recoveryScore = Math.min(100, Math.max(0, baseScore + efficiencyBonus));
-          const parseIso = (isoStr: string): { dayOfMonth: number; hour: number } | null => {
-            if (!isoStr) return null;
-            const m = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
-            if (m) return { dayOfMonth: Number(m[3]), hour: Number(m[4]) + Number(m[5]) / 60 };
-            return null;
-          };
+          const recoveryScore = Math.min(100, Math.max(0, baseScore + block.qualityFactor * 20));
 
-          const sleepStartIso = parseIso(block.sleepStartIso);
-          const sleepEndIso = parseIso(block.sleepEndIso);
-          if (!sleepStartIso || !sleepEndIso) return;
-
-          const pseudoDuty: DutyAnalysis = {
-            date: restDay.date, dayOfWeek: format(restDay.date, 'EEE'),
-            dutyHours: 0, blockHours: 0, sectors: 0,
-            minPerformance: 100, avgPerformance: 100, landingPerformance: 100,
-            sleepDebt: 0, woclExposure: 0, priorSleep: restDay.totalSleepHours,
-            overallRisk: 'LOW', minPerformanceRisk: 'LOW', landingRisk: 'LOW',
-            smsReportable: false, flightSegments: [],
-          };
-
-          const makeSleepBar = (dayIndex: number, startHour: number, endHour: number, isOvernightStart?: boolean, isOvernightContinuation?: boolean) => {
-            bars.push({
-              dayIndex, startHour, endHour, recoveryScore,
+          // Use home-tz values if available
+          if (block.sleepStartDayHomeTz != null && block.sleepStartHourHomeTz != null &&
+              block.sleepEndDayHomeTz != null && block.sleepEndHourHomeTz != null) {
+            const elStart = dayHourToElapsed(block.sleepStartDayHomeTz, block.sleepStartHourHomeTz);
+            const elEnd = dayHourToElapsed(block.sleepEndDayHomeTz, block.sleepEndHourHomeTz);
+            const pseudoDuty: DutyAnalysis = {
+              date: restDay.date, dayOfWeek: format(restDay.date, 'EEE'),
+              dutyHours: 0, blockHours: 0, sectors: 0,
+              minPerformance: 100, avgPerformance: 100, landingPerformance: 100,
+              sleepDebt: 0, woclExposure: 0, priorSleep: restDay.totalSleepHours,
+              overallRisk: 'LOW', minPerformanceRisk: 'LOW', landingRisk: 'LOW',
+              smsReportable: false, flightSegments: [],
+            };
+            addSleep(elStart, elEnd, {
+              recoveryScore,
               effectiveSleep: block.effectiveHours,
               sleepEfficiency: block.qualityFactor,
               sleepStrategy: restDay.strategyType,
-              isPreDuty: false, relatedDuty: pseudoDuty,
-              isOvernightStart, isOvernightContinuation,
-              originalStartHour: sleepStartIso!.hour,
-              originalEndHour: sleepEndIso!.hour,
+              isPreDuty: false,
+              relatedDuty: pseudoDuty,
+              originalStartHour: block.sleepStartHourHomeTz,
+              originalEndHour: block.sleepEndHourHomeTz,
               ...restDayExtras,
             });
-          };
-
-          if (sleepStartIso.dayOfMonth === sleepEndIso.dayOfMonth) {
-            makeSleepBar(sleepStartIso.dayOfMonth, sleepStartIso.hour, sleepEndIso.hour);
           } else {
-            if (sleepStartIso.dayOfMonth >= 1 && sleepStartIso.dayOfMonth <= daysInMonth)
-              makeSleepBar(sleepStartIso.dayOfMonth, sleepStartIso.hour, 24, true);
-            if (sleepEndIso.dayOfMonth >= 1 && sleepEndIso.dayOfMonth <= daysInMonth && sleepEndIso.hour > 0)
-              makeSleepBar(sleepEndIso.dayOfMonth, 0, sleepEndIso.hour, false, true);
+            // ISO fallback
+            const parseIso = (iso: string) => {
+              const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+              if (m) return { day: Number(m[3]), hour: Number(m[4]) + Number(m[5]) / 60 };
+              return null;
+            };
+            const s = parseIso(block.sleepStartIso);
+            const e = parseIso(block.sleepEndIso);
+            if (s && e) {
+              const pseudoDuty: DutyAnalysis = {
+                date: restDay.date, dayOfWeek: format(restDay.date, 'EEE'),
+                dutyHours: 0, blockHours: 0, sectors: 0,
+                minPerformance: 100, avgPerformance: 100, landingPerformance: 100,
+                sleepDebt: 0, woclExposure: 0, priorSleep: restDay.totalSleepHours,
+                overallRisk: 'LOW', minPerformanceRisk: 'LOW', landingRisk: 'LOW',
+                smsReportable: false, flightSegments: [],
+              };
+              let elStart = dayHourToElapsed(s.day, s.hour);
+              let elEnd = dayHourToElapsed(e.day, e.hour);
+              if (elEnd <= elStart) elEnd += 24;
+              addSleep(elStart, elEnd, {
+                recoveryScore,
+                effectiveSleep: block.effectiveHours,
+                sleepEfficiency: block.qualityFactor,
+                sleepStrategy: restDay.strategyType,
+                isPreDuty: false,
+                relatedDuty: pseudoDuty,
+                originalStartHour: s.hour,
+                originalEndHour: e.hour,
+                ...restDayExtras,
+              });
+            }
           }
         });
       });
     }
 
     // Deduplicate
-    const deduped: SleepBar[] = [];
-    const barsByDay = new Map<number, SleepBar[]>();
+    const deduped: ElapsedSleepBar[] = [];
+    const byRow = new Map<number, ElapsedSleepBar[]>();
     bars.forEach(b => {
-      const existing = barsByDay.get(b.dayIndex) || [];
-      existing.push(b);
-      barsByDay.set(b.dayIndex, existing);
+      const arr = byRow.get(b.rowIndex) || [];
+      arr.push(b);
+      byRow.set(b.rowIndex, arr);
     });
-    barsByDay.forEach((dayBars) => {
-      dayBars.sort((a, b) => a.startHour - b.startHour);
-      const kept: SleepBar[] = [];
-      for (const bar of dayBars) {
-        const overlapping = kept.find(k => bar.startHour < k.endHour && bar.endHour > k.startHour);
-        if (overlapping) {
-          if (!!bar.qualityFactors && !overlapping.qualityFactors) {
-            const idx = kept.indexOf(overlapping);
-            kept[idx] = bar;
+    byRow.forEach(rowBars => {
+      rowBars.sort((a, b) => a.startHourInRow - b.startHourInRow);
+      const kept: ElapsedSleepBar[] = [];
+      for (const bar of rowBars) {
+        const overlap = kept.find(k => bar.startHourInRow < k.endHourInRow && bar.endHourInRow > k.startHourInRow);
+        if (overlap) {
+          if (!!bar.qualityFactors && !overlap.qualityFactors) {
+            kept[kept.indexOf(overlap)] = bar;
           }
         } else {
           kept.push(bar);
@@ -653,23 +566,32 @@ export function HumanPerformanceTimeline({
       }
       deduped.push(...kept);
     });
-    return deduped;
-  }, [duties, restDaysSleep, daysInMonth]);
 
-  // ── Day warnings ──
-  const getDayWarnings = (dayOfMonth: number) => {
-    const duty = duties.find(d => d.date.getDate() === dayOfMonth);
-    if (!duty) return null;
-    const warnings: string[] = [];
-    if (duty.woclExposure > 0) warnings.push(`WOCL ${duty.woclExposure.toFixed(1)}h`);
-    if (duty.priorSleep < 8) warnings.push(`Sleep ${duty.priorSleep.toFixed(1)}h`);
-    if (duty.minPerformance < 60) warnings.push(`Perf ${Math.round(duty.minPerformance)}%`);
-    if (duty.sleepDebt > 4) warnings.push(`Debt ${duty.sleepDebt.toFixed(1)}h`);
-    return { warnings, risk: duty.overallRisk };
-  };
+    return deduped;
+  }, [duties, restDaysSleep, month, t0]);
+
+  // ── WOCL bands per row (shifted by circadian adaptation) ──
+  const woclBands = useMemo(() => {
+    const bands: WoclBand[] = [];
+    for (let row = 0; row < totalRows; row++) {
+      const shift = getPhaseShiftForRow(row);
+      const ws = ((WOCL_START + shift) % 24 + 24) % 24;
+      const we = ((WOCL_END + shift) % 24 + 24) % 24;
+
+      if (ws < we) {
+        bands.push({ rowIndex: row, startHourInRow: ws, endHourInRow: we });
+      } else {
+        // Wraps around midnight
+        bands.push({ rowIndex: row, startHourInRow: ws, endHourInRow: 24 });
+        bands.push({ rowIndex: row, startHourInRow: 0, endHourInRow: we });
+      }
+    }
+    return bands;
+  }, [totalRows, circadianShifts]);
 
   const ROW_HEIGHT = 40;
   const hours = Array.from({ length: 8 }, (_, i) => i * 3);
+  const rows = Array.from({ length: totalRows }, (_, i) => i);
 
   if (dutyBars.length === 0) {
     return (
@@ -716,48 +638,27 @@ export function HumanPerformanceTimeline({
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-2">
           <div className="rounded-lg bg-secondary/30 p-3 text-xs text-muted-foreground space-y-2">
-            <p className="font-medium text-foreground">Circadian Phase Tracking Model</p>
+            <p className="font-medium text-foreground">Elapsed-Time Performance View</p>
             <p>
-              This chart tracks how your body clock adapts (or doesn't) as you cross timezones.
-              The WOCL, Nadir, and WMZ markers shift based on accumulated timezone crossings
-              and gradual circadian adaptation (~1h/day east, ~1.5h/day west).
+              This chart shows your roster on a continuous timeline starting from T=0 (first duty day).
+              Each row represents 24 elapsed hours. The WOCL zone shifts as your body clock adapts
+              to timezone crossings (~1h/day east, ~1.5h/day west).
             </p>
             <div className="grid grid-cols-2 gap-4 mt-2">
               <div className="space-y-1">
-                <p className="font-medium text-foreground">Circadian Markers:</p>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-3 bg-wocl/30 border border-wocl/50 rounded-sm" />
-                  <span>WOCL - Window of Circadian Low</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-3 bg-critical/20 border-l-2 border-critical rounded-sm" />
-                  <span>Nadir - Core temp minimum</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-3 bg-warning/10 border border-warning/30 rounded-sm" />
-                  <span>WMZ - Peak alertness zone</span>
-                </div>
+                <p className="font-medium text-foreground">Y-Axis:</p>
+                <p>Elapsed 24h periods from T=0</p>
               </div>
               <div className="space-y-1">
-                <p className="font-medium text-foreground">Performance Colors:</p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="flex items-center gap-1">
-                    <span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(120, 70%, 45%)' }} /> 80-100%
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(55, 90%, 55%)' }} /> 60-80%
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(0, 80%, 50%)' }} /> &lt;40%
-                  </span>
-                </div>
+                <p className="font-medium text-foreground">X-Axis:</p>
+                <p>Hours 0–24 within each period</p>
               </div>
             </div>
           </div>
         </CollapsibleContent>
       </Collapsible>
 
-      {/* Collapsible Legend */}
+      {/* Legend */}
       <TimelineLegend showDiscretion={discretionCount > 0} variant="elapsed" />
 
       {/* Timeline Grid */}
@@ -782,11 +683,11 @@ export function HumanPerformanceTimeline({
               {format(month, 'MMMM yyyy')} — Human Performance · Elapsed Time from t=0
             </div>
             <div className="text-[11px] text-muted-foreground">
-              Body clock adapts ~1.0h/day east, ~1.5h/day west · WOCL/Nadir/WMZ markers shift with accumulated timezone crossings
+              Body clock adapts ~1.0h/day east, ~1.5h/day west · WOCL markers shift with accumulated timezone crossings
             </div>
           </div>
 
-          {/* Stats row */}
+          {/* Stats */}
           <div className="mb-4 flex items-center justify-center gap-4 text-xs flex-wrap">
             <span>Duties: <strong>{duties.length}</strong></span>
             <span>High Risk: <strong className="text-high">{duties.filter(d => d.overallRisk === 'HIGH').length}</strong></span>
@@ -800,50 +701,34 @@ export function HumanPerformanceTimeline({
           </div>
 
           <div className="flex">
-            {/* Y-axis labels */}
-            <div className="w-24 flex-shrink-0">
+            {/* Y-axis: elapsed hours labels */}
+            <div className="w-20 flex-shrink-0">
               <div className="h-8" />
-              {allDays.map((day, idx) => {
-                const dayNum = idx + 1;
-                const circadian = circadianStates.get(dayNum);
-                const phaseShift = circadian?.phaseShift || 0;
-                const hasDuty = dutyBars.some(bar => bar.dayIndex === dayNum);
-                const dayWarnings = getDayWarnings(dayNum);
-                const riskClass = dayWarnings?.risk === 'CRITICAL' ? 'risk-border-critical'
-                  : dayWarnings?.risk === 'HIGH' ? 'risk-border-high'
-                  : dayWarnings?.risk === 'MODERATE' ? 'risk-border-moderate'
-                  : hasDuty ? 'risk-border-low' : '';
+              {rows.map((row) => {
+                const shift = getPhaseShiftForRow(row);
+                // Find the calendar date for this row's midpoint
+                const midElapsed = row * 24 + 12;
+                const calDate = new Date(t0.getTime() + midElapsed * 3600000);
 
                 return (
                   <div
-                    key={idx}
-                    className={cn(
-                      "flex items-center justify-end pr-2 text-[11px]",
-                      !hasDuty && "opacity-40",
-                      riskClass
-                    )}
+                    key={row}
+                    className="flex items-center justify-end pr-2 text-[11px]"
                     style={{ height: `${ROW_HEIGHT}px` }}
                   >
                     <div className="text-right">
-                      {dayWarnings && dayWarnings.warnings.length > 0 && (
-                        <div className={cn(
-                          "text-[9px] leading-tight truncate max-w-[55px]",
-                          dayWarnings.risk === 'CRITICAL' && "text-critical",
-                          dayWarnings.risk === 'HIGH' && "text-high",
-                          dayWarnings.risk === 'MODERATE' && "text-warning",
-                          dayWarnings.risk === 'LOW' && "text-muted-foreground"
-                        )}>
-                          {dayWarnings.warnings[0]}
-                        </div>
-                      )}
-                      <div className="text-foreground font-medium text-[11px]">Day {dayNum}</div>
-                      <div className="text-[9px] text-muted-foreground">{format(day, 'EEE d')}</div>
-                      {phaseShift !== 0 && (
+                      <div className="text-foreground font-medium text-[11px]">
+                        +{row * 24}h
+                      </div>
+                      <div className="text-[9px] text-muted-foreground">
+                        {format(calDate, 'EEE d')}
+                      </div>
+                      {shift !== 0 && (
                         <div className={cn(
                           "text-[9px] font-semibold",
-                          phaseShift > 0 ? "text-warning" : "text-primary"
+                          shift > 0 ? "text-warning" : "text-primary"
                         )}>
-                          {phaseShift > 0 ? '→E ' : '→W '}{phaseShift > 0 ? '+' : ''}{phaseShift.toFixed(1)}h
+                          {shift > 0 ? '→E ' : '→W '}{shift > 0 ? '+' : ''}{shift.toFixed(1)}h
                         </div>
                       )}
                     </div>
@@ -867,42 +752,26 @@ export function HumanPerformanceTimeline({
                 ))}
               </div>
 
-              {/* Grid with circadian shading */}
+              {/* Grid rows */}
               <div className="relative">
-                {allDays.map((day, dayIdx) => {
-                  const dayNum = dayIdx + 1;
-                  const circadian = circadianStates.get(dayNum);
-
-                  const woclStart = circadian?.woclStart ?? WOCL_START;
-                  const woclEnd = circadian?.woclEnd ?? WOCL_END;
-                  const nadirHour = circadian?.nadirHour ?? NADIR_HOUR;
-                  const wmzStart = circadian?.wmzStart ?? WMZ_START;
-                  const wmzEnd = circadian?.wmzEnd ?? WMZ_END;
-
-                  const woclWraps = woclEnd < woclStart;
+                {rows.map((row) => {
+                  const rowWocl = woclBands.filter(w => w.rowIndex === row);
+                  const nadirShift = getPhaseShiftForRow(row);
+                  const nadirHour = ((NADIR_HOUR + nadirShift) % 24 + 24) % 24;
 
                   return (
-                    <div key={dayIdx} className="relative border-b border-border/20" style={{ height: `${ROW_HEIGHT}px` }}>
-                      {/* WOCL hatched pattern */}
-                      {!woclWraps ? (
+                    <div key={row} className="relative border-b border-border/20" style={{ height: `${ROW_HEIGHT}px` }}>
+                      {/* WOCL solid bands */}
+                      {rowWocl.map((w, i) => (
                         <div
+                          key={`wocl-${i}`}
                           className="absolute top-0 bottom-0 wocl-hatch"
-                          style={{ left: `${(woclStart / 24) * 100}%`, width: `${((woclEnd - woclStart) / 24) * 100}%` }}
+                          style={{
+                            left: `${(w.startHourInRow / 24) * 100}%`,
+                            width: `${((w.endHourInRow - w.startHourInRow) / 24) * 100}%`,
+                          }}
                         />
-                      ) : (
-                        <>
-                          <div className="absolute top-0 bottom-0 wocl-hatch" style={{ left: `${(woclStart / 24) * 100}%`, right: 0 }} />
-                          <div className="absolute top-0 bottom-0 wocl-hatch" style={{ left: 0, width: `${(woclEnd / 24) * 100}%` }} />
-                        </>
-                      )}
-
-                      {/* WMZ shading */}
-                      {wmzStart < wmzEnd && (
-                        <div
-                          className="absolute top-0 bottom-0 bg-warning/5 border-l border-r border-warning/20"
-                          style={{ left: `${(wmzStart / 24) * 100}%`, width: `${((wmzEnd - wmzStart) / 24) * 100}%` }}
-                        />
-                      )}
+                      ))}
 
                       {/* Nadir marker */}
                       <div
@@ -914,38 +783,38 @@ export function HumanPerformanceTimeline({
 
                       {/* Grid lines */}
                       <div className="absolute inset-0 flex pointer-events-none">
-                        {Array.from({ length: 24 }, (_, hour) => (
+                        {Array.from({ length: 24 }, (_, h) => (
                           <div
-                            key={hour}
-                            className={cn("flex-1 border-r", hour % 3 === 0 ? "border-border/40" : "border-border/15")}
+                            key={h}
+                            className={cn("flex-1 border-r", h % 3 === 0 ? "border-border/40" : "border-border/15")}
                           />
                         ))}
                       </div>
 
-                      {/* Sleep bars with full Popover */}
+                      {/* Sleep bars */}
                       {sleepBars
-                        .filter((bar) => bar.dayIndex === dayNum)
-                        .map((bar, barIndex) => {
-                          const barWidth = ((bar.endHour - bar.startHour) / 24) * 100;
+                        .filter(b => b.rowIndex === row)
+                        .map((bar, idx) => {
+                          const barWidth = ((bar.endHourInRow - bar.startHourInRow) / 24) * 100;
                           const classes = getRecoveryClasses(bar.recoveryScore);
-                          const borderRadius = bar.isOvernightStart
+                          const borderRadius = bar.isOverflowStart
                             ? '2px 0 0 2px'
-                            : bar.isOvernightContinuation
+                            : bar.isOverflowContinuation
                               ? '0 2px 2px 0'
                               : '2px';
                           return (
-                            <Popover key={`sleep-${barIndex}`}>
+                            <Popover key={`sleep-${idx}`}>
                               <PopoverTrigger asChild>
                                 <button
                                   type="button"
                                   className="absolute z-[5] flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all border-primary/20 bg-primary/5"
                                   style={{
                                     top: 0, height: '100%',
-                                    left: `${(bar.startHour / 24) * 100}%`,
+                                    left: `${(bar.startHourInRow / 24) * 100}%`,
                                     width: `${Math.max(barWidth, 1)}%`,
                                     borderRadius,
-                                    borderRight: bar.isOvernightStart ? 'none' : undefined,
-                                    borderLeft: bar.isOvernightContinuation ? 'none' : undefined,
+                                    borderRight: bar.isOverflowStart ? 'none' : undefined,
+                                    borderLeft: bar.isOverflowContinuation ? 'none' : undefined,
                                   }}
                                 >
                                   {barWidth > 6 && (
@@ -958,7 +827,6 @@ export function HumanPerformanceTimeline({
                               </PopoverTrigger>
                               <PopoverContent align="start" side="top" className="max-w-sm p-3">
                                 <div className="space-y-2 text-xs">
-                                  {/* Header */}
                                   <div className="flex items-center justify-between border-b border-border pb-2">
                                     <div className="font-semibold flex items-center gap-1.5">
                                       <span className="text-base">{bar.isPreDuty ? '🛏️' : '🔋'}</span>
@@ -968,63 +836,33 @@ export function HumanPerformanceTimeline({
                                       {Math.round(bar.recoveryScore)}%
                                     </div>
                                   </div>
-
                                   {bar.explanation && (
                                     <div className="bg-primary/5 border border-primary/20 rounded-md p-2 text-[11px] text-muted-foreground leading-relaxed">
                                       <span className="text-primary font-medium">💡 </span>{bar.explanation}
                                     </div>
                                   )}
-
-                                  {/* Sleep Window */}
                                   <div className="flex items-center justify-between text-muted-foreground">
                                     <span>Sleep Window</span>
                                     <span className="font-mono font-medium text-foreground">
-                                      {decimalToHHmm(bar.originalStartHour ?? bar.startHour)} → {decimalToHHmm(bar.originalEndHour ?? bar.endHour)}
-                                      {(bar.isOvernightStart || bar.isOvernightContinuation) &&
-                                        (bar.originalStartHour ?? bar.startHour) > (bar.originalEndHour ?? bar.endHour) && ' (+1d)'}
+                                      {decimalToHHmm(bar.originalStartHour ?? bar.startHourInRow)} → {decimalToHHmm(bar.originalEndHour ?? bar.endHourInRow)}
+                                      {(bar.isOverflowStart || bar.isOverflowContinuation) &&
+                                        (bar.originalStartHour ?? bar.startHourInRow) > (bar.originalEndHour ?? bar.endHourInRow) && ' (+1d)'}
                                     </span>
                                   </div>
-
-                                  {/* Recovery Score Breakdown */}
                                   <div className="bg-secondary/30 rounded-lg p-2 space-y-1.5">
-                                    <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Recovery Score Breakdown</div>
+                                    <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Recovery Score</div>
                                     <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-1.5"><span className="text-muted-foreground">⏱️</span><span>Effective Sleep</span></div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-muted-foreground">{bar.effectiveSleep.toFixed(1)}h / 8h</span>
-                                        <span className={cn("font-mono font-medium min-w-[40px] text-right",
-                                          bar.effectiveSleep >= 7 ? "text-success" : bar.effectiveSleep >= 5 ? "text-warning" : "text-critical"
-                                        )}>+{Math.round((bar.effectiveSleep / 8) * 100)}</span>
-                                      </div>
+                                      <span>Effective Sleep</span>
+                                      <span className="font-mono">{bar.effectiveSleep.toFixed(1)}h</span>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-1.5"><span className="text-muted-foreground">✨</span><span>Sleep Quality</span></div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-muted-foreground">{Math.round(bar.sleepEfficiency * 100)}% efficiency</span>
-                                        <span className={cn("font-mono font-medium min-w-[40px] text-right",
-                                          bar.sleepEfficiency >= 0.9 ? "text-success" : bar.sleepEfficiency >= 0.7 ? "text-warning" : "text-high"
-                                        )}>+{Math.round(bar.sleepEfficiency * 20)}</span>
-                                      </div>
-                                    </div>
-                                    {(bar.woclOverlapHours ?? 0) > 0 && (
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-1.5"><span className="text-muted-foreground">🌙</span><span>WOCL Overlap</span></div>
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-muted-foreground">{bar.woclOverlapHours!.toFixed(1)}h</span>
-                                          <span className="font-mono font-medium text-critical min-w-[40px] text-right">-{Math.round(bar.woclOverlapHours! * 5)}</span>
-                                        </div>
-                                      </div>
-                                    )}
-                                    <div className="border-t border-border/50 pt-1.5 flex items-center justify-between font-medium">
-                                      <span>Total Score</span>
-                                      <span className={cn("font-mono", classes.text)}>= {Math.round(bar.recoveryScore)}%</span>
+                                      <span>Efficiency</span>
+                                      <span className="font-mono">{Math.round(bar.sleepEfficiency * 100)}%</span>
                                     </div>
                                   </div>
-
-                                  {/* Quality Factors */}
                                   {bar.qualityFactors && (
                                     <div className="bg-secondary/20 rounded-lg p-2 space-y-1.5">
-                                      <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">🔬 Model Calculation Factors</div>
+                                      <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">🔬 Model Factors</div>
                                       {Object.entries(bar.qualityFactors).map(([key, value]) => {
                                         const labels: Record<string, string> = {
                                           base_efficiency: 'Base Efficiency', wocl_boost: 'WOCL Boost',
@@ -1032,68 +870,22 @@ export function HumanPerformanceTimeline({
                                           time_pressure_factor: 'Time Pressure', insufficient_penalty: 'Duration Penalty',
                                           pre_duty_awake_hours: 'Pre-Duty Awake',
                                         };
-                                        const label = labels[key] || key;
                                         const numValue = value as number;
                                         const isHours = key === 'pre_duty_awake_hours';
-                                        const isBoost = numValue >= 1;
                                         return (
                                           <div key={key} className="flex items-center justify-between text-[11px]">
-                                            <span className="text-muted-foreground">{label}</span>
-                                            <span className={cn("font-mono font-medium",
-                                              isHours
-                                                ? (numValue <= 2 ? "text-success" : numValue <= 4 ? "text-muted-foreground" : numValue <= 8 ? "text-warning" : "text-critical")
-                                                : (numValue >= 1.05 ? "text-success" : numValue >= 0.98 ? "text-muted-foreground" : numValue >= 0.90 ? "text-warning" : "text-critical")
-                                            )}>
-                                              {isHours ? `${numValue.toFixed(1)}h` : `${isBoost ? '+' : ''}${((numValue - 1) * 100).toFixed(0)}%`}
+                                            <span className="text-muted-foreground">{labels[key] || key}</span>
+                                            <span className="font-mono font-medium">
+                                              {isHours ? `${numValue.toFixed(1)}h` : `${numValue >= 1 ? '+' : ''}${((numValue - 1) * 100).toFixed(0)}%`}
                                             </span>
                                           </div>
                                         );
                                       })}
                                     </div>
                                   )}
-
-                                  {/* Confidence */}
-                                  {bar.confidence != null && (
-                                    <div className="flex items-center justify-between text-[11px]">
-                                      <span className="text-muted-foreground">Model Confidence</span>
-                                      <span className={cn("font-mono font-medium px-1.5 py-0.5 rounded",
-                                        bar.confidence >= 0.7 ? "bg-success/10 text-success" :
-                                          bar.confidence >= 0.5 ? "bg-warning/10 text-warning" : "bg-high/10 text-high"
-                                      )}>{Math.round(bar.confidence * 100)}%</span>
-                                    </div>
-                                  )}
-                                  {bar.confidenceBasis && (
-                                    <div className="text-[10px] text-muted-foreground/70 italic leading-relaxed">{bar.confidenceBasis}</div>
-                                  )}
-
-                                  {/* References */}
-                                  {bar.references && bar.references.length > 0 && (
-                                    <div className="border-t border-border/30 pt-2 space-y-1">
-                                      <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">📚 Sources</div>
-                                      <div className="flex flex-wrap gap-1">
-                                        {bar.references.map((ref, i) => (
-                                          <span key={ref.key || i} className="text-[9px] px-1.5 py-0.5 rounded bg-secondary/50 text-muted-foreground" title={ref.full}>
-                                            {ref.short}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Strategy Badge */}
                                   <div className="flex items-center justify-between pt-1">
                                     <span className="text-muted-foreground">Strategy</span>
-                                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-secondary/50">
-                                      <span>{getStrategyIcon(bar.sleepStrategy)}</span>
-                                      <span className="capitalize font-medium">{bar.sleepStrategy.split('_').join(' ')}</span>
-                                    </div>
-                                  </div>
-
-                                  {/* Footer */}
-                                  <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/50">
-                                    {bar.isPreDuty
-                                      ? `Rest before ${format(bar.relatedDuty.date, 'EEEE, MMM d')} duty`
-                                      : `Rest day recovery • ${format(bar.relatedDuty.date, 'EEEE, MMM d')}`}
+                                    <span className="capitalize">{getStrategyIcon(bar.sleepStrategy)} {bar.sleepStrategy.split('_').join(' ')}</span>
                                   </div>
                                 </div>
                               </PopoverContent>
@@ -1101,21 +893,20 @@ export function HumanPerformanceTimeline({
                           );
                         })}
 
-                      {/* Duty bars with individual flight segments */}
+                      {/* Duty bars */}
                       {dutyBars
-                        .filter((bar) => bar.dayIndex === dayNum)
-                        .map((bar, barIndex) => {
+                        .filter(b => b.rowIndex === row)
+                        .map((bar, idx) => {
+                          const barWidth = ((bar.endHourInRow - bar.startHourInRow) / 24) * 100;
                           const usedDiscretion = bar.duty.usedDiscretion;
-                          const maxFdp = bar.duty.maxFdpHours;
-                          const actualFdp = bar.duty.actualFdpHours || bar.duty.dutyHours;
-                          const borderRadius = bar.isOvernightStart
+                          const borderRadius = bar.isOverflowStart
                             ? '2px 0 0 2px'
-                            : bar.isOvernightContinuation
+                            : bar.isOverflowContinuation
                               ? '0 2px 2px 0'
                               : '2px';
 
                           return (
-                            <TooltipProvider key={barIndex} delayDuration={100}>
+                            <TooltipProvider key={`duty-${idx}`} delayDuration={100}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button
@@ -1123,32 +914,29 @@ export function HumanPerformanceTimeline({
                                     className={cn(
                                       "absolute z-10 transition-all hover:ring-2 cursor-pointer overflow-hidden flex",
                                       selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground",
-                                      usedDiscretion ? "ring-2 ring-critical hover:ring-critical/80" : "hover:ring-foreground"
+                                      usedDiscretion ? "ring-2 ring-critical" : "hover:ring-foreground"
                                     )}
                                     style={{
                                       top: 0, height: '100%',
-                                      left: `${(bar.startHour / 24) * 100}%`,
-                                      width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
+                                      left: `${(bar.startHourInRow / 24) * 100}%`,
+                                      width: `${Math.max(barWidth, 2)}%`,
                                       borderRadius,
                                     }}
                                   >
-                                    {bar.segments.map((segment, segIndex) => {
-                                      const segmentWidth = ((segment.endHour - segment.startHour) / (bar.endHour - bar.startHour)) * 100;
-
-                                      if (showFlightPhases && segment.type === 'flight' && segment.phases) {
+                                    {bar.segments.map((seg, segIdx) => {
+                                      if (showFlightPhases && seg.type === 'flight' && seg.phases) {
                                         return (
-                                          <div key={segIndex} className="h-full relative flex" style={{ width: `${segmentWidth}%` }}>
-                                            {segIndex > 0 && <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70 z-10" />}
-                                            {segment.phases.map((phase, phaseIndex) => (
+                                          <div key={segIdx} className="h-full relative flex" style={{ width: `${seg.widthPercent}%` }}>
+                                            {segIdx > 0 && <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70 z-10" />}
+                                            {seg.phases.map((phase, pi) => (
                                               <div
-                                                key={phaseIndex}
+                                                key={pi}
                                                 className="h-full flex items-center justify-center relative"
                                                 style={{ width: `${phase.widthPercent}%`, backgroundColor: getPerformanceColor(phase.performance) }}
-                                                title={`${phase.phase}: ${Math.round(phase.performance)}%`}
                                               >
-                                                {phaseIndex > 0 && <div className="absolute left-0 top-0 bottom-0 w-px bg-background/40" />}
-                                                {phase.phase === 'cruise' && zoom.scaleX >= 2.5 && segmentWidth > 15 && (
-                                                  <span className="text-[6px] font-medium text-background/90 truncate">{Math.round(phase.performance)}%</span>
+                                                {pi > 0 && <div className="absolute left-0 top-0 bottom-0 w-px bg-background/40" />}
+                                                {phase.phase === 'cruise' && zoom.scaleX >= 2.5 && seg.widthPercent > 15 && (
+                                                  <span className="text-[6px] font-medium text-background/90">{Math.round(phase.performance)}%</span>
                                                 )}
                                               </div>
                                             ))}
@@ -1158,24 +946,24 @@ export function HumanPerformanceTimeline({
 
                                       return (
                                         <div
-                                          key={segIndex}
+                                          key={segIdx}
                                           className={cn(
                                             "h-full relative flex items-center justify-center",
-                                            segment.type === 'checkin' && "opacity-70",
-                                            segment.type === 'ground' && "opacity-50"
+                                            seg.type === 'checkin' && "opacity-70",
+                                            seg.type === 'ground' && "opacity-50"
                                           )}
                                           style={{
-                                            width: `${segmentWidth}%`,
-                                            backgroundColor: segment.type === 'ground'
+                                            width: `${seg.widthPercent}%`,
+                                            backgroundColor: seg.type === 'ground'
                                               ? 'hsl(var(--muted))'
-                                              : getPerformanceColor(segment.performance),
+                                              : getPerformanceColor(seg.performance),
                                           }}
                                         >
-                                          {segIndex > 0 && <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70" />}
-                                          {segment.type === 'flight' && segment.flightNumber && segmentWidth > 8 && (
-                                            <span className="text-[8px] font-medium text-background truncate px-0.5">{segment.flightNumber}</span>
+                                          {segIdx > 0 && <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70" />}
+                                          {seg.type === 'flight' && seg.flightNumber && seg.widthPercent > 8 && (
+                                            <span className="text-[8px] font-medium text-background truncate px-0.5">{seg.flightNumber}</span>
                                           )}
-                                          {segment.type === 'checkin' && segmentWidth > 5 && (
+                                          {seg.type === 'checkin' && seg.widthPercent > 5 && (
                                             <span className="text-[8px] text-background/80">✓</span>
                                           )}
                                         </div>
@@ -1188,69 +976,19 @@ export function HumanPerformanceTimeline({
                                     )}
                                   </button>
                                 </TooltipTrigger>
-
                                 <TooltipContent side="top" align="start" className="max-w-xs p-3 z-[100]">
                                   <div className="space-y-2 text-xs">
-                                    <div className={cn(
-                                      "font-semibold text-sm border-b pb-1 flex items-center justify-between",
-                                      usedDiscretion ? "border-critical" : "border-border"
-                                    )}>
-                                      <span>
-                                        {format(bar.duty.date, 'EEEE, MMM d')} {bar.isOvernightContinuation && '(continued)'}
-                                      </span>
-                                      {usedDiscretion && (
-                                        <Badge variant="destructive" className="text-[10px] px-1 py-0">DISCRETION</Badge>
-                                      )}
+                                    <div className="font-semibold text-sm border-b pb-1 border-border">
+                                      {format(bar.duty.date, 'EEEE, MMM d')} {bar.isOverflowContinuation && '(continued)'}
                                     </div>
                                     <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                                       <span className="text-muted-foreground">Flights:</span>
                                       <span>{bar.duty.flightSegments.map(s => s.flightNumber).join(', ')}</span>
-                                    </div>
-
-                                    {/* EASA ORO.FTL */}
-                                    {(maxFdp || bar.duty.extendedFdpHours) && (
-                                      <div className="border-t border-border pt-2 mt-2">
-                                        <span className="text-muted-foreground font-medium">EASA ORO.FTL:</span>
-                                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
-                                          {maxFdp && (<><span className="text-muted-foreground">Max FDP:</span><span>{maxFdp.toFixed(1)}h</span></>)}
-                                          {bar.duty.extendedFdpHours && (<><span className="text-muted-foreground">Extended FDP:</span><span className="text-warning">{bar.duty.extendedFdpHours.toFixed(1)}h</span></>)}
-                                          <span className="text-muted-foreground">Actual FDP:</span>
-                                          <span className={cn(
-                                            maxFdp && actualFdp > maxFdp && "text-critical font-medium",
-                                            maxFdp && actualFdp <= maxFdp && "text-success"
-                                          )}>{actualFdp.toFixed(1)}h</span>
-                                          {bar.duty.fdpExceedance && bar.duty.fdpExceedance > 0 && (
-                                            <><span className="text-muted-foreground">Exceedance:</span><span className="text-critical font-medium">+{bar.duty.fdpExceedance.toFixed(1)}h</span></>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Flight Segments */}
-                                    <div className="border-t border-border pt-2 mt-2">
-                                      <span className="text-muted-foreground font-medium">Flight Segments:</span>
-                                      <div className="flex flex-col gap-1 mt-1">
-                                        {bar.segments.filter(s => s.type === 'flight').map((segment, i) => (
-                                          <div key={i} className="flex items-center justify-between text-[10px] p-1 rounded" style={{ backgroundColor: `${getPerformanceColor(segment.performance)}20` }}>
-                                            <span className="font-medium">{segment.flightNumber}</span>
-                                            <span className="text-muted-foreground">{segment.departure} → {segment.arrival}</span>
-                                            <span style={{ color: getPerformanceColor(segment.performance) }} className="font-medium">{Math.round(segment.performance)}%</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-
-                                    {/* Metrics grid */}
-                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border pt-2">
                                       <span className="text-muted-foreground">Min Perf:</span>
                                       <span style={{ color: getPerformanceColor(bar.duty.minPerformance) }}>{Math.round(bar.duty.minPerformance)}%</span>
-                                      <span className="text-muted-foreground">WOCL Exposure:</span>
-                                      <span className={bar.duty.woclExposure > 0 ? "text-warning" : ""}>{bar.duty.woclExposure.toFixed(1)}h</span>
-                                      <span className="text-muted-foreground">Prior Sleep:</span>
-                                      <span className={bar.duty.priorSleep < 8 ? "text-warning" : ""}>{bar.duty.priorSleep.toFixed(1)}h</span>
-                                      <span className="text-muted-foreground">Sleep Debt:</span>
-                                      <span className={bar.duty.sleepDebt > 4 ? "text-high" : ""}>{bar.duty.sleepDebt.toFixed(1)}h</span>
-                                      <span className="text-muted-foreground">Risk Level:</span>
+                                      <span className="text-muted-foreground">WOCL:</span>
+                                      <span>{bar.duty.woclExposure.toFixed(1)}h</span>
+                                      <span className="text-muted-foreground">Risk:</span>
                                       <span className={cn(
                                         bar.duty.overallRisk === 'LOW' && "text-success",
                                         bar.duty.overallRisk === 'MODERATE' && "text-warning",
@@ -1258,55 +996,12 @@ export function HumanPerformanceTimeline({
                                         bar.duty.overallRisk === 'CRITICAL' && "text-critical"
                                       )}>{bar.duty.overallRisk}</span>
                                     </div>
-
-                                    {/* Circadian phase info (unique to HPT) */}
-                                    {(() => {
-                                      const circadian = circadianStates.get(dayNum);
-                                      const phaseShift = circadian?.phaseShift || 0;
-                                      if (phaseShift === 0) return null;
-                                      return (
-                                        <div className="border-t border-border pt-2 mt-2">
-                                          <span className="text-muted-foreground font-medium flex items-center gap-1">
-                                            <Brain className="h-3 w-3" /> Circadian Phase
-                                          </span>
-                                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
-                                            <span className="text-muted-foreground">Body Clock Shift:</span>
-                                            <span className={cn(
-                                              phaseShift > 0 ? "text-warning" : "text-primary",
-                                              "font-medium"
-                                            )}>{phaseShift > 0 ? '+' : ''}{phaseShift.toFixed(1)}h {phaseShift > 0 ? 'East' : 'West'}</span>
-                                            <span className="text-muted-foreground">WOCL Window:</span>
-                                            <span className="font-mono">{decimalToHHmm(circadian!.woclStart)} – {decimalToHHmm(circadian!.woclEnd)}</span>
-                                          </div>
-                                        </div>
-                                      );
-                                    })()}
-
-                                    {/* Sleep Recovery */}
                                     {bar.duty.sleepEstimate && (
-                                      <div className="border-t border-border pt-2 mt-2">
-                                        <span className="text-muted-foreground font-medium flex items-center gap-1">
-                                          <Battery className="h-3 w-3" /> Sleep Recovery
-                                        </span>
-                                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
-                                          <span className="text-muted-foreground">Recovery Score:</span>
-                                          {(() => {
-                                            const score = getRecoveryScore(bar.duty.sleepEstimate!);
-                                            const classes = getRecoveryClasses(score);
-                                            return <span className={cn("font-medium", classes.text)}>{Math.round(score)}%</span>;
-                                          })()}
-                                          <span className="text-muted-foreground">Effective Sleep:</span>
-                                          <span>{bar.duty.sleepEstimate.effectiveSleepHours.toFixed(1)}h</span>
-                                          <span className="text-muted-foreground">Efficiency:</span>
-                                          <span>{Math.round(bar.duty.sleepEstimate.sleepEfficiency * 100)}%</span>
-                                          <span className="text-muted-foreground">Strategy:</span>
-                                          <span className="capitalize">{getStrategyIcon(bar.duty.sleepEstimate.sleepStrategy)} {bar.duty.sleepEstimate.sleepStrategy.split('_').join(' ')}</span>
-                                          {bar.duty.sleepEstimate.warnings.length > 0 && (
-                                            <span className="text-muted-foreground col-span-2 text-warning text-[10px] mt-1">
-                                              ⚠️ {bar.duty.sleepEstimate.warnings[0]}
-                                            </span>
-                                          )}
-                                        </div>
+                                      <div className="border-t border-border pt-1">
+                                        <span className="text-muted-foreground">Sleep:</span>{' '}
+                                        <span>{bar.duty.sleepEstimate.effectiveSleepHours.toFixed(1)}h</span>
+                                        <span className="text-muted-foreground ml-2">Recovery:</span>{' '}
+                                        <span>{Math.round(getRecoveryScore(bar.duty.sleepEstimate!))}%</span>
                                       </div>
                                     )}
                                   </div>
@@ -1315,28 +1010,16 @@ export function HumanPerformanceTimeline({
                             </TooltipProvider>
                           );
                         })}
-
-                      {/* FDP Limit markers */}
-                      {fdpLimitMarkers
-                        .filter((marker) => marker.dayIndex === dayNum)
-                        .map((marker, markerIndex) => (
-                          <div
-                            key={`fdp-${markerIndex}`}
-                            className="absolute top-0 bottom-0 border-r-2 border-dashed border-muted-foreground/50 pointer-events-none z-30"
-                            style={{ left: `${(marker.hour / 24) * 100}%` }}
-                            title={`Max FDP: ${marker.maxFdp}h`}
-                          />
-                        ))}
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            {/* Compact right legend */}
+            {/* Performance color legend */}
             <div className="ml-3 flex w-10 flex-shrink-0 flex-col">
-              <div style={{ height: `${ROW_HEIGHT}px` }} />
-              <div className="flex gap-1" style={{ height: `${allDays.length * ROW_HEIGHT}px` }}>
+              <div className="h-8" />
+              <div className="flex gap-1" style={{ height: `${totalRows * ROW_HEIGHT}px` }}>
                 <div className="w-2.5 rounded-sm overflow-hidden">
                   <div className="h-full w-full" style={{
                     background: 'linear-gradient(to bottom, hsl(120, 70%, 45%), hsl(90, 70%, 50%), hsl(55, 90%, 55%), hsl(40, 95%, 50%), hsl(25, 95%, 50%), hsl(0, 80%, 50%))',
@@ -1353,18 +1036,18 @@ export function HumanPerformanceTimeline({
 
           {/* X-axis label */}
           <div className="mt-2 text-center text-xs text-muted-foreground">
-            Biological Time (Circadian Phase-Adjusted) · Markers shift with timezone crossings
+            Elapsed Hours (0–24 per row) · WOCL markers shift with circadian adaptation
           </div>
         </div>
       </div>
 
-      {/* Quick duty selection grid */}
+      {/* Quick duty selection */}
       <div className="space-y-2 pt-4 border-t border-border">
         <h4 className="text-sm font-medium">Quick Duty Selection</h4>
         <div className="flex flex-wrap gap-2">
-          {duties.map((duty, index) => (
+          {duties.map((duty, i) => (
             <button
-              key={index}
+              key={i}
               onClick={() => onDutySelect(duty)}
               className={cn(
                 "rounded-lg px-3 py-2 text-xs font-medium transition-all duration-200 text-foreground",

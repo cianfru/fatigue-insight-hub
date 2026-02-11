@@ -203,27 +203,17 @@
     }
   }
 
-  /* WOCL hatched pattern overlay */
+  /* WOCL solid overlay */
   .wocl-hatch {
-    background: repeating-linear-gradient(
-      -45deg,
-      hsl(var(--wocl) / 0.15),
-      hsl(var(--wocl) / 0.15) 2px,
-      hsl(var(--wocl) / 0.05) 2px,
-      hsl(var(--wocl) / 0.05) 6px
-    );
-    border: 1px solid hsl(var(--wocl) / 0.2);
+    background: hsl(var(--wocl) / 0.18);
+    border-left: 1px solid hsl(var(--wocl) / 0.3);
+    border-right: 1px solid hsl(var(--wocl) / 0.3);
   }
 
   .light .wocl-hatch {
-    background: repeating-linear-gradient(
-      -45deg,
-      hsl(var(--wocl) / 0.2),
-      hsl(var(--wocl) / 0.2) 2px,
-      hsl(var(--wocl) / 0.08) 2px,
-      hsl(var(--wocl) / 0.08) 6px
-    );
-    border: 1px solid hsl(var(--wocl) / 0.25);
+    background: hsl(var(--wocl) / 0.22);
+    border-left: 1px solid hsl(var(--wocl) / 0.35);
+    border-right: 1px solid hsl(var(--wocl) / 0.35);
   }
 
   /* Data-heavy views: increase card opacity */

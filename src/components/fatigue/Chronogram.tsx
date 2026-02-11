@@ -1002,8 +1002,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     }
     
     // Deduplicate overlapping sleep bars on the same day
-    // If two bars overlap in time on the same dayIndex, keep the one with higher data quality
-    // (has qualityFactors) or higher recovery score
     const deduped: SleepBar[] = [];
     const barsByDay = new Map<number, SleepBar[]>();
     bars.forEach(b => {
@@ -1013,26 +1011,16 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     });
     
     barsByDay.forEach((dayBars) => {
-      // Sort by startHour to process in order
       dayBars.sort((a, b) => a.startHour - b.startHour);
-      
       const kept: SleepBar[] = [];
       for (const bar of dayBars) {
-        // Check if this bar overlaps with any already-kept bar
         const overlapping = kept.find(k => 
           bar.startHour < k.endHour && bar.endHour > k.startHour
         );
-        
         if (overlapping) {
-          // Keep the one with more data (qualityFactors) or higher score
-          const barHasData = !!bar.qualityFactors;
-          const overlapHasData = !!overlapping.qualityFactors;
-          if (barHasData && !overlapHasData) {
-            // Replace the kept one with this better one
-            const idx = kept.indexOf(overlapping);
-            kept[idx] = bar;
+          if (!!bar.qualityFactors && !overlapping.qualityFactors) {
+            kept[kept.indexOf(overlapping)] = bar;
           }
-          // Otherwise keep the existing one (already has data or same quality)
         } else {
           kept.push(bar);
         }
