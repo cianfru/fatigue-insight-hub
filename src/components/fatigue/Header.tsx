@@ -9,56 +9,85 @@ interface HeaderProps {
   onThemeChange: (theme: 'dark' | 'light') => void;
   onMenuToggle?: () => void;
   showMenuButton?: boolean;
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
 }
 
-export function Header({ theme, onThemeChange, onMenuToggle, showMenuButton }: HeaderProps) {
+const navItems = [
+  { value: 'analysis', label: 'Analysis' },
+  { value: 'insights', label: 'Insights' },
+  { value: 'learn', label: 'Learn' },
+  { value: 'about', label: 'About' },
+];
+
+export function Header({ theme, onThemeChange, onMenuToggle, showMenuButton, activeTab = 'analysis', onTabChange }: HeaderProps) {
   return (
-    <header className="border-b border-border/30 glass-strong relative z-20">
-      <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4">
-        <div className="flex items-center gap-2 md:gap-4">
-          {/* Mobile menu button */}
+    <header className="border-b border-border/20 glass-strong relative z-20">
+      <div className="flex items-center justify-between px-4 py-2.5 md:px-6 md:py-3">
+        {/* Left: Logo + subtitle */}
+        <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
           {showMenuButton && (
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden"
+              className="md:hidden h-8 w-8"
               onClick={onMenuToggle}
             >
-              <Menu className="h-5 w-5" />
+              <Menu className="h-4.5 w-4.5" />
             </Button>
           )}
           
           <img 
             src={theme === 'dark' ? logoDark : logoLight} 
             alt="Aerowake Logo" 
-            className="h-8 w-auto object-contain md:h-10"
+            className="h-7 w-auto object-contain md:h-9"
           />
-          <div className="hidden sm:block">
-            <p className="text-[10px] text-muted-foreground md:text-xs">
+          <div className="hidden lg:block">
+            <p className="text-[10px] text-muted-foreground/70">
               Biomathematical fatigue prediction
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 md:gap-4">
-          {/* Hide badges on mobile */}
-          <Badge variant="info" className="hidden md:inline-flex">Version 2.1.2</Badge>
-          <Badge variant="success" className="hidden lg:inline-flex">EASA ORO.FTL Compliant</Badge>
+
+        {/* Center: Navigation tabs */}
+        <nav className="flex items-center gap-0.5 md:gap-1 mx-2 md:mx-8 overflow-x-auto scrollbar-none">
+          {navItems.map((item) => (
+            <button
+              key={item.value}
+              onClick={() => onTabChange?.(item.value)}
+              className={`relative px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-medium rounded-lg transition-all duration-200 whitespace-nowrap
+                ${activeTab === item.value
+                  ? 'text-foreground bg-secondary/60 backdrop-blur-sm shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/30'
+                }
+              `}
+            >
+              {item.label}
+              {activeTab === item.value && (
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full bg-primary" />
+              )}
+            </button>
+          ))}
+        </nav>
+
+        {/* Right: Badge + theme toggle */}
+        <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+          <Badge variant="success" className="hidden lg:inline-flex text-[10px]">EASA ORO.FTL</Badge>
           
-          {/* Apple-style theme toggle */}
           <button
             onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')}
-            className="relative h-7 w-12 rounded-full bg-secondary/80 p-1 transition-all duration-300 hover:bg-secondary md:h-8 md:w-14"
+            className="relative h-7 w-12 rounded-full bg-secondary/60 backdrop-blur-sm p-1 transition-all duration-300 hover:bg-secondary/80 md:h-7 md:w-13 border border-border/20"
             aria-label="Toggle theme"
           >
             <div
-              className={`flex h-5 w-5 items-center justify-center rounded-full bg-foreground/10 backdrop-blur-sm shadow-sm transition-all duration-300 md:h-6 md:w-6 ${
-                theme === 'dark' ? 'translate-x-0' : 'translate-x-5 md:translate-x-6'
+              className={`flex h-5 w-5 items-center justify-center rounded-full bg-foreground/10 backdrop-blur-sm shadow-sm transition-all duration-300 ${
+                theme === 'dark' ? 'translate-x-0' : 'translate-x-5 md:translate-x-5'
               }`}
             >
               {theme === 'dark' ? (
-                <Moon className="h-3 w-3 text-primary md:h-3.5 md:w-3.5" />
+                <Moon className="h-3 w-3 text-primary" />
               ) : (
-                <Sun className="h-3 w-3 text-warning md:h-3.5 md:w-3.5" />
+                <Sun className="h-3 w-3 text-warning" />
               )}
             </div>
           </button>
