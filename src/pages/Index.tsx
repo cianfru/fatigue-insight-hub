@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Header } from '@/components/fatigue/Header';
 import { Footer } from '@/components/fatigue/Footer';
 import { DashboardContent } from '@/components/fatigue/DashboardContent';
@@ -107,6 +106,7 @@ const Index = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [activeTab, setActiveTab] = useState('analysis');
 
   const handleSettingsChange = (newSettings: Partial<PilotSettings>) => {
     setSettings((prev) => {
@@ -429,42 +429,12 @@ const Index = () => {
           onThemeChange={(theme) => handleSettingsChange({ theme })}
           onMenuToggle={() => setSidebarOpen(true)}
           showMenuButton={true}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
         />
         
-        {/* 4-Tab Navigation */}
-        <Tabs defaultValue="analysis" className="flex flex-1 flex-col">
-          <div className="border-b border-border/30 glass-subtle overflow-x-auto">
-            <div className="px-2 md:px-6">
-              <TabsList className="h-10 md:h-12 w-full justify-start gap-0 md:gap-1 rounded-none border-0 bg-transparent p-0">
-                <TabsTrigger 
-                  value="analysis" 
-                  className="rounded-none border-b-2 border-transparent px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                >
-                  Analysis
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="insights" 
-                  className="rounded-none border-b-2 border-transparent px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                >
-                  Insights
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="learn" 
-                  className="rounded-none border-b-2 border-transparent px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                >
-                  Learn
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="about" 
-                  className="rounded-none border-b-2 border-transparent px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                >
-                  About
-                </TabsTrigger>
-              </TabsList>
-            </div>
-          </div>
-
-          <TabsContent value="analysis" className="flex-1 mt-0">
+        {activeTab === 'analysis' && (
+          <div className="flex-1">
             <DashboardContent
               settings={settings}
               onSettingsChange={handleSettingsChange}
@@ -481,23 +451,29 @@ const Index = () => {
               sidebarOpen={sidebarOpen}
               onSidebarOpenChange={setSidebarOpen}
             />
-          </TabsContent>
+          </div>
+        )}
 
-          <TabsContent value="insights" className="flex-1 mt-0">
+        {activeTab === 'insights' && (
+          <div className="flex-1">
             <InsightsContent 
               analysisResults={analysisResults} 
               settings={settings} 
             />
-          </TabsContent>
+          </div>
+        )}
 
-          <TabsContent value="learn" className="flex-1 mt-0">
+        {activeTab === 'learn' && (
+          <div className="flex-1">
             <LearnPage />
-          </TabsContent>
+          </div>
+        )}
 
-          <TabsContent value="about" className="flex-1 mt-0">
+        {activeTab === 'about' && (
+          <div className="flex-1">
             <AboutPage />
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
 
         <Footer />
       </div>
