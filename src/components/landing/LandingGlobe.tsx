@@ -41,13 +41,14 @@ export function LandingGlobe() {
       addDataLayers();
       setLoaded(true);
 
-      // Start auto-rotation
-      let bearing = 0;
+      // Start auto-rotation — spin Earth west-to-east on its north-south axis
+      let lng = 51.57; // Start at DOH longitude
       const rotateGlobe = () => {
         if (!map.current) return;
-        bearing += 0.06;
+        lng += 0.03;
+        if (lng > 180) lng -= 360;
         map.current.easeTo({
-          bearing,
+          center: [lng, 25.26],
           duration: 50,
           easing: (t: number) => t,
         });
