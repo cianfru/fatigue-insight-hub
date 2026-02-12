@@ -48,6 +48,16 @@ const decimalToHHmm = (h: number): string => {
   return `${String(hrs).padStart(2, '0')}:${String(Math.abs(mins)).padStart(2, '0')}`;
 };
 
+// Extract UTC (Zulu) time as "HH:mmZ" from an ISO timestamp string
+const isoToZulu = (isoStr?: string): string | null => {
+  if (!isoStr) return null;
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return null;
+    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}Z`;
+  } catch { return null; }
+};
+
 const getPerformanceColor = (performance: number): string => {
   if (performance >= 80) return 'hsl(120, 70%, 45%)';
   if (performance >= 70) return 'hsl(90, 70%, 50%)';
@@ -124,6 +134,9 @@ interface ElapsedSleepBar {
   isOverflowContinuation?: boolean;
   originalStartHour?: number;
   originalEndHour?: number;
+  // Zulu (UTC) times for display in tooltip
+  sleepStartZulu?: string;
+  sleepEndZulu?: string;
   qualityFactors?: SleepQualityFactors;
   explanation?: string;
   confidenceBasis?: string;
@@ -420,6 +433,8 @@ export function HumanPerformanceTimeline({
         confidence: est.confidence,
         references: est.references,
         woclOverlapHours: est.woclOverlapHours,
+        sleepStartZulu: isoToZulu(est.sleepStartIso) ?? undefined,
+        sleepEndZulu: isoToZulu(est.sleepEndIso) ?? undefined,
       };
 
       // Use home-tz precomputed values
@@ -482,6 +497,12 @@ export function HumanPerformanceTimeline({
           const baseScore = (block.effectiveHours / 8) * 100;
           const recoveryScore = Math.min(100, Math.max(0, baseScore + block.qualityFactor * 20));
 
+          // Compute Zulu times from ISO timestamps
+          const blockZuluTimes = {
+            sleepStartZulu: isoToZulu(block.sleepStartIso) ?? undefined,
+            sleepEndZulu: isoToZulu(block.sleepEndIso) ?? undefined,
+          };
+
           // Use home-tz values if available
           if (block.sleepStartDayHomeTz != null && block.sleepStartHourHomeTz != null &&
               block.sleepEndDayHomeTz != null && block.sleepEndHourHomeTz != null) {
@@ -505,6 +526,7 @@ export function HumanPerformanceTimeline({
               originalStartHour: block.sleepStartHourHomeTz,
               originalEndHour: block.sleepEndHourHomeTz,
               ...restDayExtras,
+              ...blockZuluTimes,
             });
           } else {
             // ISO fallback
@@ -537,6 +559,7 @@ export function HumanPerformanceTimeline({
                 originalStartHour: s.hour,
                 originalEndHour: e.hour,
                 ...restDayExtras,
+                ...blockZuluTimes,
               });
             }
           }
@@ -850,6 +873,14 @@ export function HumanPerformanceTimeline({
                                         (bar.originalStartHour ?? bar.startHourInRow) > (bar.originalEndHour ?? bar.endHourInRow) && ' (+1d)'}
                                     </span>
                                   </div>
+                                  {bar.sleepStartZulu && bar.sleepEndZulu && (
+                                    <div className="flex items-center justify-between text-muted-foreground">
+                                      <span>Zulu</span>
+                                      <span className="font-mono font-medium text-foreground">
+                                        {bar.sleepStartZulu} → {bar.sleepEndZulu}
+                                      </span>
+                                    </div>
+                                  )}
                                   <div className="bg-secondary/30 rounded-lg p-2 space-y-1.5">
                                     <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Recovery Score</div>
                                     <div className="flex items-center justify-between">
