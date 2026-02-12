@@ -18,8 +18,22 @@ export function HeroSection({ onScrollToContent }: HeroSectionProps) {
 
   return (
     <section ref={heroRef} className="relative h-screen overflow-hidden bg-[#000408]">
-      {/* Mapbox Globe Background */}
+      {/* Mapbox Globe Background — z-0 */}
       <LandingGlobe />
+
+      {/* Gradient overlays — z-[1], between globe and content */}
+      <div
+        className="absolute inset-0 z-[1] pointer-events-none"
+        style={{
+          background: 'linear-gradient(to right, rgba(0,4,8,0.88) 0%, rgba(0,4,8,0.4) 45%, rgba(0,4,8,0.1) 70%, rgba(0,4,8,0.2) 100%)',
+        }}
+      />
+      <div
+        className="absolute inset-0 z-[1] pointer-events-none"
+        style={{
+          background: 'linear-gradient(to bottom, rgba(0,4,8,0.3) 0%, transparent 15%, transparent 75%, #000408 100%)',
+        }}
+      />
 
       {/* Nav */}
       <nav className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-4 md:px-10">

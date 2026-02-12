@@ -183,25 +183,10 @@ export function LandingGlobe() {
   };
 
   return (
-    <div className="absolute inset-0">
-      <div
-        ref={mapContainer}
-        className="h-full w-full"
-        style={{ opacity: loaded ? 1 : 0, transition: 'opacity 1.5s ease-out' }}
-      />
-      {/* Gradient overlays for blending with page */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'linear-gradient(to right, rgba(0,4,8,0.88) 0%, rgba(0,4,8,0.4) 45%, rgba(0,4,8,0.1) 70%, rgba(0,4,8,0.2) 100%)',
-        }}
-      />
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'linear-gradient(to bottom, rgba(0,4,8,0.3) 0%, transparent 15%, transparent 75%, #000408 100%)',
-        }}
-      />
-    </div>
+    <div
+      ref={mapContainer}
+      className="absolute inset-0 z-0 h-full w-full"
+      style={{ opacity: loaded ? 1 : 0, transition: 'opacity 1.5s ease-out' }}
+    />
   );
 }
