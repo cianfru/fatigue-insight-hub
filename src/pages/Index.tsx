@@ -237,6 +237,12 @@ const Index = () => {
             sleepEndTimeHomeTz: block.sleep_end_time_home_tz ?? undefined,
             locationTimezone: block.location_timezone ?? undefined,
             environment: block.environment ?? undefined,
+            sleepStartTimeLocationTz: block.sleep_start_time_location_tz ?? undefined,
+            sleepEndTimeLocationTz: block.sleep_end_time_location_tz ?? undefined,
+            sleepStartDay: block.sleep_start_day ?? undefined,
+            sleepStartHour: block.sleep_start_hour ?? undefined,
+            sleepEndDay: block.sleep_end_day ?? undefined,
+            sleepEndHour: block.sleep_end_hour ?? undefined,
           })),
           totalSleepHours: restDay.total_sleep_hours,
           effectiveSleepHours: restDay.effective_sleep_hours,
@@ -247,6 +253,11 @@ const Index = () => {
           confidenceBasis: restDay.confidence_basis,
           qualityFactors: restDay.quality_factors,
           references: restDay.references,
+        })),
+        bodyClockTimeline: result.body_clock_timeline?.map(entry => ({
+          timestampUtc: entry.timestamp_utc,
+          phaseShiftHours: entry.phase_shift_hours,
+          referenceTimezone: entry.reference_timezone,
         })),
         duties: result.duties.map(duty => {
           const segmentPerformances = calculateSegmentPerformances(duty);
@@ -278,6 +289,7 @@ const Index = () => {
             maxFdpHours: duty.max_fdp_hours,
             extendedFdpHours: duty.extended_fdp_hours,
             usedDiscretion: duty.used_discretion,
+            circadianPhaseShiftValue: duty.circadian_phase_shift ?? undefined,
             sleepEnvironment,
             sleepQuality,
             sleepEstimate: sleep ? (() => {
