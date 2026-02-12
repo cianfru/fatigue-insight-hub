@@ -83,6 +83,16 @@ const decimalToHHmm = (h: number): string => {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 };
 
+// Extract UTC (Zulu) time as "HH:mmZ" from an ISO timestamp string
+const isoToZulu = (isoStr?: string): string | null => {
+  if (!isoStr) return null;
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return null;
+    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}Z`;
+  } catch { return null; }
+};
+
 interface FlightSegmentBar {
   type: 'checkin' | 'flight' | 'ground';
   flightNumber?: string;
@@ -124,6 +134,9 @@ interface SleepBar {
   // Original full sleep window times (for display in tooltip)
   originalStartHour?: number;
   originalEndHour?: number;
+  // Zulu (UTC) times for display in tooltip
+  sleepStartZulu?: string;
+  sleepEndZulu?: string;
   // Quality factor data (from backend for all sleep types)
   qualityFactors?: SleepQualityFactors;
   explanation?: string;
@@ -520,6 +533,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         confidence: sleepEstimate.confidence,
         references: sleepEstimate.references,
         woclOverlapHours: sleepEstimate.woclOverlapHours,
+        sleepStartZulu: isoToZulu(sleepEstimate.sleepStartIso) ?? undefined,
+        sleepEndZulu: isoToZulu(sleepEstimate.sleepEndIso) ?? undefined,
       };
       
       // PREFER home-base timezone day/hour values for chronogram positioning
@@ -878,7 +893,13 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           const baseScore = (block.effectiveHours / 8) * 100;
           const efficiencyBonus = block.qualityFactor * 20;
           const recoveryScore = Math.min(100, Math.max(0, baseScore + efficiencyBonus));
-          
+
+          // Compute Zulu times from ISO timestamps
+          const blockZuluTimes = {
+            sleepStartZulu: isoToZulu(block.sleepStartIso) ?? undefined,
+            sleepEndZulu: isoToZulu(block.sleepEndIso) ?? undefined,
+          };
+
           // PREFER home-base timezone positioning for rest day blocks too
           const hasHomeTzBlock = 
             block.sleepStartDayHomeTz != null && 
@@ -957,6 +978,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 isPreDuty: false,
                 relatedDuty: pseudoDuty,
                 ...restDayExtras,
+                ...blockZuluTimes,
               });
             } else {
               // Overnight sleep: crosses midnight
@@ -976,6 +998,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                   originalStartHour: startHour,
                   originalEndHour: endHour,
                   ...restDayExtras,
+                  ...blockZuluTimes,
                 });
               }
               // Part 2: 00:00 to endHour on end day
@@ -994,6 +1017,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                   originalStartHour: startHour,
                   originalEndHour: endHour,
                   ...restDayExtras,
+                  ...blockZuluTimes,
                 });
               }
             }
@@ -1354,11 +1378,19 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         <span className="font-mono font-medium text-foreground">
                                           {decimalToHHmm(bar.originalStartHour ?? bar.startHour)} → {decimalToHHmm(bar.originalEndHour ?? bar.endHour)}
                                           {/* Show +1d only when sleep truly crosses midnight */}
-                                          {(bar.isOvernightStart || bar.isOvernightContinuation) && 
+                                          {(bar.isOvernightStart || bar.isOvernightContinuation) &&
                                            (bar.originalStartHour ?? bar.startHour) > (bar.originalEndHour ?? bar.endHour) && ' (+1d)'}
                                         </span>
                                       </div>
-                                      
+                                      {bar.sleepStartZulu && bar.sleepEndZulu && (
+                                        <div className="flex items-center justify-between text-muted-foreground">
+                                          <span>Zulu</span>
+                                          <span className="font-mono font-medium text-foreground">
+                                            {bar.sleepStartZulu} → {bar.sleepEndZulu}
+                                          </span>
+                                        </div>
+                                      )}
+
                                       {/* Recovery Score Breakdown */}
                                       <div className="bg-secondary/30 rounded-lg p-2 space-y-1.5">
                                         <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
