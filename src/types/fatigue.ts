@@ -99,6 +99,7 @@ export interface DutyAnalysis {
   // Existing optional fields
   pinchEvents?: PinchEvent[];
   circadianPhaseShift?: number;
+  circadianPhaseShiftValue?: number; // Backend circadian_phase_shift: hours offset from home-base body clock
   phasePerformance?: FlightPhasePerformance[];
   sleepQuality?: 'poor' | 'fair' | 'good' | 'excellent';
   sleepEnvironment?: 'home' | 'layover';
@@ -198,7 +199,15 @@ export interface RestDaySleepBlock {
   sleepStartTimeHomeTz?: string;
   sleepEndTimeHomeTz?: string;
   locationTimezone?: string;
-  environment?: 'home' | 'hotel' | 'layover';
+  environment?: 'home' | 'hotel' | 'layover' | 'crew_rest' | 'airport_hotel';
+  // Location-local display times
+  sleepStartTimeLocationTz?: string;
+  sleepEndTimeLocationTz?: string;
+  // Numeric grid positioning (home-base TZ)
+  sleepStartDay?: number;
+  sleepStartHour?: number;
+  sleepEndDay?: number;
+  sleepEndHour?: number;
 }
 
 // Rest day sleep (transformed from backend)
@@ -231,4 +240,13 @@ export interface AnalysisResults {
   homeBaseTimezone?: string; // IANA timezone e.g. "Asia/Qatar"
   // Rest day sleep data
   restDaysSleep?: RestDaySleep[];
+  // Circadian adaptation curve across the roster
+  bodyClockTimeline?: BodyClockTimelineEntry[];
+}
+
+// Body clock adaptation curve entry
+export interface BodyClockTimelineEntry {
+  timestampUtc: string;       // ISO 8601 UTC timestamp
+  phaseShiftHours: number;    // hours offset from home base (-12 to +12)
+  referenceTimezone: string;  // IANA tz the pilot is physically in
 }

@@ -159,16 +159,12 @@ export function HumanPerformanceTimeline({
     duties.filter(d => d.usedDiscretion).length
   , [duties]);
 
-  // ── T=0 reference: midnight of the first duty day ──
+  // ── T=0 reference: first hour of the roster month ──
   const t0 = useMemo(() => {
-    if (duties.length === 0) return new Date(month);
-    const sorted = [...duties].sort((a, b) => a.date.getTime() - b.date.getTime());
-    const firstDuty = sorted[0];
-    // T=0 = midnight of the first duty day (in home base timezone context)
-    const d = new Date(firstDuty.date);
-    d.setHours(0, 0, 0, 0);
+    // T=0 = midnight on the 1st of the roster month
+    const d = new Date(month.getFullYear(), month.getMonth(), 1, 0, 0, 0, 0);
     return d;
-  }, [duties, month]);
+  }, [month]);
 
   // Convert a Date + HH:mm time to elapsed hours from T=0
   const toElapsed = (date: Date, hourOfDay: number): number => {
@@ -211,7 +207,12 @@ export function HumanPerformanceTimeline({
         }
       }
 
-      currentShift += duty.circadianPhaseShift || 0;
+      // Prefer backend-provided circadian_phase_shift (absolute value at this duty)
+      if (duty.circadianPhaseShiftValue != null) {
+        currentShift = duty.circadianPhaseShiftValue;
+      } else {
+        currentShift += duty.circadianPhaseShift || 0;
+      }
       currentShift = Math.max(-12, Math.min(12, currentShift));
 
       const row = Math.floor(elapsed / 24);

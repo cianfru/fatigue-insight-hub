@@ -36,6 +36,16 @@ export interface SleepBlockResponse {
   duration_hours: number;
   effective_hours: number;
   quality_factor: number;
+  // Location context
+  location_timezone?: string | null;
+  environment?: 'home' | 'hotel' | 'crew_rest' | 'airport_hotel' | null;
+  sleep_start_time_location_tz?: string | null;
+  sleep_end_time_location_tz?: string | null;
+  // Numeric grid positioning (home-base TZ)
+  sleep_start_day?: number | null;
+  sleep_start_hour?: number | null;
+  sleep_end_day?: number | null;
+  sleep_end_hour?: number | null;
 }
 
 // Strategic sleep estimator output (SleepQualityResponse from backend)
@@ -139,6 +149,8 @@ export interface Duty {
   max_fdp_hours?: number;
   extended_fdp_hours?: number;
   used_discretion?: boolean;
+  // Circadian adaptation state at duty report time
+  circadian_phase_shift?: number | null;
 }
 
 // Rest day sleep block from backend
@@ -159,7 +171,15 @@ export interface RestDaySleepBlock {
   sleep_start_time_home_tz?: string | null;
   sleep_end_time_home_tz?: string | null;
   location_timezone?: string | null;
-  environment?: 'home' | 'hotel' | 'layover' | null;
+  environment?: 'home' | 'hotel' | 'layover' | 'crew_rest' | 'airport_hotel' | null;
+  // Location-local display times
+  sleep_start_time_location_tz?: string | null;
+  sleep_end_time_location_tz?: string | null;
+  // Numeric grid positioning (home-base TZ)
+  sleep_start_day?: number | null;
+  sleep_start_hour?: number | null;
+  sleep_end_day?: number | null;
+  sleep_end_hour?: number | null;
 }
 
 // Rest day sleep entry from backend
@@ -217,6 +237,12 @@ export interface AnalysisResult {
   
   duties: Duty[];
   rest_days_sleep?: RestDaySleep[];
+  // Full circadian adaptation curve across the roster
+  body_clock_timeline?: Array<{
+    timestamp_utc: string;
+    phase_shift_hours: number;
+    reference_timezone: string;
+  }>;
 }
 
 export interface Statistics {
