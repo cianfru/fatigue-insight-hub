@@ -1,4 +1,4 @@
-import { AlertTriangle, Plane, AlertCircle, Clock, Timer, Zap, TrendingDown } from 'lucide-react';
+import { AlertTriangle, Plane, AlertCircle, Clock, Timer, Zap, TrendingDown, Globe, Users } from 'lucide-react';
 import { DutyStatistics } from '@/types/fatigue';
 
 interface StatisticsCardsProps {
@@ -90,6 +90,35 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
           subtitle="maximum"
         />
       </div>
+
+      {/* ULR/Augmented Stats Row - only when relevant */}
+      {(statistics.totalUlrDuties > 0 || statistics.totalAugmentedDuties > 0) && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <StatCard
+            label="ULR Duties"
+            value={statistics.totalUlrDuties.toString()}
+            icon={<Globe className="h-4 w-4" />}
+            variant="neutral"
+            subtitle="ultra long range"
+          />
+          <StatCard
+            label="Augmented Crew"
+            value={statistics.totalAugmentedDuties.toString()}
+            icon={<Users className="h-4 w-4" />}
+            variant="neutral"
+            subtitle="3 or 4 pilot"
+          />
+          {statistics.ulrViolations.length > 0 && (
+            <StatCard
+              label="ULR Violations"
+              value={statistics.ulrViolations.length.toString()}
+              icon={<AlertCircle className="h-4 w-4" />}
+              variant="critical"
+              subtitle="compliance"
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

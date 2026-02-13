@@ -93,6 +93,23 @@ export function DashboardContent({
                       </div>
                     </div>
                   )}
+
+                  {/* ULR Violations Warning */}
+                  {analysisResults.statistics.ulrViolations.length > 0 && (
+                    <div className="mt-4 flex items-start gap-3 rounded-lg border border-critical/50 bg-critical/10 p-4">
+                      <AlertTriangle className="h-5 w-5 flex-shrink-0 text-critical" />
+                      <div>
+                        <p className="font-medium text-critical">
+                          ULR COMPLIANCE: {analysisResults.statistics.ulrViolations.length} violation(s) detected
+                        </p>
+                        <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
+                          {analysisResults.statistics.ulrViolations.map((v, i) => (
+                            <li key={i}>- {v}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

@@ -7,6 +7,7 @@ export interface PilotSettings {
   endDate?: Date;
   theme: 'dark' | 'light';
   configPreset: string;
+  crewSet: 'crew_a' | 'crew_b';
 }
 
 export interface UploadedFile {
@@ -28,6 +29,10 @@ export interface DutyStatistics {
   avgSleepPerNight: number;
   worstPerformance: number;
   worstDutyId?: string;
+  // ULR / Augmented crew summary
+  totalUlrDuties: number;
+  totalAugmentedDuties: number;
+  ulrViolations: string[];
 }
 
 export interface FlightSegment {
@@ -132,6 +137,35 @@ export interface DutyAnalysis {
     qualityFactors?: SleepQualityFactors;
     references?: SleepReference[];
   };
+
+  // ULR / Augmented crew fields
+  crewComposition: 'standard' | 'augmented_3' | 'augmented_4';
+  restFacilityClass: 'class_1' | 'class_2' | 'class_3' | null;
+  isUlr: boolean;
+  acclimatizationState: 'acclimatized' | 'unknown' | 'departed';
+  ulrCompliance: {
+    isUlr: boolean;
+    fdpWithinLimit: boolean;
+    maxPlannedFdp: number;
+    restPeriodsValid: boolean;
+    preUlrRestCompliant: boolean;
+    postUlrRestCompliant: boolean;
+    monthlyUlrCount: number;
+    monthlyLimit: number;
+    violations: string[];
+    warnings: string[];
+  } | null;
+  inflightRestBlocks: {
+    startUtc: string;
+    endUtc: string;
+    durationHours: number;
+    effectiveSleepHours: number;
+    crewMemberId: string | null;
+    crewSet: 'crew_a' | 'crew_b' | null;
+    isDuringWocl: boolean;
+  }[];
+  returnToDeckPerformance: number | null;
+  preDutyAwakeHours: number;
 }
 
 // Sleep quality calculation factors
@@ -153,6 +187,7 @@ export interface TimelinePoint {
   sleep_pressure: number;          // Process S (Borbély, 1982)
   circadian: number;               // Process C (Dijk & Czeisler, 1995)
   performance?: number;            // Combined performance score
+  is_in_rest?: boolean;            // True when crew member is in bunk rest
 }
 
 // Academic reference for sleep calculations

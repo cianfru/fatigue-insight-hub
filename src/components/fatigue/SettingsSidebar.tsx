@@ -1,4 +1,4 @@
-import { Info, BookOpen, ChevronDown, User, MapPin, Plane } from 'lucide-react';
+import { Info, BookOpen, ChevronDown, User, MapPin, Plane, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -158,6 +158,39 @@ export function SettingsSidebar({
         </CardContent>
       </Card>
 
+
+      {/* Crew Configuration Card (ULR) */}
+      <Card variant="glass">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Users className="h-4 w-4 text-primary" />
+            Crew Configuration
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">
+              Analysis Perspective (ULR)
+            </Label>
+            <Select
+              value={settings.crewSet}
+              onValueChange={(value) => onSettingsChange({ crewSet: value as 'crew_a' | 'crew_b' })}
+            >
+              <SelectTrigger className="h-9 bg-secondary/50">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border-border">
+                <SelectItem value="crew_a">Crew A (Operating)</SelectItem>
+                <SelectItem value="crew_b">Crew B (Relief)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            For augmented crew ULR duties, select which crew set's fatigue profile to analyze.
+            Standard 2-pilot duties are unaffected.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Model Configuration Card */}
       <Card variant="glass">

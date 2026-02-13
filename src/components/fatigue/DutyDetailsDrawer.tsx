@@ -48,6 +48,7 @@ export function DutyDetailsDrawer({ duty, analysisId, open, onOpenChange }: Duty
           sleep_pressure: pt.sleep_pressure ?? 0,
           circadian: pt.circadian ?? 0,
           performance: pt.performance,
+          is_in_rest: pt.is_in_rest ?? false,
         })) : undefined;
 
         console.log('Fetched timeline points:', timelinePoints?.length, 'points');
