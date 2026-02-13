@@ -6,6 +6,35 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://web-production-7a4
 // TYPES (matching your existing types in src/types/fatigue.ts)
 // ============================================================================
 
+// Crew augmentation & ULR enums
+export type CrewComposition = 'standard' | 'augmented_3' | 'augmented_4';
+export type RestFacilityClass = 'class_1' | 'class_2' | 'class_3';
+export type ULRCrewSet = 'crew_a' | 'crew_b';
+export type AcclimatizationState = 'acclimatized' | 'unknown' | 'departed';
+
+export interface InFlightRestBlock {
+  start_utc: string;
+  end_utc: string;
+  duration_hours: number;
+  effective_sleep_hours: number;
+  crew_member_id: string | null;
+  crew_set: ULRCrewSet | null;
+  is_during_wocl: boolean;
+}
+
+export interface ULRCompliance {
+  is_ulr: boolean;
+  fdp_within_limit: boolean;
+  max_planned_fdp: number;
+  rest_periods_valid: boolean;
+  pre_ulr_rest_compliant: boolean;
+  post_ulr_rest_compliant: boolean;
+  monthly_ulr_count: number;
+  monthly_limit: number;
+  violations: string[];
+  warnings: string[];
+}
+
 export interface DutySegment {
   flight_number: string;
   departure: string;
@@ -151,6 +180,16 @@ export interface Duty {
   used_discretion?: boolean;
   // Circadian adaptation state at duty report time
   circadian_phase_shift?: number | null;
+
+  // ULR / Augmented crew fields
+  crew_composition?: CrewComposition;
+  rest_facility_class?: RestFacilityClass | null;
+  is_ulr?: boolean;
+  acclimatization_state?: AcclimatizationState;
+  ulr_compliance?: ULRCompliance | null;
+  inflight_rest_blocks?: InFlightRestBlock[];
+  return_to_deck_performance?: number | null;
+  pre_duty_awake_hours?: number;
 }
 
 // Rest day sleep block from backend
@@ -243,6 +282,11 @@ export interface AnalysisResult {
     phase_shift_hours: number;
     reference_timezone: string;
   }>;
+
+  // ULR / Augmented crew summary
+  total_ulr_duties?: number;
+  total_augmented_duties?: number;
+  ulr_violations?: string[];
 }
 
 export interface Statistics {
@@ -263,14 +307,16 @@ export async function analyzeRoster(
   file: File,
   pilotId: string,
   homeBase: string,
-  configPreset: string = 'default'
+  configPreset: string = 'default',
+  crewSet: ULRCrewSet = 'crew_b'
 ): Promise<AnalysisResult> {
-  
+
   const formData = new FormData();
   formData.append('file', file);
   formData.append('pilot_id', pilotId);
   formData.append('home_base', homeBase);
   formData.append('config_preset', configPreset);
+  formData.append('crew_set', crewSet);
   
   const response = await fetch(`${API_BASE_URL}/api/analyze`, {
     method: 'POST',

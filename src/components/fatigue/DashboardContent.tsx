@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { X, AlertTriangle } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { SettingsSidebar } from '@/components/fatigue/SettingsSidebar';
@@ -90,6 +90,23 @@ export function DashboardContent({
         <div className="mx-auto max-w-6xl space-y-4 md:space-y-6">
           {analysisResults && (
             <div className="space-y-4 md:space-y-6 animate-fade-in">
+              {/* ULR Violations Warning */}
+              {analysisResults.statistics.ulrViolations.length > 0 && (
+                <div className="flex items-start gap-3 rounded-lg border border-critical/50 bg-critical/10 p-4">
+                  <AlertTriangle className="h-5 w-5 flex-shrink-0 text-critical" />
+                  <div>
+                    <p className="font-medium text-critical">
+                      ULR COMPLIANCE: {analysisResults.statistics.ulrViolations.length} violation(s) detected
+                    </p>
+                    <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
+                      {analysisResults.statistics.ulrViolations.map((v, i) => (
+                        <li key={i}>- {v}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
               {/* Pinch Event Alerts */}
               <PinchEventAlerts duties={analysisResults.duties} />
 

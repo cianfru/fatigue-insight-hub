@@ -99,6 +99,14 @@ export function PerformanceDegradation({
           <span className="text-lg font-mono font-bold">{hours_on_duty.toFixed(1)}h</span>
         </div>
 
+        {/* In-rest indicator — crew member is in bunk */}
+        {timelinePoint.is_in_rest && (
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-chart-2/10 border border-chart-2/30">
+            <Moon className="h-4 w-4 text-chart-2" />
+            <span className="text-sm font-medium text-chart-2">Crew member in bunk rest</span>
+          </div>
+        )}
+
         {/* Process Breakdown */}
         <div className="space-y-3">
           <h5 className="text-xs font-medium text-muted-foreground">Fatigue Components</h5>

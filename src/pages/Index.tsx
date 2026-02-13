@@ -97,6 +97,7 @@ const Index = () => {
     selectedMonth: new Date(2026, 1, 1),
     theme: 'dark',
     configPreset: 'easa-default',
+    crewSet: 'crew_b',
   });
 
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
@@ -145,7 +146,8 @@ const Index = () => {
         actualFileObject,
         settings.pilotId,
         settings.homeBase,
-        settings.configPreset
+        settings.configPreset,
+        settings.crewSet
       );
 
       // Debug logging
@@ -217,6 +219,9 @@ const Index = () => {
           avgSleepPerNight: result.avg_sleep_per_night || 0,
           worstPerformance: result.worst_performance || 0,
           worstDutyId: result.worst_duty_id || undefined,
+          totalUlrDuties: result.total_ulr_duties || 0,
+          totalAugmentedDuties: result.total_augmented_duties || 0,
+          ulrViolations: result.ulr_violations || [],
         },
         restDaysSleep: result.rest_days_sleep?.map(restDay => ({
           date: parseISO(restDay.date),
@@ -297,13 +302,13 @@ const Index = () => {
               const firstBlock = sleepBlocks?.[0];
               const sleepStartIso = sleep.sleep_start_iso ?? firstBlock?.sleep_start_iso;
               const sleepEndIso = sleep.sleep_end_iso ?? firstBlock?.sleep_end_iso;
-              
+
               const sleepRecord = sleep as unknown as Record<string, unknown>;
               let sleepStartDay = sleepRecord.sleep_start_day as number | undefined;
               let sleepStartHour = sleepRecord.sleep_start_hour as number | undefined;
               let sleepEndDay = sleepRecord.sleep_end_day as number | undefined;
               let sleepEndHour = sleepRecord.sleep_end_hour as number | undefined;
-              
+
               // Home base timezone fields (for chronogram positioning)
               const sleepStartDayHomeTz = sleepRecord.sleep_start_day_home_tz as number | undefined;
               const sleepStartHourHomeTz = sleepRecord.sleep_start_hour_home_tz as number | undefined;
@@ -313,14 +318,14 @@ const Index = () => {
               const sleepEndTimeHomeTz = sleepRecord.sleep_end_time_home_tz as string | undefined;
               const locationTimezone = sleepRecord.location_timezone as string | undefined;
               const sleepEnvironment2 = sleepRecord.environment as 'home' | 'hotel' | 'layover' | undefined;
-              
+
               const parseIsoToDayHour = (iso: string | undefined): { day: number; hour: number } | null => {
                 if (!iso) return null;
                 const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
                 if (m) return { day: Number(m[3]), hour: Number(m[4]) + Number(m[5]) / 60 };
                 return null;
               };
-              
+
               if (sleepStartDay == null && sleepStartIso) {
                 const parsed = parseIsoToDayHour(sleepStartIso as string);
                 if (parsed) { sleepStartDay = parsed.day; sleepStartHour = parsed.hour; }
@@ -329,7 +334,7 @@ const Index = () => {
                 const parsed = parseIsoToDayHour(sleepEndIso as string);
                 if (parsed) { sleepEndDay = parsed.day; sleepEndHour = parsed.hour; }
               }
-              
+
               const explanation = sleepRecord.explanation as string | undefined;
               const confidenceBasis = sleepRecord.confidence_basis as string | undefined;
               const qualityFactors = sleepRecord.quality_factors as {
@@ -345,7 +350,7 @@ const Index = () => {
                 short: string;
                 full: string;
               }> | undefined;
-              
+
               return {
                 totalSleepHours: sleep.total_sleep_hours,
                 effectiveSleepHours: sleep.effective_sleep_hours,
@@ -376,6 +381,35 @@ const Index = () => {
                 references,
               };
             })() : undefined,
+            // ULR / Augmented crew transforms
+            crewComposition: duty.crew_composition || 'standard',
+            restFacilityClass: duty.rest_facility_class || null,
+            isUlr: duty.is_ulr || false,
+            acclimatizationState: duty.acclimatization_state || 'acclimatized',
+            ulrCompliance: duty.ulr_compliance ? {
+              isUlr: duty.ulr_compliance.is_ulr,
+              fdpWithinLimit: duty.ulr_compliance.fdp_within_limit,
+              maxPlannedFdp: duty.ulr_compliance.max_planned_fdp,
+              restPeriodsValid: duty.ulr_compliance.rest_periods_valid,
+              preUlrRestCompliant: duty.ulr_compliance.pre_ulr_rest_compliant,
+              postUlrRestCompliant: duty.ulr_compliance.post_ulr_rest_compliant,
+              monthlyUlrCount: duty.ulr_compliance.monthly_ulr_count,
+              monthlyLimit: duty.ulr_compliance.monthly_limit,
+              violations: duty.ulr_compliance.violations,
+              warnings: duty.ulr_compliance.warnings,
+            } : null,
+            inflightRestBlocks: (duty.inflight_rest_blocks || []).map(block => ({
+              startUtc: block.start_utc,
+              endUtc: block.end_utc,
+              durationHours: block.duration_hours,
+              effectiveSleepHours: block.effective_sleep_hours,
+              crewMemberId: block.crew_member_id,
+              crewSet: block.crew_set,
+              isDuringWocl: block.is_during_wocl,
+            })),
+            returnToDeckPerformance: duty.return_to_deck_performance ?? null,
+            preDutyAwakeHours: duty.pre_duty_awake_hours ?? 0,
+
             flightSegments: duty.segments.map((seg, idx) => ({
               flightNumber: seg.flight_number,
               departure: seg.departure,

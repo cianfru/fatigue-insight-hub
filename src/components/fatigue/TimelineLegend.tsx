@@ -52,6 +52,15 @@ export function TimelineLegend({ showDiscretion, variant = 'homebase' }: Timelin
             <span className="h-3 w-6 rounded-sm bg-primary/10 border border-dashed border-primary/30" />
             <span className="text-muted-foreground">Sleep</span>
           </span>
+          <span className="flex items-center gap-1.5">
+            <span
+              className="h-3 w-6 rounded-sm"
+              style={{
+                background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(147, 130, 220, 0.5) 2px, rgba(147, 130, 220, 0.5) 4px)',
+              }}
+            />
+            <span className="text-muted-foreground">In-Flight Rest</span>
+          </span>
 
           <span className="text-border">|</span>
 

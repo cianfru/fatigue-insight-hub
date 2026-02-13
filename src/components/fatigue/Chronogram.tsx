@@ -146,6 +146,17 @@ interface SleepBar {
   woclOverlapHours?: number;
 }
 
+interface InFlightRestBar {
+  dayIndex: number;
+  startHour: number;
+  endHour: number;
+  durationHours: number;
+  effectiveSleepHours: number;
+  isDuringWocl: boolean;
+  crewSet: string | null;
+  relatedDuty: DutyAnalysis;
+}
+
 // WOCL (Window of Circadian Low) is typically 02:00 - 06:00
 const WOCL_START = 2;
 const WOCL_END = 6;
@@ -1055,6 +1066,69 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     return deduped;
   }, [duties, restDaysSleep, daysInMonth]);
 
+  // Calculate in-flight rest bars for augmented/ULR duties
+  const inflightRestBars = useMemo(() => {
+    const bars: InFlightRestBar[] = [];
+
+    duties.forEach((duty) => {
+      if (!duty.inflightRestBlocks || duty.inflightRestBlocks.length === 0) return;
+
+      const dutyDayOfMonth = duty.dateString
+        ? Number(duty.dateString.split('-')[2])
+        : duty.date.getDate();
+
+      duty.inflightRestBlocks.forEach((block) => {
+        // Parse ISO UTC timestamps to get hour positions
+        const startMatch = block.startUtc.match(/T(\d{2}):(\d{2})/);
+        const endMatch = block.endUtc.match(/T(\d{2}):(\d{2})/);
+        if (!startMatch || !endMatch) return;
+
+        const startHour = Number(startMatch[1]) + Number(startMatch[2]) / 60;
+        const endHour = Number(endMatch[1]) + Number(endMatch[2]) / 60;
+
+        if (endHour > startHour) {
+          // Same-day rest block
+          bars.push({
+            dayIndex: dutyDayOfMonth,
+            startHour,
+            endHour,
+            durationHours: block.durationHours,
+            effectiveSleepHours: block.effectiveSleepHours,
+            isDuringWocl: block.isDuringWocl,
+            crewSet: block.crewSet,
+            relatedDuty: duty,
+          });
+        } else {
+          // Overnight rest block — split at midnight
+          bars.push({
+            dayIndex: dutyDayOfMonth,
+            startHour,
+            endHour: 24,
+            durationHours: block.durationHours,
+            effectiveSleepHours: block.effectiveSleepHours,
+            isDuringWocl: block.isDuringWocl,
+            crewSet: block.crewSet,
+            relatedDuty: duty,
+          });
+          if (dutyDayOfMonth < daysInMonth) {
+            bars.push({
+              dayIndex: dutyDayOfMonth + 1,
+              startHour: 0,
+              endHour,
+              durationHours: block.durationHours,
+              effectiveSleepHours: block.effectiveSleepHours,
+              isDuringWocl: block.isDuringWocl,
+              crewSet: block.crewSet,
+              relatedDuty: duty,
+            });
+          }
+        }
+      });
+    });
+
+    return bars;
+  }, [duties, daysInMonth]);
+
   // Get duty warnings based on actual duty data
   const getDayWarnings = (dayOfMonth: number) => {
     const duty = duties.find(d => d.date.getDate() === dayOfMonth);
@@ -1796,6 +1870,57 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                             );
                           })}
 
+                        {/* In-flight rest period bars - hatched overlay on duty bars */}
+                        {inflightRestBars
+                          .filter((bar) => bar.dayIndex === dayNum)
+                          .map((bar, barIndex) => {
+                            const barWidth = ((bar.endHour - bar.startHour) / 24) * 100;
+                            return (
+                              <TooltipProvider key={`ifr-${barIndex}`} delayDuration={100}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div
+                                      className="absolute pointer-events-auto cursor-help"
+                                      style={{
+                                        top: 13,
+                                        height: 13,
+                                        left: `${(bar.startHour / 24) * 100}%`,
+                                        width: `${Math.max(barWidth, 0.5)}%`,
+                                        background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(147, 130, 220, 0.5) 2px, rgba(147, 130, 220, 0.5) 4px)',
+                                        borderRadius: '2px',
+                                        zIndex: 25,
+                                      }}
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-xs p-3">
+                                    <div className="space-y-1 text-xs">
+                                      <div className="font-semibold border-b pb-1">
+                                        In-Flight Rest
+                                        {bar.crewSet && (
+                                          <Badge variant="outline" className="ml-2 text-[10px] capitalize">
+                                            {bar.crewSet.replace('_', ' ')}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                        <span className="text-muted-foreground">Duration:</span>
+                                        <span>{bar.durationHours.toFixed(1)}h</span>
+                                        <span className="text-muted-foreground">Effective Sleep:</span>
+                                        <span>{bar.effectiveSleepHours.toFixed(1)}h</span>
+                                        {bar.isDuringWocl && (
+                                          <>
+                                            <span className="text-muted-foreground">WOCL:</span>
+                                            <span className="text-warning">Yes</span>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            );
+                          })}
+
                         {/* FDP Limit markers for this day - rendered separately to handle overnight cases */}
                         {fdpLimitMarkers
                           .filter((marker) => marker.dayIndex === dayNum)
@@ -1852,7 +1977,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 key={index}
                 onClick={() => onDutySelect(duty)}
                 className={cn(
-                  "rounded-lg px-3 py-2 text-xs font-medium transition-all duration-200 text-foreground",
+                  "rounded-lg px-3 py-2 text-xs font-medium transition-all duration-200 text-foreground relative",
                   duty.overallRisk === 'LOW' && "bg-success hover:bg-success/80",
                   duty.overallRisk === 'MODERATE' && "bg-warning hover:bg-warning/80",
                   duty.overallRisk === 'HIGH' && "bg-high hover:bg-high/80",
@@ -1862,6 +1987,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                     : 'hover:scale-105'
                 )}
               >
+                {duty.isUlr && (
+                  <span className="absolute -top-1 -right-1 text-[8px] bg-primary text-primary-foreground rounded-full px-1 leading-tight">ULR</span>
+                )}
                 {duty.dayOfWeek}, {format(duty.date, 'MMM dd')}
               </button>
             ))}
