@@ -12,9 +12,10 @@ export function HeroSection({ onScrollToContent }: HeroSectionProps) {
   const heroRef = useRef<HTMLElement>(null);
   const progress = useScrollProgress(heroRef);
 
-  // Fade out hero content as user scrolls down
-  const contentOpacity = Math.max(0, 1 - progress * 2.5);
-  const contentTranslate = progress * 40;
+  // Fade out hero content as user scrolls past (progress ~0.5 = top of page)
+  const scrollFade = Math.max(0, Math.min(1, (progress - 0.5) * 4));
+  const contentOpacity = 1 - scrollFade;
+  const contentTranslate = scrollFade * 60;
 
   return (
     <section ref={heroRef} className="relative h-screen overflow-hidden bg-[#000408]">
