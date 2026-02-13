@@ -17,7 +17,7 @@ export function LandingGlobe() {
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/satellite-streets-v12',
+      style: 'mapbox://styles/mapbox/dark-v11',
       center: [51.57, 25.26],
       zoom: 1.8,
       projection: 'globe',
@@ -37,6 +37,16 @@ export function LandingGlobe() {
         'space-color': 'hsl(220, 40%, 1%)',
         'star-intensity': 0.5,
       } as any);
+
+      // Remove all text labels (country names, cities, etc.)
+      const style = map.current!.getStyle();
+      if (style?.layers) {
+        style.layers.forEach((layer) => {
+          if (layer.type === 'symbol' && layer.id.includes('label')) {
+            map.current!.removeLayer(layer.id);
+          }
+        });
+      }
 
       addDataLayers();
       setLoaded(true);
