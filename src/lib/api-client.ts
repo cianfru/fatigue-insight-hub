@@ -44,6 +44,15 @@ export interface DutySegment {
   departure_time_local: string;  // Pre-converted to HH:mm in home base timezone
   arrival_time_local: string;    // Pre-converted to HH:mm in home base timezone
   block_hours: number;
+  // New unambiguous time fields
+  departure_time_home_tz: string;       // HH:mm in home base timezone
+  arrival_time_home_tz: string;         // HH:mm in home base timezone
+  departure_time_airport_local: string; // HH:mm in actual airport timezone
+  arrival_time_airport_local: string;   // HH:mm in actual airport timezone
+  departure_timezone: string;           // IANA timezone e.g. "Asia/Kolkata"
+  arrival_timezone: string;             // IANA timezone e.g. "Asia/Qatar"
+  departure_utc_offset: number | null;  // UTC offset hours e.g. 5.5
+  arrival_utc_offset: number | null;    // UTC offset hours e.g. 3.0
 }
 
 // Sleep block from strategic sleep estimator
@@ -56,6 +65,16 @@ export interface SleepBlockResponse {
   duration_hours: number;
   effective_hours: number;
   quality_factor: number;
+  // Location context
+  location_timezone?: string | null;
+  environment?: 'home' | 'hotel' | 'crew_rest' | 'airport_hotel' | null;
+  sleep_start_time_location_tz?: string | null;
+  sleep_end_time_location_tz?: string | null;
+  // Numeric grid positioning (home-base TZ)
+  sleep_start_day?: number | null;
+  sleep_start_hour?: number | null;
+  sleep_end_day?: number | null;
+  sleep_end_hour?: number | null;
 }
 
 // Strategic sleep estimator output (SleepQualityResponse from backend)
@@ -74,7 +93,8 @@ export interface SleepEstimate {
     | 'normal'
     // Additional backend strategies
     | 'early_bedtime'
-    | 'afternoon_nap';
+    | 'afternoon_nap'
+    | 'post_duty_recovery';
   confidence: number;
   warnings: string[];
   // Sleep blocks array (detailed sleep periods)
@@ -85,11 +105,21 @@ export interface SleepEstimate {
   // ISO timestamps for precise date/time positioning - optional top-level convenience fields
   sleep_start_iso?: string | null;
   sleep_end_iso?: string | null;
-  // Pre-computed day/hour values (timezone-safe - already converted by backend)
-  sleep_start_day?: number | null;   // Day of month (1-31)
-  sleep_start_hour?: number | null;  // Hour (0-24, decimal)
-  sleep_end_day?: number | null;     // Day of month (1-31)
-  sleep_end_hour?: number | null;    // Hour (0-24, decimal)
+  // Pre-computed day/hour values in LOCATION timezone
+  sleep_start_day?: number | null;
+  sleep_start_hour?: number | null;
+  sleep_end_day?: number | null;
+  sleep_end_hour?: number | null;
+  // Pre-computed day/hour values in HOME BASE timezone (for chronogram positioning)
+  sleep_start_day_home_tz?: number | null;
+  sleep_start_hour_home_tz?: number | null;
+  sleep_end_day_home_tz?: number | null;
+  sleep_end_hour_home_tz?: number | null;
+  sleep_start_time_home_tz?: string | null;
+  sleep_end_time_home_tz?: string | null;
+  // Location context
+  location_timezone?: string | null;
+  environment?: 'home' | 'hotel' | 'layover' | null;
 
   // Detailed sleep quality explanation (new backend fields)
   explanation?: string;
@@ -120,6 +150,8 @@ export interface Duty {
   release_time_utc: string;
   report_time_local?: string;   // Pre-converted to HH:mm in home base timezone
   release_time_local?: string;  // Pre-converted to HH:mm in home base timezone
+  report_time_home_tz?: string;   // HH:MM in home base timezone (unambiguous naming)
+  release_time_home_tz?: string;  // HH:MM in home base timezone (unambiguous naming)
   duty_hours: number;
   sectors: number;
   segments: DutySegment[];
@@ -146,6 +178,8 @@ export interface Duty {
   max_fdp_hours?: number;
   extended_fdp_hours?: number;
   used_discretion?: boolean;
+  // Circadian adaptation state at duty report time
+  circadian_phase_shift?: number | null;
 
   // ULR / Augmented crew fields
   crew_composition?: CrewComposition;
@@ -168,6 +202,23 @@ export interface RestDaySleepBlock {
   duration_hours: number;
   effective_hours: number;
   quality_factor: number;
+  // Home base timezone positioning
+  sleep_start_day_home_tz?: number | null;
+  sleep_start_hour_home_tz?: number | null;
+  sleep_end_day_home_tz?: number | null;
+  sleep_end_hour_home_tz?: number | null;
+  sleep_start_time_home_tz?: string | null;
+  sleep_end_time_home_tz?: string | null;
+  location_timezone?: string | null;
+  environment?: 'home' | 'hotel' | 'layover' | 'crew_rest' | 'airport_hotel' | null;
+  // Location-local display times
+  sleep_start_time_location_tz?: string | null;
+  sleep_end_time_location_tz?: string | null;
+  // Numeric grid positioning (home-base TZ)
+  sleep_start_day?: number | null;
+  sleep_start_hour?: number | null;
+  sleep_end_day?: number | null;
+  sleep_end_hour?: number | null;
 }
 
 // Rest day sleep entry from backend
@@ -177,8 +228,25 @@ export interface RestDaySleep {
   total_sleep_hours: number;
   effective_sleep_hours: number;
   sleep_efficiency: number;
-  strategy_type: 'recovery' | 'normal';
+  strategy_type: 'recovery' | 'normal' | 'post_duty_recovery';
   confidence: number;
+  // Quality factor breakdown (new backend fields)
+  explanation?: string;
+  confidence_basis?: string;
+  quality_factors?: {
+    base_efficiency: number;
+    wocl_boost: number;
+    late_onset_penalty: number;
+    recovery_boost: number;
+    time_pressure_factor: number;
+    insufficient_penalty: number;
+    pre_duty_awake_hours?: number;
+  };
+  references?: Array<{
+    key: string;
+    short: string;
+    full: string;
+  }>;
 }
 
 export interface AnalysisResult {
@@ -188,6 +256,7 @@ export interface AnalysisResult {
   pilot_name: string | null;
   pilot_base: string | null;
   pilot_aircraft: string | null;
+  home_base_timezone: string | null;  // IANA timezone e.g. "Asia/Qatar"
   month: string;
   
   total_duties: number;
@@ -207,6 +276,12 @@ export interface AnalysisResult {
   
   duties: Duty[];
   rest_days_sleep?: RestDaySleep[];
+  // Full circadian adaptation curve across the roster
+  body_clock_timeline?: Array<{
+    timestamp_utc: string;
+    phase_shift_hours: number;
+    reference_timezone: string;
+  }>;
 
   // ULR / Augmented crew summary
   total_ulr_duties?: number;
@@ -331,4 +406,21 @@ export async function healthCheck(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function getAirportsBatch(codes: string[]): Promise<Array<{
+  code: string;
+  timezone: string;
+  utc_offset_hours: number | null;
+  latitude: number;
+  longitude: number;
+}>> {
+  const response = await fetch(`${API_BASE_URL}/api/airports/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codes }),
+  });
+  
+  if (!response.ok) throw new Error('Failed to fetch airport data');
+  return response.json();
 }

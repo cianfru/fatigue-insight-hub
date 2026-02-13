@@ -1,179 +1,114 @@
-// Airport API client for fetching coordinates of unknown airports
-// Uses the open AviationStack-style API or fallback to static data
+// Airport API client — fetches all airport data from the backend
+// No static data; the backend's 7,800+ airport repository is the single source of truth.
 
-import { AirportData, airportCoordinates } from '@/data/airportCoordinates';
+import { AirportData } from '@/data/airportCoordinates';
+import { getAirportsBatch } from '@/lib/api-client';
 
-// Cache for fetched airport data to avoid repeated API calls
-const airportCache = new Map<string, AirportData | null>();
-
-// Initialize cache with our static data
-Object.entries(airportCoordinates).forEach(([code, data]) => {
-  airportCache.set(code, data);
-});
+// In-memory cache for fetched airport data
+const airportCache = new Map<string, AirportData>();
+// Track codes we already attempted (including misses) to avoid repeated lookups
+const attemptedCodes = new Set<string>();
 
 /**
- * Fetches airport coordinates from an external API
- * Uses a free airport database API
+ * Map backend response to our AirportData interface
  */
-async function fetchFromAPI(code: string): Promise<AirportData | null> {
+function mapBackendAirport(raw: {
+  code: string;
+  timezone: string;
+  utc_offset_hours: number | null;
+  latitude: number;
+  longitude: number;
+  name?: string;
+  city?: string;
+  country?: string;
+}): AirportData {
+  return {
+    code: raw.code,
+    name: raw.name || `${raw.code} Airport`,
+    city: raw.city || raw.code,
+    country: raw.country || 'Unknown',
+    lat: raw.latitude,
+    lng: raw.longitude,
+    timezone: raw.timezone,
+  };
+}
+
+/**
+ * Fetch airports from the backend batch endpoint, updating the cache.
+ * Only fetches codes not already cached or attempted.
+ */
+async function fetchAndCache(codes: string[]): Promise<void> {
+  const toFetch = codes.filter(c => !attemptedCodes.has(c));
+  if (toFetch.length === 0) return;
+
+  // Mark as attempted immediately to prevent parallel duplicate fetches
+  toFetch.forEach(c => attemptedCodes.add(c));
+
   try {
-    // Using a free, no-auth airport API
-    const response = await fetch(
-      `https://airports-by-api-ninjas.p.rapidapi.com/v1/airports?iata=${code}`,
-      {
-        method: 'GET',
-        headers: {
-          // This is a free tier RapidAPI - limited but functional
-          'X-RapidAPI-Key': 'demo', // Will use fallback if this fails
-          'X-RapidAPI-Host': 'airports-by-api-ninjas.p.rapidapi.com',
-        },
-      }
-    );
-
-    if (!response.ok) {
-      console.warn(`[AirportAPI] API request failed for ${code}: ${response.status}`);
-      return null;
+    const results = await getAirportsBatch(toFetch);
+    for (const raw of results) {
+      const airport = mapBackendAirport(raw);
+      airportCache.set(airport.code, airport);
     }
 
-    const data = await response.json();
-    
-    if (Array.isArray(data) && data.length > 0) {
-      const airport = data[0];
-      return {
-        code: code,
-        name: airport.name || `${code} Airport`,
-        city: airport.city || 'Unknown',
-        country: airport.country || 'Unknown',
-        lat: parseFloat(airport.latitude),
-        lng: parseFloat(airport.longitude),
-      };
+    const found = new Set(results.map(r => r.code));
+    const missing = toFetch.filter(c => !found.has(c));
+    if (missing.length > 0) {
+      console.warn('[AirportAPI] Backend has no data for:', missing);
     }
-
-    return null;
   } catch (error) {
-    console.warn(`[AirportAPI] Failed to fetch ${code}:`, error);
-    return null;
+    // Un-mark so a retry is possible later
+    toFetch.forEach(c => attemptedCodes.delete(c));
+    console.error('[AirportAPI] Backend fetch failed:', error);
   }
 }
 
 /**
- * Alternative: Use OpenFlights data (public domain)
- * This is a fallback that uses a GitHub-hosted dataset
- */
-async function fetchFromOpenFlights(code: string): Promise<AirportData | null> {
-  try {
-    // OpenFlights provides a static CSV, but we can use a JSON mirror
-    const response = await fetch(
-      `https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat`
-    );
-
-    if (!response.ok) return null;
-
-    const text = await response.text();
-    const lines = text.split('\n');
-
-    for (const line of lines) {
-      const parts = line.split(',');
-      // Format: ID, Name, City, Country, IATA, ICAO, Lat, Lng, ...
-      if (parts.length >= 8) {
-        const iata = parts[4].replace(/"/g, '');
-        if (iata === code) {
-          return {
-            code: code,
-            name: parts[1].replace(/"/g, ''),
-            city: parts[2].replace(/"/g, ''),
-            country: parts[3].replace(/"/g, ''),
-            lat: parseFloat(parts[6]),
-            lng: parseFloat(parts[7]),
-          };
-        }
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.warn(`[AirportAPI] OpenFlights fallback failed for ${code}:`, error);
-    return null;
-  }
-}
-
-/**
- * Main function to get airport coordinates
- * First checks cache/static data, then tries API
+ * Get a single airport's data (async, backend-backed).
  */
 export async function getAirportCoordinatesAsync(code: string): Promise<AirportData | null> {
-  // Check cache first (includes static data)
-  if (airportCache.has(code)) {
-    return airportCache.get(code) || null;
-  }
+  if (airportCache.has(code)) return airportCache.get(code)!;
 
-  // Try fetching from API
-  console.log(`[AirportAPI] Fetching coordinates for unknown airport: ${code}`);
-  
-  // Try OpenFlights first (more reliable, no API key needed)
-  let data = await fetchFromOpenFlights(code);
-  
-  if (!data) {
-    // Fallback to RapidAPI
-    data = await fetchFromAPI(code);
-  }
-
-  // Cache the result (even if null, to avoid repeated lookups)
-  airportCache.set(code, data);
-
-  if (data) {
-    console.log(`[AirportAPI] Found coordinates for ${code}:`, data);
-  } else {
-    console.warn(`[AirportAPI] Could not find coordinates for ${code}`);
-  }
-
-  return data;
+  await fetchAndCache([code]);
+  return airportCache.get(code) || null;
 }
 
 /**
- * Batch fetch multiple airports at once
+ * Batch fetch multiple airports at once (preferred for performance).
  */
 export async function getMultipleAirportsAsync(codes: string[]): Promise<Map<string, AirportData>> {
+  // Determine which codes are missing from cache
+  const missing = codes.filter(c => !airportCache.has(c));
+  if (missing.length > 0) {
+    await fetchAndCache(missing);
+  }
+
   const results = new Map<string, AirportData>();
-  const unknownCodes: string[] = [];
-
-  // Check cache first
   for (const code of codes) {
-    if (airportCache.has(code)) {
-      const data = airportCache.get(code);
-      if (data) results.set(code, data);
-    } else {
-      unknownCodes.push(code);
-    }
+    const data = airportCache.get(code);
+    if (data) results.set(code, data);
   }
-
-  // Fetch unknown airports in parallel
-  if (unknownCodes.length > 0) {
-    console.log(`[AirportAPI] Fetching ${unknownCodes.length} unknown airports:`, unknownCodes);
-    
-    const fetches = unknownCodes.map(code => getAirportCoordinatesAsync(code));
-    const fetchedData = await Promise.all(fetches);
-    
-    fetchedData.forEach((data, index) => {
-      if (data) {
-        results.set(unknownCodes[index], data);
-      }
-    });
-  }
-
   return results;
 }
 
 /**
- * Check if an airport is in our cache/static data
+ * Synchronous cache-only lookup (returns null if not yet fetched).
+ * Use after an async fetch to read from cache.
+ */
+export function getAirportFromCache(code: string): AirportData | null {
+  return airportCache.get(code) || null;
+}
+
+/**
+ * Check if an airport is in the cache
  */
 export function isAirportKnown(code: string): boolean {
-  return airportCache.has(code) && airportCache.get(code) !== null;
+  return airportCache.has(code);
 }
 
 /**
  * Get all cached airports
  */
 export function getCachedAirports(): AirportData[] {
-  return Array.from(airportCache.values()).filter((a): a is AirportData => a !== null);
+  return Array.from(airportCache.values());
 }

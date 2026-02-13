@@ -51,7 +51,7 @@ export function SettingsSidebar({
   const [howToOpen, setHowToOpen] = useState(false);
 
   return (
-    <div className="w-80 flex-shrink-0 space-y-4 overflow-y-auto p-4">
+    <div className="w-full md:w-80 flex-shrink-0 space-y-3 md:space-y-4 overflow-y-auto p-3 md:p-4 pt-10 md:pt-4">
       {/* Connection Status */}
       <ConnectionStatus />
 

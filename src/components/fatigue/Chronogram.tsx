@@ -7,11 +7,12 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DutyAnalysis, DutyStatistics, RestDaySleep, FlightPhase } from '@/types/fatigue';
+import { DutyAnalysis, DutyStatistics, RestDaySleep, FlightPhase, SleepQualityFactors, SleepReference } from '@/types/fatigue';
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useChronogramZoom } from '@/hooks/useChronogramZoom';
 import { HumanPerformanceTimeline } from './HumanPerformanceTimeline';
+import { TimelineLegend } from './TimelineLegend';
 
 // Helper to calculate recovery score from sleep estimate
 const getRecoveryScore = (estimate: NonNullable<DutyAnalysis['sleepEstimate']>): number => {
@@ -40,6 +41,7 @@ const getStrategyIcon = (strategy: string): string => {
     case 'extended': return '🛏️';
     case 'restricted': return '⏰';
     case 'recovery': return '🔋';
+    case 'post_duty_recovery': return '🛏️';
     case 'normal': return '😴';
     default: return '😴';
   }
@@ -72,6 +74,23 @@ const parseTimeToHours = (timeStr: string | undefined): number | undefined => {
     return parts[0] + parts[1] / 60;
   }
   return undefined;
+};
+
+// Convert decimal hours to HH:mm string (e.g., 18.5 → "18:30")
+const decimalToHHmm = (h: number): string => {
+  const hours = Math.floor(h);
+  const minutes = Math.round((h - hours) * 60);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+// Extract UTC (Zulu) time as "HH:mmZ" from an ISO timestamp string
+const isoToZulu = (isoStr?: string): string | null => {
+  if (!isoStr) return null;
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return null;
+    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}Z`;
+  } catch { return null; }
 };
 
 interface FlightSegmentBar {
@@ -115,6 +134,16 @@ interface SleepBar {
   // Original full sleep window times (for display in tooltip)
   originalStartHour?: number;
   originalEndHour?: number;
+  // Zulu (UTC) times for display in tooltip
+  sleepStartZulu?: string;
+  sleepEndZulu?: string;
+  // Quality factor data (from backend for all sleep types)
+  qualityFactors?: SleepQualityFactors;
+  explanation?: string;
+  confidenceBasis?: string;
+  confidence?: number;
+  references?: SleepReference[];
+  woclOverlapHours?: number;
 }
 
 interface InFlightRestBar {
@@ -507,37 +536,63 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
       const recoveryScore = getRecoveryScore(sleepEstimate);
       
-      // PREFER pre-computed day/hour values if available (timezone-safe from backend)
-      const hasPrecomputed = 
+      // Common quality factor fields for all sleep bars from this duty
+      const sleepBarExtras = {
+        qualityFactors: sleepEstimate.qualityFactors,
+        explanation: sleepEstimate.explanation,
+        confidenceBasis: sleepEstimate.confidenceBasis,
+        confidence: sleepEstimate.confidence,
+        references: sleepEstimate.references,
+        woclOverlapHours: sleepEstimate.woclOverlapHours,
+        sleepStartZulu: isoToZulu(sleepEstimate.sleepStartIso) ?? undefined,
+        sleepEndZulu: isoToZulu(sleepEstimate.sleepEndIso) ?? undefined,
+      };
+      
+      // PREFER home-base timezone day/hour values for chronogram positioning
+      // This ensures sleep bars align with duty bars (which are already in home TZ)
+      const hasHomeTz = 
+        sleepEstimate.sleepStartDayHomeTz != null && 
+        sleepEstimate.sleepStartHourHomeTz != null && 
+        sleepEstimate.sleepEndDayHomeTz != null && 
+        sleepEstimate.sleepEndHourHomeTz != null;
+      
+      // Fallback to location-timezone precomputed values if home_tz not available
+      const hasPrecomputed = hasHomeTz || (
         sleepEstimate.sleepStartDay != null && 
         sleepEstimate.sleepStartHour != null && 
         sleepEstimate.sleepEndDay != null && 
-        sleepEstimate.sleepEndHour != null;
+        sleepEstimate.sleepEndHour != null);
       
       if (hasPrecomputed) {
-        // Use backend-computed day/hour values directly (no timezone conversion needed)
-        const startDay = sleepEstimate.sleepStartDay!;
-        const endDay = sleepEstimate.sleepEndDay!;
-        const startHour = sleepEstimate.sleepStartHour!;
-        const endHour = sleepEstimate.sleepEndHour!;
+        // Use home-base timezone values when available, fall back to location values
+        const startDay = sleepEstimate.sleepStartDayHomeTz ?? sleepEstimate.sleepStartDay!;
+        const endDay = sleepEstimate.sleepEndDayHomeTz ?? sleepEstimate.sleepEndDay!;
+        const startHour = sleepEstimate.sleepStartHourHomeTz ?? sleepEstimate.sleepStartHour!;
+        const endHour = sleepEstimate.sleepEndHourHomeTz ?? sleepEstimate.sleepEndHour!;
         
-        if (startDay === endDay) {
-          // Same-day sleep (e.g., afternoon nap)
-          bars.push({
-            dayIndex: startDay,
-            startHour,
-            endHour,
-            recoveryScore,
-            effectiveSleep: sleepEstimate.effectiveSleepHours,
-            sleepEfficiency: sleepEstimate.sleepEfficiency,
-            sleepStrategy: sleepEstimate.sleepStrategy,
-            isPreDuty: true,
-            relatedDuty: duty,
-          });
-        } else {
-          // Overnight sleep: crosses midnight into different day
-          // Part 1: startHour to 24:00 on start day
-          if (startDay >= 1 && startDay <= daysInMonth) {
+        // Validate: days must be within month range and hours within 0-24
+        const validStart = startDay >= 1 && startDay <= daysInMonth && startHour >= 0 && startHour <= 24;
+        const validEnd = endDay >= 1 && endDay <= daysInMonth && endHour >= 0 && endHour <= 24;
+        
+        if (validStart && validEnd) {
+          if (startDay === endDay && endHour > startHour) {
+            // Same-day sleep (e.g., afternoon nap)
+            bars.push({
+              dayIndex: startDay,
+              startHour,
+              endHour,
+              recoveryScore,
+              effectiveSleep: sleepEstimate.effectiveSleepHours,
+              sleepEfficiency: sleepEstimate.sleepEfficiency,
+              sleepStrategy: sleepEstimate.sleepStrategy,
+              isPreDuty: true,
+              relatedDuty: duty,
+              originalStartHour: startHour,
+              originalEndHour: endHour,
+            });
+          } else if (startDay !== endDay) {
+            // Overnight sleep: crosses midnight into different day
+            // Part 1: startHour to 24:00 on start day
             bars.push({
               dayIndex: startDay,
               startHour,
@@ -552,26 +607,74 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               originalStartHour: startHour,
               originalEndHour: endHour,
             });
+            // Part 2: 00:00 to endHour on end day
+            if (endHour > 0) {
+              bars.push({
+                dayIndex: endDay,
+                startHour: 0,
+                endHour,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+                isOvernightContinuation: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
+              });
+            }
           }
-          // Part 2: 00:00 to endHour on end day
-          if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
+          // If same day but endHour <= startHour, treat as overnight (endDay = startDay + 1)
+          else if (startDay === endDay && endHour <= startHour) {
             bars.push({
-              dayIndex: endDay,
-              startHour: 0,
-              endHour,
+              dayIndex: startDay,
+              startHour,
+              endHour: 24,
               recoveryScore,
               effectiveSleep: sleepEstimate.effectiveSleepHours,
               sleepEfficiency: sleepEstimate.sleepEfficiency,
               sleepStrategy: sleepEstimate.sleepStrategy,
               isPreDuty: true,
               relatedDuty: duty,
-              isOvernightContinuation: true,
+              isOvernightStart: true,
               originalStartHour: startHour,
               originalEndHour: endHour,
             });
+            if (startDay + 1 <= daysInMonth && endHour > 0) {
+              bars.push({
+                dayIndex: startDay + 1,
+                startHour: 0,
+                endHour,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+                isOvernightContinuation: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
+              });
+            }
           }
         }
-      } else {
+        // If validation fails, fall through to ISO/HH:mm fallback
+        else {
+          // Let the else branch below handle it by pretending hasPrecomputed is false
+          // (we re-enter below via the else)
+        }
+        
+        // Skip fallback if we successfully used precomputed values
+        if (validStart && validEnd) {
+          // Enrich bars from this duty now (before moving to next duty)
+          const barsFromThisDuty = bars.filter(b => b.relatedDuty === duty && !b.qualityFactors);
+          barsFromThisDuty.forEach(b => Object.assign(b, sleepBarExtras));
+          return; // forEach continue - skip fallback
+        }
+      }
+      // FALLBACK when precomputed data is missing or invalid
+      {
         // FALLBACK: Parse ISO timestamps (legacy behavior)
         const sleepStartIso = sleepEstimate.sleepStartIso ? parseIsoTimestamp(sleepEstimate.sleepStartIso) : null;
         const sleepEndIso = sleepEstimate.sleepEndIso ? parseIsoTimestamp(sleepEstimate.sleepEndIso) : null;
@@ -595,42 +698,86 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               sleepStrategy: sleepEstimate.sleepStrategy,
               isPreDuty: true,
               relatedDuty: duty,
+              originalStartHour: startHour,
+              originalEndHour: endHour,
             });
           } else {
-            // Overnight sleep: crosses midnight into different day
-            // Part 1: startHour to 24:00 on start day
-            if (startDay >= 1 && startDay <= daysInMonth) {
-              bars.push({
-                dayIndex: startDay,
-                startHour,
-                endHour: 24,
-                recoveryScore,
-                effectiveSleep: sleepEstimate.effectiveSleepHours,
-                sleepEfficiency: sleepEstimate.sleepEfficiency,
-                sleepStrategy: sleepEstimate.sleepStrategy,
-                isPreDuty: true,
-                relatedDuty: duty,
-                isOvernightStart: true,
-                originalStartHour: startHour,
-                originalEndHour: endHour,
-              });
-            }
-            // Part 2: 00:00 to endHour on end day
-            if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
-              bars.push({
-                dayIndex: endDay,
-                startHour: 0,
-                endHour,
-                recoveryScore,
-                effectiveSleep: sleepEstimate.effectiveSleepHours,
-                sleepEfficiency: sleepEstimate.sleepEfficiency,
-                sleepStrategy: sleepEstimate.sleepStrategy,
-                isPreDuty: true,
-                relatedDuty: duty,
-                isOvernightContinuation: true,
-                originalStartHour: startHour,
-                originalEndHour: endHour,
-              });
+            // Multi-day span: the backend may send the entire rest period as one block.
+            // Only render the last night of sleep (the night before the duty).
+            const daySpan = endDay - startDay;
+            
+            if (daySpan <= 1) {
+              // Normal overnight sleep (1 day crossing)
+              if (startDay >= 1 && startDay <= daysInMonth) {
+                bars.push({
+                  dayIndex: startDay,
+                  startHour,
+                  endHour: 24,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                  isOvernightStart: true,
+                  originalStartHour: startHour,
+                  originalEndHour: endHour,
+                });
+              }
+              if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
+                bars.push({
+                  dayIndex: endDay,
+                  startHour: 0,
+                  endHour,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                  isOvernightContinuation: true,
+                  originalStartHour: startHour,
+                  originalEndHour: endHour,
+                });
+              }
+            } else {
+              // Multi-day rest period (>1 day span): only render the last night before the duty.
+              // Estimate sleep start as ~22:00 on the night before endDay, ending at endHour on endDay.
+              const lastNightDay = endDay - 1;
+              const estimatedSleepStart = 22; // Reasonable default for pre-duty sleep
+              
+              if (lastNightDay >= 1 && lastNightDay <= daysInMonth) {
+                bars.push({
+                  dayIndex: lastNightDay,
+                  startHour: estimatedSleepStart,
+                  endHour: 24,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                  isOvernightStart: true,
+                  originalStartHour: estimatedSleepStart,
+                  originalEndHour: endHour,
+                });
+              }
+              if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
+                bars.push({
+                  dayIndex: endDay,
+                  startHour: 0,
+                  endHour,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                  isOvernightContinuation: true,
+                  originalStartHour: estimatedSleepStart,
+                  originalEndHour: endHour,
+                });
+              }
             }
           }
         } else {
@@ -734,52 +881,80 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           }
         }
       }
+      
+      // Enrich all bars from this duty with quality factor data
+      const barsFromThisDuty = bars.filter(b => b.relatedDuty === duty && !b.qualityFactors);
+      barsFromThisDuty.forEach(b => Object.assign(b, sleepBarExtras));
     });
     
     // Add rest day sleep bars (from separate rest_days_sleep array)
     if (restDaysSleep) {
       restDaysSleep.forEach((restDay) => {
+        // Rest-day level quality factor extras
+        const restDayExtras = {
+          qualityFactors: restDay.qualityFactors,
+          explanation: restDay.explanation,
+          confidenceBasis: restDay.confidenceBasis,
+          confidence: restDay.confidence,
+          references: restDay.references,
+        };
+        
         restDay.sleepBlocks.forEach((block) => {
           // Calculate recovery score for rest day sleep
           const baseScore = (block.effectiveHours / 8) * 100;
           const efficiencyBonus = block.qualityFactor * 20;
           const recoveryScore = Math.min(100, Math.max(0, baseScore + efficiencyBonus));
-          
-          // Use ISO timestamps for accurate positioning.
-          // IMPORTANT: Parse directly from ISO string to avoid browser timezone conversion.
-          const parseIso = (isoStr: string): { dayOfMonth: number; hour: number } | null => {
-            if (!isoStr) return null;
 
-            // Fast-path for standard ISO strings: YYYY-MM-DDTHH:mm...
-            const m = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
-            if (m) {
-              const dayOfMonth = Number(m[3]);
-              const hour = Number(m[4]) + Number(m[5]) / 60;
-              if (!Number.isFinite(dayOfMonth) || !Number.isFinite(hour)) return null;
-              return { dayOfMonth, hour };
-            }
-
-            // Fallback for unexpected formats
-            try {
-              const date = new Date(isoStr);
-              if (Number.isNaN(date.getTime())) return null;
-              return {
-                dayOfMonth: date.getDate(),
-                hour: date.getHours() + date.getMinutes() / 60,
-              };
-            } catch {
-              return null;
-            }
+          // Compute Zulu times from ISO timestamps
+          const blockZuluTimes = {
+            sleepStartZulu: isoToZulu(block.sleepStartIso) ?? undefined,
+            sleepEndZulu: isoToZulu(block.sleepEndIso) ?? undefined,
           };
+
+          // PREFER home-base timezone positioning for rest day blocks too
+          const hasHomeTzBlock = 
+            block.sleepStartDayHomeTz != null && 
+            block.sleepStartHourHomeTz != null && 
+            block.sleepEndDayHomeTz != null && 
+            block.sleepEndHourHomeTz != null;
           
-          const sleepStartIso = parseIso(block.sleepStartIso);
-          const sleepEndIso = parseIso(block.sleepEndIso);
+          let startDay: number;
+          let endDay: number;
+          let startHour: number;
+          let endHour: number;
           
-          if (sleepStartIso && sleepEndIso) {
-            const startDay = sleepStartIso.dayOfMonth;
-            const endDay = sleepEndIso.dayOfMonth;
-            const startHour = sleepStartIso.hour;
-            const endHour = sleepEndIso.hour;
+          if (hasHomeTzBlock) {
+            startDay = block.sleepStartDayHomeTz!;
+            endDay = block.sleepEndDayHomeTz!;
+            startHour = block.sleepStartHourHomeTz!;
+            endHour = block.sleepEndHourHomeTz!;
+          } else {
+            // Fallback: parse ISO timestamps (location timezone)
+            const parseIso = (isoStr: string): { dayOfMonth: number; hour: number } | null => {
+              if (!isoStr) return null;
+              const m = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+              if (m) {
+                const dayOfMonth = Number(m[3]);
+                const hour = Number(m[4]) + Number(m[5]) / 60;
+                if (!Number.isFinite(dayOfMonth) || !Number.isFinite(hour)) return null;
+                return { dayOfMonth, hour };
+              }
+              try {
+                const date = new Date(isoStr);
+                if (Number.isNaN(date.getTime())) return null;
+                return { dayOfMonth: date.getDate(), hour: date.getHours() + date.getMinutes() / 60 };
+              } catch { return null; }
+            };
+            
+            const sleepStartIso = parseIso(block.sleepStartIso);
+            const sleepEndIso = parseIso(block.sleepEndIso);
+            
+            if (!sleepStartIso || !sleepEndIso) return;
+            startDay = sleepStartIso.dayOfMonth;
+            endDay = sleepEndIso.dayOfMonth;
+            startHour = sleepStartIso.hour;
+            endHour = sleepEndIso.hour;
+          }
             
             // Create a pseudo-duty for tooltip display purposes
             const pseudoDuty: DutyAnalysis = {
@@ -813,6 +988,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 sleepStrategy: restDay.strategyType,
                 isPreDuty: false,
                 relatedDuty: pseudoDuty,
+                ...restDayExtras,
+                ...blockZuluTimes,
               });
             } else {
               // Overnight sleep: crosses midnight
@@ -831,6 +1008,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                   isOvernightStart: true,
                   originalStartHour: startHour,
                   originalEndHour: endHour,
+                  ...restDayExtras,
+                  ...blockZuluTimes,
                 });
               }
               // Part 2: 00:00 to endHour on end day
@@ -848,15 +1027,43 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                   isOvernightContinuation: true,
                   originalStartHour: startHour,
                   originalEndHour: endHour,
+                  ...restDayExtras,
+                  ...blockZuluTimes,
                 });
               }
             }
-          }
         });
       });
     }
     
-    return bars;
+    // Deduplicate overlapping sleep bars on the same day
+    const deduped: SleepBar[] = [];
+    const barsByDay = new Map<number, SleepBar[]>();
+    bars.forEach(b => {
+      const existing = barsByDay.get(b.dayIndex) || [];
+      existing.push(b);
+      barsByDay.set(b.dayIndex, existing);
+    });
+    
+    barsByDay.forEach((dayBars) => {
+      dayBars.sort((a, b) => a.startHour - b.startHour);
+      const kept: SleepBar[] = [];
+      for (const bar of dayBars) {
+        const overlapping = kept.find(k => 
+          bar.startHour < k.endHour && bar.endHour > k.startHour
+        );
+        if (overlapping) {
+          if (!!bar.qualityFactors && !overlapping.qualityFactors) {
+            kept[kept.indexOf(overlapping)] = bar;
+          }
+        } else {
+          kept.push(bar);
+        }
+      }
+      deduped.push(...kept);
+    });
+    
+    return deduped;
   }, [duties, restDaysSleep, daysInMonth]);
 
   // Calculate in-flight rest bars for augmented/ULR duties
@@ -955,6 +1162,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     };
   };
 
+  // Row height constant for consistency
+  const ROW_HEIGHT = 40; // Increased from 28px for breathing room
   const hours = Array.from({ length: 8 }, (_, i) => i * 3); // 00, 03, 06, 09, 12, 15, 18, 21
 
   const [activeTab, setActiveTab] = useState<'homebase' | 'elapsed'>('homebase');
@@ -1064,112 +1273,62 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               </div>
             </div>
             
-            {/* Stats row */}
-            <div className="mb-4 flex items-center justify-center gap-4 text-xs flex-wrap">
+            {/* Stats ribbon */}
+            <div className="mb-3 flex items-center justify-center gap-4 text-[11px] flex-wrap">
               <span>Duties: <strong>{statistics.totalDuties}</strong></span>
               <span>High Risk: <strong className="text-high">{statistics.highRiskDuties}</strong></span>
               <span>Critical: <strong className="text-critical">{statistics.criticalRiskDuties}</strong></span>
               {discretionCount > 0 && (
-                <Badge variant="destructive" className="flex items-center gap-1">
+                <Badge variant="destructive" className="flex items-center gap-1 text-[10px]">
                   <AlertTriangle className="h-3 w-3" />
-                  {discretionCount} Discretion Used
+                  {discretionCount} Discretion
                 </Badge>
               )}
             </div>
             
-            {/* Legend */}
-            <div className="mb-4 flex items-center justify-center gap-4 text-xs flex-wrap">
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-8 rounded bg-wocl/30" />
-                WOCL
-              </span>
-              <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
-              <span className="flex items-center gap-1">
-                <span className="h-3 w-6 rounded opacity-70" style={{ backgroundColor: 'hsl(120, 70%, 45%)' }} />
-                Check-in
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-3 w-6 rounded" style={{ backgroundColor: 'hsl(120, 70%, 45%)' }} />
-                ✈️ Flight
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-3 w-6 rounded bg-muted opacity-50" />
-                Ground
-              </span>
-              <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
-              <span className="flex items-center gap-1">
-                <span 
-                  className="h-3 w-6 rounded border border-dashed" 
-                  style={{ 
-                    backgroundColor: 'hsl(120, 70%, 45%, 0.15)',
-                    borderColor: 'hsl(120, 70%, 45%)'
-                  }} 
-                />
-                🛏️ Sleep/Recovery
-              </span>
-              <span className="flex items-center gap-1">
-                <span
-                  className="h-3 w-6 rounded"
-                  style={{
-                    background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(147, 130, 220, 0.5) 2px, rgba(147, 130, 220, 0.5) 4px)',
-                  }}
-                />
-                In-Flight Rest
-              </span>
-              <span className="flex items-center gap-1.5 text-muted-foreground">|</span>
-              <span className="flex items-center gap-1">
-                <span className="h-3 w-3 rounded border-2 border-dashed border-muted-foreground" />
-                FDP Limit
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-3 w-3 rounded bg-critical ring-2 ring-critical/50" />
-                Discretion
-              </span>
+            {/* Collapsible Legend */}
+            <div className="mb-3">
+              <TimelineLegend showDiscretion={discretionCount > 0} variant="homebase" />
             </div>
 
             {/* Timeline Grid */}
             <div className="flex">
               {/* Y-axis labels (all days of month) */}
-              <div className="w-32 flex-shrink-0">
-                <div className="h-8" /> {/* Header spacer */}
+              <div className="w-28 flex-shrink-0">
+                <div style={{ height: `${ROW_HEIGHT}px` }} /> {/* Header spacer */}
                 {allDays.map((day) => {
                   const dayNum = day.getDate();
                   const dayWarnings = getDayWarnings(dayNum);
                   const hasDuty = dutyBars.some(bar => bar.dayIndex === dayNum);
+                  const riskClass = dayWarnings?.risk === 'CRITICAL' ? 'risk-border-critical'
+                    : dayWarnings?.risk === 'HIGH' ? 'risk-border-high'
+                    : dayWarnings?.risk === 'MODERATE' ? 'risk-border-moderate'
+                    : hasDuty ? 'risk-border-low' : '';
                   return (
                     <div
                       key={dayNum}
                       className={cn(
-                        "relative flex h-7 items-center gap-1 pr-2 text-xs",
-                        !hasDuty && "opacity-50"
+                        "relative flex items-center gap-1 pr-2 text-[11px]",
+                        !hasDuty && "opacity-40",
+                        riskClass
                       )}
+                      style={{ height: `${ROW_HEIGHT}px` }}
                     >
-                      <div className="flex flex-col items-start min-w-[60px]">
+                      <div className="flex flex-col items-start min-w-[50px] pl-1">
                         {dayWarnings && dayWarnings.warnings.length > 0 && (
                           <span className={cn(
-                            "text-[8px] leading-tight truncate max-w-[60px]",
+                            "text-[9px] leading-tight truncate max-w-[50px]",
                             dayWarnings.risk === 'CRITICAL' && "text-critical",
                             dayWarnings.risk === 'HIGH' && "text-high",
                             dayWarnings.risk === 'MODERATE' && "text-warning",
                             dayWarnings.risk === 'LOW' && "text-muted-foreground"
                           )}>
-                            ⚠ {dayWarnings.warnings[0]}
-                          </span>
-                        )}
-                        {dayWarnings && dayWarnings.warnings.length > 1 && (
-                          <span className={cn(
-                            "text-[8px] leading-tight truncate max-w-[60px]",
-                            dayWarnings.risk === 'CRITICAL' && "text-critical",
-                            dayWarnings.risk === 'HIGH' && "text-high",
-                            dayWarnings.risk === 'MODERATE' && "text-warning",
-                            dayWarnings.risk === 'LOW' && "text-muted-foreground"
-                          )}>
-                            ⚠ {dayWarnings.warnings[1]}
+                            {dayWarnings.warnings[0]}
                           </span>
                         )}
                       </div>
                       <span className={cn(
-                        "ml-auto font-medium",
+                        "ml-auto font-medium text-[11px]",
                         hasDuty ? "text-foreground" : "text-muted-foreground"
                       )}>
                         {format(day, 'EEE d')}
@@ -1182,11 +1341,11 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               {/* Main chart area */}
               <div className="relative flex-1">
                 {/* X-axis header */}
-                <div className="flex h-8 border-b border-border">
+                <div className="flex border-b border-border" style={{ height: `${ROW_HEIGHT}px` }}>
                   {hours.map((hour) => (
                     <div
                       key={hour}
-                      className="flex-1 text-center text-[10px] text-muted-foreground"
+                      className="flex-1 text-center text-[11px] text-muted-foreground flex items-center justify-center"
                       style={{ width: `${(3/24) * 100}%` }}
                     >
                       {hour.toString().padStart(2, '0')}:00
@@ -1196,9 +1355,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
                 {/* Grid with WOCL shading and duty bars */}
                 <div className="relative">
-                  {/* WOCL shading */}
+                  {/* WOCL hatched pattern */}
                   <div
-                    className="absolute top-0 bottom-0 bg-wocl/20"
+                    className="absolute top-0 bottom-0 wocl-hatch"
                     style={{
                       left: `${(WOCL_START / 24) * 100}%`,
                       width: `${((WOCL_END - WOCL_START) / 24) * 100}%`,
@@ -1224,7 +1383,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                     return (
                       <div
                         key={dayNum}
-                        className="relative h-7 border-b border-border/20"
+                        className="relative border-b border-border/20"
+                        style={{ height: `${ROW_HEIGHT}px` }}
                       >
                         {/* Sleep/Rest bars for this day showing recovery - SEPARATE LANE at top */}
                         {sleepBars
@@ -1242,16 +1402,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                             return (
                               <Popover key={`sleep-${barIndex}`}>
                                 <PopoverTrigger asChild>
-                                  <button
+                              <button
                                     type="button"
-                                    className={cn(
-                                      "absolute z-20 flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all",
-                                      classes.border,
-                                      classes.bg
-                                    )}
+                                    className="absolute z-[5] flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all border-primary/20 bg-primary/5"
                                     style={{
-                                      top: 1,
-                                      height: 11,
+                                      top: 0,
+                                      height: '100%',
                                       left: `${(bar.startHour / 24) * 100}%`,
                                       width: `${Math.max(barWidth, 1)}%`,
                                       borderRadius,
@@ -1283,10 +1439,10 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       </div>
                                       
                                       {/* Explanation from backend (if available) */}
-                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.explanation && (
+                                      {bar.explanation && (
                                         <div className="bg-primary/5 border border-primary/20 rounded-md p-2 text-[11px] text-muted-foreground leading-relaxed">
                                           <span className="text-primary font-medium">💡 </span>
-                                          {bar.relatedDuty.sleepEstimate.explanation}
+                                          {bar.explanation}
                                         </div>
                                       )}
                                       
@@ -1294,11 +1450,21 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       <div className="flex items-center justify-between text-muted-foreground">
                                         <span>Sleep Window</span>
                                         <span className="font-mono font-medium text-foreground">
-                                          {(bar.originalStartHour ?? bar.startHour).toFixed(0).padStart(2, '0')}:00 → {(bar.originalEndHour ?? bar.endHour).toFixed(0).padStart(2, '0')}:00
-                                          {(bar.isOvernightStart || bar.isOvernightContinuation) && ' (+1d)'}
+                                          {decimalToHHmm(bar.originalStartHour ?? bar.startHour)} → {decimalToHHmm(bar.originalEndHour ?? bar.endHour)}
+                                          {/* Show +1d only when sleep truly crosses midnight */}
+                                          {(bar.isOvernightStart || bar.isOvernightContinuation) &&
+                                           (bar.originalStartHour ?? bar.startHour) > (bar.originalEndHour ?? bar.endHour) && ' (+1d)'}
                                         </span>
                                       </div>
-                                      
+                                      {bar.sleepStartZulu && bar.sleepEndZulu && (
+                                        <div className="flex items-center justify-between text-muted-foreground">
+                                          <span>Zulu</span>
+                                          <span className="font-mono font-medium text-foreground">
+                                            {bar.sleepStartZulu} → {bar.sleepEndZulu}
+                                          </span>
+                                        </div>
+                                      )}
+
                                       {/* Recovery Score Breakdown */}
                                       <div className="bg-secondary/30 rounded-lg p-2 space-y-1.5">
                                         <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
@@ -1341,17 +1507,17 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           </div>
                                         </div>
                                         
-                                        {/* WOCL Penalty (only for pre-duty sleep with WOCL data) */}
-                                        {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.woclOverlapHours > 0 && (
+                                        {/* WOCL Penalty */}
+                                        {(bar.woclOverlapHours ?? 0) > 0 && (
                                           <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-1.5">
                                               <span className="text-muted-foreground">🌙</span>
                                               <span>WOCL Overlap</span>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                              <span className="text-muted-foreground">{bar.relatedDuty.sleepEstimate.woclOverlapHours.toFixed(1)}h</span>
+                                              <span className="text-muted-foreground">{bar.woclOverlapHours!.toFixed(1)}h</span>
                                               <span className="font-mono font-medium text-critical min-w-[40px] text-right">
-                                                -{Math.round(bar.relatedDuty.sleepEstimate.woclOverlapHours * 5)}
+                                                -{Math.round(bar.woclOverlapHours! * 5)}
                                               </span>
                                             </div>
                                           </div>
@@ -1367,12 +1533,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       </div>
                                       
                                       {/* Quality Factors from backend (if available) */}
-                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.qualityFactors && (
+                                      {bar.qualityFactors && (
                                         <div className="bg-secondary/20 rounded-lg p-2 space-y-1.5">
                                           <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                                             🔬 Model Calculation Factors
                                           </div>
-                                          {Object.entries(bar.relatedDuty.sleepEstimate.qualityFactors).map(([key, value]) => {
+                                          {Object.entries(bar.qualityFactors).map(([key, value]) => {
                                             const labels: Record<string, string> = {
                                               base_efficiency: 'Base Efficiency',
                                               wocl_boost: 'WOCL Boost',
@@ -1380,20 +1546,22 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                               recovery_boost: 'Recovery Boost',
                                               time_pressure_factor: 'Time Pressure',
                                               insufficient_penalty: 'Duration Penalty',
+                                              pre_duty_awake_hours: 'Pre-Duty Awake',
                                             };
                                             const label = labels[key] || key;
                                             const numValue = value as number;
+                                            const isHours = key === 'pre_duty_awake_hours';
                                             const isBoost = numValue >= 1;
                                             return (
                                               <div key={key} className="flex items-center justify-between text-[11px]">
                                                 <span className="text-muted-foreground">{label}</span>
                                                 <span className={cn(
                                                   "font-mono font-medium",
-                                                  numValue >= 1.05 ? "text-success" :
-                                                  numValue >= 0.98 ? "text-muted-foreground" :
-                                                  numValue >= 0.90 ? "text-warning" : "text-critical"
+                                                  isHours
+                                                    ? (numValue <= 2 ? "text-success" : numValue <= 4 ? "text-muted-foreground" : numValue <= 8 ? "text-warning" : "text-critical")
+                                                    : (numValue >= 1.05 ? "text-success" : numValue >= 0.98 ? "text-muted-foreground" : numValue >= 0.90 ? "text-warning" : "text-critical")
                                                 )}>
-                                                  {isBoost ? '+' : ''}{((numValue - 1) * 100).toFixed(0)}%
+                                                  {isHours ? `${numValue.toFixed(1)}h` : `${isBoost ? '+' : ''}${((numValue - 1) * 100).toFixed(0)}%`}
                                                 </span>
                                               </div>
                                             );
@@ -1402,32 +1570,32 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       )}
                                       
                                       {/* Confidence & Basis (if available) */}
-                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate && (
+                                      {bar.confidence != null && (
                                         <div className="flex items-center justify-between text-[11px]">
                                           <span className="text-muted-foreground">Model Confidence</span>
                                           <span className={cn(
                                             "font-mono font-medium px-1.5 py-0.5 rounded",
-                                            bar.relatedDuty.sleepEstimate.confidence >= 0.7 ? "bg-success/10 text-success" :
-                                            bar.relatedDuty.sleepEstimate.confidence >= 0.5 ? "bg-warning/10 text-warning" : "bg-high/10 text-high"
+                                            bar.confidence >= 0.7 ? "bg-success/10 text-success" :
+                                            bar.confidence >= 0.5 ? "bg-warning/10 text-warning" : "bg-high/10 text-high"
                                           )}>
-                                            {Math.round(bar.relatedDuty.sleepEstimate.confidence * 100)}%
+                                            {Math.round(bar.confidence * 100)}%
                                           </span>
                                         </div>
                                       )}
-                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.confidenceBasis && (
+                                      {bar.confidenceBasis && (
                                         <div className="text-[10px] text-muted-foreground/70 italic leading-relaxed">
-                                          {bar.relatedDuty.sleepEstimate.confidenceBasis}
+                                          {bar.confidenceBasis}
                                         </div>
                                       )}
                                       
                                       {/* References (if available) */}
-                                      {bar.isPreDuty && bar.relatedDuty.sleepEstimate?.references && bar.relatedDuty.sleepEstimate.references.length > 0 && (
+                                      {bar.references && bar.references.length > 0 && (
                                         <div className="border-t border-border/30 pt-2 space-y-1">
                                           <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
                                             📚 Sources
                                           </div>
                                           <div className="flex flex-wrap gap-1">
-                                            {bar.relatedDuty.sleepEstimate.references.map((ref, i) => (
+                                            {bar.references.map((ref, i) => (
                                               <span key={ref.key || i} className="text-[9px] px-1.5 py-0.5 rounded bg-secondary/50 text-muted-foreground" title={ref.full}>
                                                 {ref.short}
                                               </span>
@@ -1441,7 +1609,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         <span className="text-muted-foreground">Strategy</span>
                                         <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-secondary/50">
                                           <span>{getStrategyIcon(bar.sleepStrategy)}</span>
-                                          <span className="capitalize font-medium">{bar.sleepStrategy.replace('_', ' ')}</span>
+                                          <span className="capitalize font-medium">{bar.sleepStrategy.split('_').join(' ')}</span>
                                         </div>
                                       </div>
                                       
@@ -1484,8 +1652,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         usedDiscretion ? "ring-2 ring-critical hover:ring-critical/80" : "hover:ring-foreground"
                                       )}
                                       style={{
-                                        top: 13,
-                                        height: 13,
+                                        top: 0,
+                                        height: '100%',
                                         left: `${(bar.startHour / 24) * 100}%`,
                                         width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 2)}%`,
                                         borderRadius,
@@ -1576,7 +1744,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                     </button>
                                   </TooltipTrigger>
 
-                                  <TooltipContent side="right" className="max-w-xs p-3">
+                                  <TooltipContent side="top" align="start" className="max-w-xs p-3 z-[100]">
                                     <div className="space-y-2 text-xs">
                                       <div className={cn(
                                         "font-semibold text-sm border-b pb-1 flex items-center justify-between",
@@ -1772,12 +1940,11 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 </div>
               </div>
 
-              {/* Color legend - aligned with chart height */}
-              <div className="ml-4 flex w-16 flex-shrink-0 flex-col">
-                  <div className="h-8 text-[10px] text-muted-foreground text-center">Score</div>
-                  <div className="flex gap-1" style={{ height: `${allDays.length * 28}px` }}>
-                    {/* Gradient bar */}
-                    <div className="w-3 rounded-sm overflow-hidden">
+              {/* Color legend - compact, aligned with chart height */}
+              <div className="ml-3 flex w-10 flex-shrink-0 flex-col">
+                  <div style={{ height: `${ROW_HEIGHT}px` }} />
+                  <div className="flex gap-1" style={{ height: `${allDays.length * ROW_HEIGHT}px` }}>
+                    <div className="w-2.5 rounded-sm overflow-hidden">
                       <div
                         className="h-full w-full"
                         style={{
@@ -1785,13 +1952,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                         }}
                       />
                     </div>
-                    {/* Labels aligned with gradient */}
                     <div className="flex flex-col justify-between text-[9px] text-muted-foreground">
                       <span>100</span>
-                      <span>80</span>
                       <span>60</span>
-                      <span>40</span>
-                      <span>20</span>
                       <span>0</span>
                     </div>
                   </div>
@@ -1843,6 +2006,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               pilotBase={pilotBase}
               onDutySelect={onDutySelect}
               selectedDuty={selectedDuty}
+              restDaysSleep={restDaysSleep}
             />
           </TabsContent>
         </Tabs>

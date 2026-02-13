@@ -45,6 +45,13 @@ export interface FlightSegment {
   arrivalTimeUtc?: string;    // HH:mmZ (Zulu time, formatted)
   blockHours: number;
   performance: number;
+  // New airport-local time fields
+  departureTimeAirportLocal?: string;  // HH:mm in actual airport timezone
+  arrivalTimeAirportLocal?: string;    // HH:mm in actual airport timezone
+  departureTimezone?: string;          // IANA timezone e.g. "Asia/Kolkata"
+  arrivalTimezone?: string;            // IANA timezone e.g. "Asia/Qatar"
+  departureUtcOffset?: number | null;  // UTC offset hours e.g. 5.5
+  arrivalUtcOffset?: number | null;    // UTC offset hours e.g. 3.0
 }
 
 export type FlightPhase = 'preflight' | 'taxi' | 'takeoff' | 'climb' | 'cruise' | 'descent' | 'approach' | 'landing';
@@ -97,6 +104,7 @@ export interface DutyAnalysis {
   // Existing optional fields
   pinchEvents?: PinchEvent[];
   circadianPhaseShift?: number;
+  circadianPhaseShiftValue?: number; // Backend circadian_phase_shift: hours offset from home-base body clock
   phasePerformance?: FlightPhasePerformance[];
   sleepQuality?: 'poor' | 'fair' | 'good' | 'excellent';
   sleepEnvironment?: 'home' | 'layover';
@@ -117,7 +125,8 @@ export interface DutyAnalysis {
       | 'normal'
       // Additional backend strategies
       | 'early_bedtime'
-      | 'afternoon_nap';
+      | 'afternoon_nap'
+      | 'post_duty_recovery';
     confidence: number;
     warnings: string[];
     // Sleep timing (HH:mm in home base timezone)
@@ -126,11 +135,21 @@ export interface DutyAnalysis {
     // ISO timestamps for precise date/time positioning
     sleepStartIso?: string;
     sleepEndIso?: string;
-    // Pre-computed day/hour values (timezone-safe - already converted by backend)
+    // Pre-computed day/hour values in LOCATION timezone (legacy)
     sleepStartDay?: number;   // Day of month (1-31)
     sleepStartHour?: number;  // Hour (0-24, decimal)
     sleepEndDay?: number;     // Day of month (1-31)
     sleepEndHour?: number;    // Hour (0-24, decimal)
+    // Pre-computed day/hour values in HOME BASE timezone (use for chronogram positioning)
+    sleepStartDayHomeTz?: number;
+    sleepStartHourHomeTz?: number;
+    sleepEndDayHomeTz?: number;
+    sleepEndHourHomeTz?: number;
+    sleepStartTimeHomeTz?: string;  // HH:mm in home base timezone
+    sleepEndTimeHomeTz?: string;    // HH:mm in home base timezone
+    // Location context for display
+    locationTimezone?: string;      // IANA timezone e.g. "Europe/London"
+    environment?: 'home' | 'hotel' | 'layover';
     // Detailed sleep quality data from backend
     explanation?: string;
     confidenceBasis?: string;
@@ -207,6 +226,23 @@ export interface RestDaySleepBlock {
   durationHours: number;
   effectiveHours: number;
   qualityFactor: number;
+  // Home base timezone positioning
+  sleepStartDayHomeTz?: number;
+  sleepStartHourHomeTz?: number;
+  sleepEndDayHomeTz?: number;
+  sleepEndHourHomeTz?: number;
+  sleepStartTimeHomeTz?: string;
+  sleepEndTimeHomeTz?: string;
+  locationTimezone?: string;
+  environment?: 'home' | 'hotel' | 'layover' | 'crew_rest' | 'airport_hotel';
+  // Location-local display times
+  sleepStartTimeLocationTz?: string;
+  sleepEndTimeLocationTz?: string;
+  // Numeric grid positioning (home-base TZ)
+  sleepStartDay?: number;
+  sleepStartHour?: number;
+  sleepEndDay?: number;
+  sleepEndHour?: number;
 }
 
 // Rest day sleep (transformed from backend)
@@ -216,8 +252,13 @@ export interface RestDaySleep {
   totalSleepHours: number;
   effectiveSleepHours: number;
   sleepEfficiency: number;
-  strategyType: 'recovery' | 'normal';
+  strategyType: 'recovery' | 'normal' | 'post_duty_recovery';
   confidence: number;
+  // Quality factor breakdown from backend
+  explanation?: string;
+  confidenceBasis?: string;
+  qualityFactors?: SleepQualityFactors;
+  references?: SleepReference[];
 }
 
 export interface AnalysisResults {
@@ -231,6 +272,16 @@ export interface AnalysisResults {
   pilotName?: string;
   pilotBase?: string;
   pilotAircraft?: string;
+  homeBaseTimezone?: string; // IANA timezone e.g. "Asia/Qatar"
   // Rest day sleep data
   restDaysSleep?: RestDaySleep[];
+  // Circadian adaptation curve across the roster
+  bodyClockTimeline?: BodyClockTimelineEntry[];
+}
+
+// Body clock adaptation curve entry
+export interface BodyClockTimelineEntry {
+  timestampUtc: string;       // ISO 8601 UTC timestamp
+  phaseShiftHours: number;    // hours offset from home base (-12 to +12)
+  referenceTimezone: string;  // IANA tz the pilot is physically in
 }
