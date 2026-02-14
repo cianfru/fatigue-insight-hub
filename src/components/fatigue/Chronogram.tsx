@@ -1911,17 +1911,17 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         )}
                                       </div>
                                       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                                        <span className="text-muted-foreground">Duration:</span>
-                                        <span>{bar.durationHours.toFixed(1)}h</span>
-                                        <span className="text-muted-foreground">Effective Sleep:</span>
-                                        <span>{bar.effectiveSleepHours.toFixed(1)}h</span>
-                                        {bar.isDuringWocl && (
-                                          <>
-                                            <span className="text-muted-foreground">WOCL:</span>
-                                            <span className="text-warning">Yes</span>
-                                          </>
-                                        )}
-                                      </div>
+                                         <span className="text-muted-foreground">Duration:</span>
+                                         <span>{bar.durationHours?.toFixed(1) ?? 'N/A'}h</span>
+                                         <span className="text-muted-foreground">Effective Sleep:</span>
+                                         <span>{bar.effectiveSleepHours?.toFixed(1) ?? 'N/A'}h</span>
+                                         {bar.isDuringWocl && (
+                                           <>
+                                             <span className="text-muted-foreground">WOCL:</span>
+                                             <span className="text-warning">Yes</span>
+                                           </>
+                                         )}
+                                       </div>
                                     </div>
                                   </TooltipContent>
                                 </Tooltip>
