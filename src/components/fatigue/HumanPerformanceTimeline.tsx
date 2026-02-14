@@ -515,6 +515,9 @@ export function HumanPerformanceTimeline({
               sleepDebt: 0, woclExposure: 0, priorSleep: restDay.totalSleepHours,
               overallRisk: 'LOW', minPerformanceRisk: 'LOW', landingRisk: 'LOW',
               smsReportable: false, flightSegments: [],
+              crewComposition: 'standard', restFacilityClass: null, isUlr: false,
+              acclimatizationState: 'acclimatized', ulrCompliance: null,
+              inflightRestBlocks: [], returnToDeckPerformance: null, preDutyAwakeHours: 0,
             };
             addSleep(elStart, elEnd, {
               recoveryScore,
@@ -545,6 +548,9 @@ export function HumanPerformanceTimeline({
                 sleepDebt: 0, woclExposure: 0, priorSleep: restDay.totalSleepHours,
                 overallRisk: 'LOW', minPerformanceRisk: 'LOW', landingRisk: 'LOW',
                 smsReportable: false, flightSegments: [],
+                crewComposition: 'standard', restFacilityClass: null, isUlr: false,
+                acclimatizationState: 'acclimatized', ulrCompliance: null,
+                inflightRestBlocks: [], returnToDeckPerformance: null, preDutyAwakeHours: 0,
               };
               let elStart = dayHourToElapsed(s.day, s.hour);
               let elEnd = dayHourToElapsed(e.day, e.hour);
