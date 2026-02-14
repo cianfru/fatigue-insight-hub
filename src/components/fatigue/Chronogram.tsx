@@ -974,6 +974,14 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               landingRisk: 'LOW',
               smsReportable: false,
               flightSegments: [],
+              crewComposition: 'standard',
+              restFacilityClass: null,
+              isUlr: false,
+              acclimatizationState: 'acclimatized',
+              ulrCompliance: null,
+              inflightRestBlocks: [],
+              returnToDeckPerformance: null,
+              preDutyAwakeHours: 0,
             };
             
             if (startDay === endDay) {
