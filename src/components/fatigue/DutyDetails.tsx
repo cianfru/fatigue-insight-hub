@@ -60,7 +60,7 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
           <div className="grid grid-cols-2 gap-3 md:gap-4 sm:grid-cols-3">
             <div className="space-y-0.5 md:space-y-1">
               <p className="text-[10px] md:text-xs text-muted-foreground">Duty Hours</p>
-              <p className="font-medium text-sm md:text-base">{duty.dutyHours.toFixed(1)}h</p>
+              <p className="font-medium text-sm md:text-base">{(duty.dutyHours ?? 0).toFixed(1)}h</p>
             </div>
             <div className="space-y-0.5 md:space-y-1">
               <p className="text-[10px] md:text-xs text-muted-foreground">Sectors</p>
@@ -68,22 +68,22 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
             </div>
             <div className="space-y-0.5 md:space-y-1">
               <p className="text-[10px] md:text-xs text-muted-foreground">Block Hours</p>
-              <p className="font-medium text-sm md:text-base">{Math.max(0, duty.blockHours).toFixed(1)}h</p>
+              <p className="font-medium text-sm md:text-base">{Math.max(0, duty.blockHours ?? 0).toFixed(1)}h</p>
             </div>
             <div className="space-y-0.5 md:space-y-1">
               <p className="text-[10px] md:text-xs text-muted-foreground">Min Performance</p>
-              <p className={`font-medium text-sm md:text-base ${duty.minPerformance < 50 ? 'text-critical' : duty.minPerformance < 60 ? 'text-warning' : 'text-foreground'}`}>
-                {duty.minPerformance.toFixed(1)}/100
+              <p className={`font-medium text-sm md:text-base ${(duty.minPerformance ?? 0) < 50 ? 'text-critical' : (duty.minPerformance ?? 0) < 60 ? 'text-warning' : 'text-foreground'}`}>
+                {(duty.minPerformance ?? 0).toFixed(1)}/100
               </p>
             </div>
             <div className="space-y-0.5 md:space-y-1">
               <p className="text-[10px] md:text-xs text-muted-foreground">Avg Performance</p>
-              <p className="font-medium text-sm md:text-base">{duty.avgPerformance.toFixed(1)}/100</p>
+              <p className="font-medium text-sm md:text-base">{(duty.avgPerformance ?? 0).toFixed(1)}/100</p>
             </div>
             <div className="space-y-0.5 md:space-y-1">
               <p className="text-[10px] md:text-xs text-muted-foreground">Landing</p>
-              <p className={`font-medium text-sm md:text-base ${duty.landingPerformance < 50 ? 'text-critical' : duty.landingPerformance < 60 ? 'text-warning' : 'text-foreground'}`}>
-                {duty.landingPerformance.toFixed(1)}/100
+              <p className={`font-medium text-sm md:text-base ${(duty.landingPerformance ?? 0) < 50 ? 'text-critical' : (duty.landingPerformance ?? 0) < 60 ? 'text-warning' : 'text-foreground'}`}>
+                {(duty.landingPerformance ?? 0).toFixed(1)}/100
               </p>
             </div>
             {/* Crew Composition - only for augmented crews */}
@@ -123,7 +123,7 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {duty.flightSegments.map((segment, index) => {
+            {(duty.flightSegments ?? []).map((segment, index) => {
               const formatUtcOffset = (offset: number | null | undefined): string => {
                 if (offset === null || offset === undefined) return '';
                 const sign = offset >= 0 ? '+' : '';
@@ -153,8 +153,8 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
                         {segment.departure} → {segment.arrival}
                       </span>
                     </div>
-                    <Badge variant={segment.performance < 50 ? 'critical' : segment.performance < 60 ? 'warning' : 'success'} className="text-[10px] md:text-xs">
-                      {segment.performance.toFixed(0)}%
+                    <Badge variant={(segment.performance ?? 0) < 50 ? 'critical' : (segment.performance ?? 0) < 60 ? 'warning' : 'success'} className="text-[10px] md:text-xs">
+                      {(segment.performance ?? 0).toFixed(0)}%
                     </Badge>
                   </div>
 
@@ -295,8 +295,8 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
                     )}
                   </div>
                   <div className="flex items-center gap-4 text-sm">
-                    <span className="text-muted-foreground">{block.durationHours.toFixed(1)}h</span>
-                    <span className="font-medium">{block.effectiveSleepHours.toFixed(1)}h eff.</span>
+                    <span className="text-muted-foreground">{(block.durationHours ?? 0).toFixed(1)}h</span>
+                    <span className="font-medium">{(block.effectiveSleepHours ?? 0).toFixed(1)}h eff.</span>
                     {block.crewSet && (
                       <Badge variant="outline" className="text-[10px] capitalize">
                         {block.crewSet.replace('_', ' ')}
@@ -362,8 +362,8 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
               <Clock className="h-3.5 w-3.5 text-muted-foreground" />
               <div className="text-xs">
                 <span className="text-muted-foreground">Sleep Debt: </span>
-                <span className={`font-medium ${duty.sleepDebt > 5 ? 'text-critical' : duty.sleepDebt > 3 ? 'text-warning' : 'text-foreground'}`}>
-                  {duty.sleepDebt.toFixed(1)}h
+                <span className={`font-medium ${(duty.sleepDebt ?? 0) > 5 ? 'text-critical' : (duty.sleepDebt ?? 0) > 3 ? 'text-warning' : 'text-foreground'}`}>
+                  {(duty.sleepDebt ?? 0).toFixed(1)}h
                 </span>
               </div>
             </div>
@@ -371,8 +371,8 @@ export function DutyDetails({ duty }: DutyDetailsProps) {
               <Moon className="h-3.5 w-3.5 text-muted-foreground" />
               <div className="text-xs">
                 <span className="text-muted-foreground">WOCL: </span>
-                <span className={`font-medium ${duty.woclExposure > 2 ? 'text-critical' : duty.woclExposure > 1 ? 'text-warning' : 'text-foreground'}`}>
-                  {duty.woclExposure.toFixed(1)}h
+                <span className={`font-medium ${(duty.woclExposure ?? 0) > 2 ? 'text-critical' : (duty.woclExposure ?? 0) > 1 ? 'text-warning' : 'text-foreground'}`}>
+                  {(duty.woclExposure ?? 0).toFixed(1)}h
                 </span>
               </div>
             </div>
