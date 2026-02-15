@@ -201,7 +201,7 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
       </Card>
 
       {/* Crew Assignment - for augmented/ULR duties */}
-      {onCrewChange && duty.crewComposition === 'augmented_4' && (
+      {onCrewChange && duty.crewComposition !== 'standard' && (
         <Card variant="glass">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
