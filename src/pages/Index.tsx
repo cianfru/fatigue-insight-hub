@@ -166,18 +166,6 @@ const Index = () => {
         dutyCrewOverrides
       );
 
-      // Debug logging
-      result.duties.forEach((d, i) => {
-        const sleep = (d as any).sleep_quality ?? (d as any).sleep_estimate;
-        if (sleep) {
-          console.log(`[Sleep Debug] Duty ${i} (${d.date}):`, {
-            totalHours: sleep.total_sleep_hours,
-            effectiveHours: sleep.effective_sleep_hours,
-            strategy: sleep.sleep_strategy,
-          });
-        }
-      });
-
       const analysisMonth = result.duties.length > 0 
         ? parseISO(result.duties[0].date) 
         : settings.selectedMonth;
@@ -314,28 +302,27 @@ const Index = () => {
             sleepEnvironment,
             sleepQuality,
             sleepEstimate: sleep ? (() => {
-              const sleepBlocks = (sleep as unknown as Record<string, unknown>).sleep_blocks as Array<{ sleep_start_iso?: string; sleep_end_iso?: string }> | undefined;
-              const firstBlock = sleepBlocks?.[0];
+              // Use typed fields directly — no unsafe casts needed.
+              const firstBlock = sleep.sleep_blocks?.[0];
               const sleepStartIso = sleep.sleep_start_iso ?? firstBlock?.sleep_start_iso;
               const sleepEndIso = sleep.sleep_end_iso ?? firstBlock?.sleep_end_iso;
 
-              const sleepRecord = sleep as unknown as Record<string, unknown>;
-              let sleepStartDay = sleepRecord.sleep_start_day as number | undefined;
-              let sleepStartHour = sleepRecord.sleep_start_hour as number | undefined;
-              let sleepEndDay = sleepRecord.sleep_end_day as number | undefined;
-              let sleepEndHour = sleepRecord.sleep_end_hour as number | undefined;
+              let sleepStartDay = sleep.sleep_start_day ?? undefined;
+              let sleepStartHour = sleep.sleep_start_hour ?? undefined;
+              let sleepEndDay = sleep.sleep_end_day ?? undefined;
+              let sleepEndHour = sleep.sleep_end_hour ?? undefined;
 
               // Home base timezone fields (for chronogram positioning)
-              const sleepStartDayHomeTz = sleepRecord.sleep_start_day_home_tz as number | undefined;
-              const sleepStartHourHomeTz = sleepRecord.sleep_start_hour_home_tz as number | undefined;
-              const sleepEndDayHomeTz = sleepRecord.sleep_end_day_home_tz as number | undefined;
-              const sleepEndHourHomeTz = sleepRecord.sleep_end_hour_home_tz as number | undefined;
-              const sleepStartTimeHomeTz = sleepRecord.sleep_start_time_home_tz as string | undefined;
-              const sleepEndTimeHomeTz = sleepRecord.sleep_end_time_home_tz as string | undefined;
-              const locationTimezone = sleepRecord.location_timezone as string | undefined;
-              const sleepEnvironment2 = sleepRecord.environment as 'home' | 'hotel' | 'layover' | undefined;
+              const sleepStartDayHomeTz = sleep.sleep_start_day_home_tz ?? undefined;
+              const sleepStartHourHomeTz = sleep.sleep_start_hour_home_tz ?? undefined;
+              const sleepEndDayHomeTz = sleep.sleep_end_day_home_tz ?? undefined;
+              const sleepEndHourHomeTz = sleep.sleep_end_hour_home_tz ?? undefined;
+              const sleepStartTimeHomeTz = sleep.sleep_start_time_home_tz ?? undefined;
+              const sleepEndTimeHomeTz = sleep.sleep_end_time_home_tz ?? undefined;
+              const locationTimezone = sleep.location_timezone ?? undefined;
+              const sleepEnvironment2 = sleep.environment ?? undefined;
 
-              const parseIsoToDayHour = (iso: string | undefined): { day: number; hour: number } | null => {
+              const parseIsoToDayHour = (iso: string | undefined | null): { day: number; hour: number } | null => {
                 if (!iso) return null;
                 const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
                 if (m) return { day: Number(m[3]), hour: Number(m[4]) + Number(m[5]) / 60 };
@@ -343,29 +330,18 @@ const Index = () => {
               };
 
               if (sleepStartDay == null && sleepStartIso) {
-                const parsed = parseIsoToDayHour(sleepStartIso as string);
+                const parsed = parseIsoToDayHour(sleepStartIso);
                 if (parsed) { sleepStartDay = parsed.day; sleepStartHour = parsed.hour; }
               }
               if (sleepEndDay == null && sleepEndIso) {
-                const parsed = parseIsoToDayHour(sleepEndIso as string);
+                const parsed = parseIsoToDayHour(sleepEndIso);
                 if (parsed) { sleepEndDay = parsed.day; sleepEndHour = parsed.hour; }
               }
 
-              const explanation = sleepRecord.explanation as string | undefined;
-              const confidenceBasis = sleepRecord.confidence_basis as string | undefined;
-              const qualityFactors = sleepRecord.quality_factors as {
-                base_efficiency: number;
-                wocl_boost: number;
-                late_onset_penalty: number;
-                recovery_boost: number;
-                time_pressure_factor: number;
-                insufficient_penalty: number;
-              } | undefined;
-              const references = sleepRecord.references as Array<{
-                key: string;
-                short: string;
-                full: string;
-              }> | undefined;
+              const explanation = sleep.explanation;
+              const confidenceBasis = sleep.confidence_basis;
+              const qualityFactors = sleep.quality_factors;
+              const references = sleep.references;
 
               return {
                 totalSleepHours: sleep.total_sleep_hours,

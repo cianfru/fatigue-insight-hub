@@ -42,11 +42,6 @@ export function SidebarUpload({
     const files = e.dataTransfer.files;
     if (files && files[0]) {
       const file = files[0];
-      console.log('[SidebarUpload] file dropped:', {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-      });
       onFileUpload({
         name: file.name,
         size: file.size,
@@ -59,11 +54,6 @@ export function SidebarUpload({
     const files = e.target.files;
     if (files && files[0]) {
       const file = files[0];
-      console.log('[SidebarUpload] file selected:', {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-      });
       onFileUpload({
         name: file.name,
         size: file.size,
@@ -138,10 +128,7 @@ export function SidebarUpload({
             <Button
               variant="glow"
               size="sm"
-              onClick={() => {
-                console.log('[SidebarUpload] Run Analysis clicked');
-                onRunAnalysis();
-              }}
+              onClick={onRunAnalysis}
               disabled={isAnalyzing}
               className="w-full"
             >

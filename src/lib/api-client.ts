@@ -354,58 +354,6 @@ export async function getDutyDetail(
   return response.json();
 }
 
-export async function getChronogram(
-  analysisId: string,
-  mode: 'risk' | 'state' | 'hybrid' = 'risk',
-  theme: 'light' | 'dark' = 'light',
-  showAnnotations: boolean = true
-): Promise<string> {
-  
-  const response = await fetch(`${API_BASE_URL}/api/visualize/chronogram`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      analysis_id: analysisId,
-      mode,
-      theme,
-      show_annotations: showAnnotations,
-    }),
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to generate chronogram');
-  }
-  
-  const data = await response.json();
-  return data.image; // Returns "data:image/png;base64,..."
-}
-
-export async function getCalendar(
-  analysisId: string,
-  theme: 'light' | 'dark' = 'light'
-): Promise<string> {
-  
-  const response = await fetch(`${API_BASE_URL}/api/visualize/calendar`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      analysis_id: analysisId,
-      theme,
-    }),
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to generate calendar');
-  }
-  
-  const data = await response.json();
-  return data.image;
-}
-
 export async function healthCheck(): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE_URL}/health`);

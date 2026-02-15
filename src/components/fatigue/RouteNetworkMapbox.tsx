@@ -277,15 +277,15 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
   useEffect(() => {
     const mapInstance = map.current;
     if (!mapInstance || !mapLoaded || !styleReady) {
-      console.log('[RouteNetworkMapbox] Early return - map:', !!mapInstance, 'loaded:', mapLoaded, 'styleReady:', styleReady);
+
       return;
     }
     if (airports.length === 0) {
-      console.log('[RouteNetworkMapbox] Waiting for airports to load...');
+
       return;
     }
     if (routes.length === 0) {
-      console.log('[RouteNetworkMapbox] No routes to display');
+
       return;
     }
 
@@ -293,7 +293,6 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
     const addLayersToMap = () => {
       if (!map.current) return;
       
-      console.log('[RouteNetworkMapbox] Adding routes:', routes.length, 'airports:', airports.length);
 
       // Remove existing layers first, then sources (order matters!)
       const layerIds = ['airport-labels', 'airports', 'routes'];
@@ -341,7 +340,6 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         };
       }).filter(Boolean);
 
-      console.log('[RouteNetworkMapbox] Route features created:', routeFeatures.length);
 
       map.current.addSource('routes', {
         type: 'geojson',
@@ -444,13 +442,11 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
 
     // Check if style is actually loaded before adding layers
     const isLoaded = mapInstance.isStyleLoaded();
-    console.log('[RouteNetworkMapbox] Style loaded check:', isLoaded);
-    
     if (isLoaded) {
       addLayersToMap();
     } else {
       // Wait for style to finish loading - try both events for safety
-      console.log('[RouteNetworkMapbox] Style not ready, waiting for style.load or idle...');
+
       const handleStyleReady = () => {
         mapInstance.off('idle', handleStyleReady);
         addLayersToMap();
