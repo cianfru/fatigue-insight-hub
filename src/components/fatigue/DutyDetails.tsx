@@ -1,4 +1,4 @@
-import { AlertTriangle, Plane, Clock, Moon, ChevronDown, Globe, Zap, Users } from 'lucide-react';
+import { AlertTriangle, Plane, Clock, Moon, ChevronDown, Globe, Zap, Users, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DutyAnalysis } from '@/types/fatigue';
 import { format } from 'date-fns';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { PriorSleepIndicator } from './PriorSleepIndicator';
 import { SleepRecoveryIndicator } from './SleepRecoveryIndicator';
 import { FlightPhasePerformance } from './FlightPhasePerformance';
@@ -199,6 +200,59 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
         </CardContent>
       </Card>
 
+      {/* Crew Assignment - for augmented/ULR duties */}
+      {onCrewChange && duty.crewComposition !== 'standard' && (
+        <Card variant="glass">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-4 w-4 text-primary" />
+              Crew Assignment
+              <Badge variant="outline" className="text-[10px] capitalize">
+                {duty.crewComposition.replace('_', ' ')}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Your Crew Set for This Duty</Label>
+            <div className="flex gap-2">
+              <Button
+                variant={effectiveCrewSet === 'crew_a' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  onCrewChange(duty.dutyId || '', 'crew_a');
+                  toast.info('Crew set to A — re-run analysis to update metrics', { icon: <RefreshCw className="h-4 w-4" /> });
+                }}
+                className="flex-1 text-xs"
+              >
+                <Users className="h-3.5 w-3.5 mr-1.5" />
+                Crew A (Operating)
+              </Button>
+              <Button
+                variant={effectiveCrewSet === 'crew_b' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  onCrewChange(duty.dutyId || '', 'crew_b');
+                  toast.info('Crew set to B — re-run analysis to update metrics', { icon: <RefreshCw className="h-4 w-4" /> });
+                }}
+                className="flex-1 text-xs"
+              >
+                <Users className="h-3.5 w-3.5 mr-1.5" />
+                Crew B (Relief)
+              </Button>
+            </div>
+            {hasOverride && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Badge variant="outline" className="text-[10px]">CUSTOM</Badge>
+                <span>Per-duty override (global: {globalCrewSet === 'crew_a' ? 'Crew A' : 'Crew B'})</span>
+              </div>
+            )}
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Select which crew set you'll fly as. Changes take effect on the next analysis run.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ULR Compliance - only for ULR duties */}
       {duty.isUlr && duty.ulrCompliance && (
         <Card variant="glass">
@@ -214,38 +268,6 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {/* Crew Selection - ULR duties only */}
-            {onCrewChange && (
-              <div className="space-y-2 pb-3 border-b border-border/30">
-                <Label className="text-xs text-muted-foreground">Your Crew Assignment</Label>
-                <div className="flex gap-2">
-                  <Button
-                    variant={effectiveCrewSet === 'crew_a' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => onCrewChange(duty.dutyId || '', 'crew_a')}
-                    className="flex-1 text-xs"
-                  >
-                    <Users className="h-3.5 w-3.5 mr-1.5" />
-                    Crew A (Operating)
-                  </Button>
-                  <Button
-                    variant={effectiveCrewSet === 'crew_b' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => onCrewChange(duty.dutyId || '', 'crew_b')}
-                    className="flex-1 text-xs"
-                  >
-                    <Users className="h-3.5 w-3.5 mr-1.5" />
-                    Crew B (Relief)
-                  </Button>
-                </div>
-                {hasOverride && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Badge variant="outline" className="text-[10px]">CUSTOM</Badge>
-                    <span>Per-duty override (global: {globalCrewSet === 'crew_a' ? 'Crew A' : 'Crew B'})</span>
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
