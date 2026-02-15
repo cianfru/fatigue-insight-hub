@@ -214,8 +214,8 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {/* Crew Selection - ULR duties only */}
-            {onCrewChange && (
+            {/* Crew Selection - 4-pilot augmented crew only (not 3-pilot) */}
+            {onCrewChange && duty.crewComposition === 'augmented_4' && (
               <div className="space-y-2 pb-3 border-b border-border/30">
                 <Label className="text-xs text-muted-foreground">Your Crew Assignment</Label>
                 <div className="flex gap-2">
