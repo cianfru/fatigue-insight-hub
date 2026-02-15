@@ -43,6 +43,8 @@ const getStrategyIcon = (strategy: string): string => {
     case 'recovery': return '🔋';
     case 'post_duty_recovery': return '🛏️';
     case 'normal': return '😴';
+    case 'ulr_pre_duty': return '✈️🌙'; // ULR 4-pilot crew (48h protocol)
+    case 'augmented_3_pilot': return '✈️😴'; // 3-pilot augmented crew
     default: return '😴';
   }
 };
@@ -532,7 +534,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         : duty.date.getDate();
       const sleepEstimate = duty.sleepEstimate;
 
-      if (!sleepEstimate) return;
+      if (!sleepEstimate) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`❌ Duty ${duty.dutyId} missing sleepEstimate - skipping sleep bar`);
+        }
+        return;
+      }
 
       const recoveryScore = getRecoveryScore(sleepEstimate);
       
@@ -573,7 +580,18 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         // Validate: days must be within month range and hours within 0-24
         const validStart = startDay >= 1 && startDay <= daysInMonth && startHour >= 0 && startHour <= 24;
         const validEnd = endDay >= 1 && endDay <= daysInMonth && endHour >= 0 && endHour <= 24;
-        
+
+        if (!validStart || !validEnd) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn(
+              `❌ Duty ${duty.dutyId} sleep positioning invalid:\n` +
+              `   startDay=${startDay} (valid=${validStart})\n` +
+              `   endDay=${endDay} (valid=${validEnd})\n` +
+              `   daysInMonth=${daysInMonth}`
+            );
+          }
+        }
+
         if (validStart && validEnd) {
           if (startDay === endDay && endHour > startHour) {
             // Same-day sleep (e.g., afternoon nap)
@@ -1057,13 +1075,19 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       dayBars.sort((a, b) => a.startHour - b.startHour);
       const kept: SleepBar[] = [];
       for (const bar of dayBars) {
-        const overlapping = kept.find(k => 
+        const overlapping = kept.find(k =>
           bar.startHour < k.endHour && bar.endHour > k.startHour
         );
         if (overlapping) {
-          if (!!bar.qualityFactors && !overlapping.qualityFactors) {
+          // Prefer bar with richer metadata (score-based selection)
+          const barScore = (bar.qualityFactors ? 10 : 0) + (bar.explanation ? 5 : 0);
+          const keptScore = (overlapping.qualityFactors ? 10 : 0) + (overlapping.explanation ? 5 : 0);
+
+          if (barScore > keptScore) {
+            // Replace with bar that has better metadata
             kept[kept.indexOf(overlapping)] = bar;
           }
+          // Otherwise keep existing (discard current bar)
         } else {
           kept.push(bar);
         }
