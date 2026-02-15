@@ -250,7 +250,7 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Max Planned FDP</p>
-                <p className="font-medium">{duty.ulrCompliance.maxPlannedFdp.toFixed(1)}h</p>
+                <p className="font-medium">{(duty.ulrCompliance.maxPlannedFdp ?? 0).toFixed(1)}h</p>
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">FDP Within Limit</p>
@@ -423,19 +423,19 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
                 <Zap className="h-3.5 w-3.5 text-muted-foreground" />
                 <div className="text-xs">
                   <span className="text-muted-foreground">Return to Deck: </span>
-                  <span className={`font-medium ${duty.returnToDeckPerformance < 60 ? 'text-critical' : duty.returnToDeckPerformance < 70 ? 'text-warning' : 'text-foreground'}`}>
-                    {duty.returnToDeckPerformance.toFixed(1)}%
+                  <span className={`font-medium ${(duty.returnToDeckPerformance ?? 0) < 60 ? 'text-critical' : (duty.returnToDeckPerformance ?? 0) < 70 ? 'text-warning' : 'text-foreground'}`}>
+                    {(duty.returnToDeckPerformance ?? 0).toFixed(1)}%
                   </span>
                 </div>
               </div>
             )}
-            {duty.preDutyAwakeHours > 0 && (
+            {(duty.preDutyAwakeHours ?? 0) > 0 && (
               <div className="flex items-center gap-2">
                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                 <div className="text-xs">
                   <span className="text-muted-foreground">Awake Pre-Duty: </span>
-                  <span className={`font-medium ${duty.preDutyAwakeHours > 17 ? 'text-critical' : duty.preDutyAwakeHours > 14 ? 'text-warning' : 'text-foreground'}`}>
-                    {duty.preDutyAwakeHours.toFixed(1)}h
+                  <span className={`font-medium ${(duty.preDutyAwakeHours ?? 0) > 17 ? 'text-critical' : (duty.preDutyAwakeHours ?? 0) > 14 ? 'text-warning' : 'text-foreground'}`}>
+                    {(duty.preDutyAwakeHours ?? 0).toFixed(1)}h
                   </span>
                 </div>
               </div>
@@ -470,14 +470,14 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
             <div>
               <h5 className="mb-1 font-medium">Fatigue Factors</h5>
               <ul className="list-inside list-disc space-y-1 text-muted-foreground">
-                {duty.woclExposure > 0 && (
-                  <li>Window of Circadian Low (WOCL) exposure: {duty.woclExposure.toFixed(1)}h</li>
+                {(duty.woclExposure ?? 0) > 0 && (
+                  <li>Window of Circadian Low (WOCL) exposure: {(duty.woclExposure ?? 0).toFixed(1)}h</li>
                 )}
-                {duty.sleepDebt > 3 && (
-                  <li>Elevated sleep debt: {duty.sleepDebt.toFixed(1)}h accumulated</li>
+                {(duty.sleepDebt ?? 0) > 3 && (
+                  <li>Elevated sleep debt: {(duty.sleepDebt ?? 0).toFixed(1)}h accumulated</li>
                 )}
-                {duty.priorSleep < 24 && (
-                  <li>Limited prior sleep opportunity: {duty.priorSleep.toFixed(1)}h</li>
+                {(duty.priorSleep ?? 0) < 24 && (
+                  <li>Limited prior sleep opportunity: {(duty.priorSleep ?? 0).toFixed(1)}h</li>
                 )}
               </ul>
             </div>
