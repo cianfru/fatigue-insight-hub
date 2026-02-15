@@ -1075,8 +1075,33 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
   }, [duties, restDaysSleep, daysInMonth]);
 
   // Calculate in-flight rest bars for augmented/ULR duties
+  // IMPORTANT: Duty bars are positioned in HOME BASE LOCAL time, so inflight rest
+  // bars must also be converted from UTC to local time for proper alignment.
   const inflightRestBars = useMemo(() => {
     const bars: InFlightRestBar[] = [];
+
+    // Helper: derive UTC→local offset from duty's first segment
+    const getLocalOffsetHours = (duty: DutyAnalysis): number => {
+      if (!duty.flightSegments || duty.flightSegments.length === 0) return 0;
+      const seg = duty.flightSegments[0];
+      // Use explicit UTC offset if available
+      if (seg.departureUtcOffset != null && typeof seg.departureUtcOffset === 'number') {
+        return seg.departureUtcOffset;
+      }
+      // Derive from comparing local vs UTC departure times
+      if (seg.departureTime && seg.departureTimeUtc) {
+        const [lH, lM] = seg.departureTime.split(':').map(Number);
+        const utcStr = seg.departureTimeUtc.replace('Z', '');
+        const [uH, uM] = utcStr.split(':').map(Number);
+        if (Number.isFinite(lH) && Number.isFinite(uH)) {
+          let diff = (lH + lM / 60) - (uH + uM / 60);
+          if (diff > 12) diff -= 24;
+          if (diff < -12) diff += 24;
+          return diff;
+        }
+      }
+      return 0;
+    };
 
     duties.forEach((duty) => {
       if (!duty.inflightRestBlocks || duty.inflightRestBlocks.length === 0) return;
@@ -1085,51 +1110,59 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         ? Number(duty.dateString.split('-')[2])
         : duty.date.getDate();
 
+      const utcOffset = getLocalOffsetHours(duty);
+
       duty.inflightRestBlocks.forEach((block) => {
-        // Parse ISO UTC timestamps to get hour positions
+        // Parse ISO UTC timestamps
         const startMatch = block.startUtc.match(/T(\d{2}):(\d{2})/);
         const endMatch = block.endUtc.match(/T(\d{2}):(\d{2})/);
         if (!startMatch || !endMatch) return;
 
-        const startHour = Number(startMatch[1]) + Number(startMatch[2]) / 60;
-        const endHour = Number(endMatch[1]) + Number(endMatch[2]) / 60;
+        // Convert UTC hours to local time for alignment with duty bars
+        let startHour = Number(startMatch[1]) + Number(startMatch[2]) / 60 + utcOffset;
+        let endHour = Number(endMatch[1]) + Number(endMatch[2]) / 60 + utcOffset;
 
-        if (endHour > startHour) {
-          // Same-day rest block
+        // Also check if the UTC date differs from the duty date (rest block may span days in UTC)
+        const startDateMatch = block.startUtc.match(/(\d{4})-(\d{2})-(\d{2})/);
+        const endDateMatch = block.endUtc.match(/(\d{4})-(\d{2})-(\d{2})/);
+        const startDayUtc = startDateMatch ? Number(startDateMatch[3]) : dutyDayOfMonth;
+        const endDayUtc = endDateMatch ? Number(endDateMatch[3]) : dutyDayOfMonth;
+
+        // Adjust day index based on UTC→local conversion crossing midnight
+        let startDayLocal = startDayUtc;
+        if (startHour >= 24) { startHour -= 24; startDayLocal += 1; }
+        if (startHour < 0) { startHour += 24; startDayLocal -= 1; }
+
+        let endDayLocal = endDayUtc;
+        if (endHour >= 24) { endHour -= 24; endDayLocal += 1; }
+        if (endHour < 0) { endHour += 24; endDayLocal -= 1; }
+
+        const pushBar = (dayIdx: number, sH: number, eH: number) => {
+          if (dayIdx < 1 || dayIdx > daysInMonth) return;
           bars.push({
-            dayIndex: dutyDayOfMonth,
-            startHour,
-            endHour,
+            dayIndex: dayIdx,
+            startHour: sH,
+            endHour: eH,
             durationHours: block.durationHours,
             effectiveSleepHours: block.effectiveSleepHours,
             isDuringWocl: block.isDuringWocl,
             crewSet: block.crewSet,
             relatedDuty: duty,
           });
-        } else {
-          // Overnight rest block — split at midnight
-          bars.push({
-            dayIndex: dutyDayOfMonth,
-            startHour,
-            endHour: 24,
-            durationHours: block.durationHours,
-            effectiveSleepHours: block.effectiveSleepHours,
-            isDuringWocl: block.isDuringWocl,
-            crewSet: block.crewSet,
-            relatedDuty: duty,
-          });
-          if (dutyDayOfMonth < daysInMonth) {
-            bars.push({
-              dayIndex: dutyDayOfMonth + 1,
-              startHour: 0,
-              endHour,
-              durationHours: block.durationHours,
-              effectiveSleepHours: block.effectiveSleepHours,
-              isDuringWocl: block.isDuringWocl,
-              crewSet: block.crewSet,
-              relatedDuty: duty,
-            });
+        };
+
+        if (startDayLocal === endDayLocal) {
+          if (endHour > startHour) {
+            pushBar(startDayLocal, startHour, endHour);
+          } else {
+            // Crosses midnight in local time
+            pushBar(startDayLocal, startHour, 24);
+            pushBar(startDayLocal + 1, 0, endHour);
           }
+        } else {
+          // Multi-day: first day until midnight, last day from midnight
+          pushBar(startDayLocal, startHour, 24);
+          pushBar(endDayLocal, 0, endHour);
         }
       });
     });
