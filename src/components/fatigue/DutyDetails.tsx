@@ -159,6 +159,19 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
                       <span className="font-mono text-xs md:text-sm font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded">
                         {segment.flightNumber}
                       </span>
+                      {segment.activityCode && (
+                        <span className={`text-[10px] md:text-xs font-semibold px-1.5 py-0.5 rounded ${
+                          segment.activityCode === 'DH'
+                            ? 'bg-muted text-muted-foreground'
+                            : segment.activityCode === 'IR'
+                              ? 'bg-blue-500/15 text-blue-400'
+                              : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {segment.activityCode === 'DH' ? '🪑 DH' :
+                           segment.activityCode === 'IR' ? '🛏️ IR' :
+                           segment.activityCode}
+                        </span>
+                      )}
                       <span className="text-sm md:text-base font-medium">
                         {segment.departure} → {segment.arrival}
                       </span>

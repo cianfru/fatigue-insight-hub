@@ -52,6 +52,9 @@ export interface FlightSegment {
   arrivalTimezone?: string;            // IANA timezone e.g. "Asia/Qatar"
   departureUtcOffset?: number | null;  // UTC offset hours e.g. 5.5
   arrivalUtcOffset?: number | null;    // UTC offset hours e.g. 3.0
+  // Activity code from roster PDF
+  activityCode?: string | null;  // "IR" = inflight rest, "DH" = deadhead
+  isDeadhead?: boolean;          // true when activity_code == "DH"
 }
 
 export type FlightPhase = 'preflight' | 'taxi' | 'takeoff' | 'climb' | 'cruise' | 'descent' | 'approach' | 'landing';
