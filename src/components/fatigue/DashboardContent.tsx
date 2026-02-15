@@ -22,6 +22,9 @@ interface DashboardContentProps {
   onDrawerOpenChange: (open: boolean) => void;
   sidebarOpen: boolean;
   onSidebarOpenChange: (open: boolean) => void;
+  globalCrewSet?: 'crew_a' | 'crew_b';
+  dutyCrewOverride?: 'crew_a' | 'crew_b';
+  onCrewChange?: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
 }
 
 export function DashboardContent({
@@ -39,6 +42,9 @@ export function DashboardContent({
   onDrawerOpenChange,
   sidebarOpen,
   onSidebarOpenChange,
+  globalCrewSet,
+  dutyCrewOverride,
+  onCrewChange,
 }: DashboardContentProps) {
   return (
     <div className="flex flex-1 relative">
@@ -150,11 +156,14 @@ export function DashboardContent({
       </main>
 
       {/* Duty Details Drawer */}
-      <DutyDetailsDrawer 
-        duty={selectedDuty} 
+      <DutyDetailsDrawer
+        duty={selectedDuty}
         analysisId={analysisResults?.analysisId}
-        open={drawerOpen} 
-        onOpenChange={onDrawerOpenChange} 
+        open={drawerOpen}
+        onOpenChange={onDrawerOpenChange}
+        globalCrewSet={globalCrewSet}
+        dutyCrewOverride={dutyCrewOverride}
+        onCrewChange={onCrewChange}
       />
     </div>
   );

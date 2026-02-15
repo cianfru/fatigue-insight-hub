@@ -108,12 +108,26 @@ const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState('analysis');
+  const [dutyCrewOverrides, setDutyCrewOverrides] = useState<Map<string, 'crew_a' | 'crew_b'>>(new Map());
 
   const handleSettingsChange = (newSettings: Partial<PilotSettings>) => {
     setSettings((prev) => {
       const updated = { ...prev, ...newSettings };
       if (newSettings.theme) {
         setTheme(newSettings.theme);
+      }
+      return updated;
+    });
+  };
+
+  const handleDutyCrewChange = (dutyId: string, crewSet: 'crew_a' | 'crew_b') => {
+    setDutyCrewOverrides(prev => {
+      const updated = new Map(prev);
+      // If selecting global setting, remove override
+      if (crewSet === settings.crewSet) {
+        updated.delete(dutyId);
+      } else {
+        updated.set(dutyId, crewSet);
       }
       return updated;
     });
@@ -131,6 +145,7 @@ const Index = () => {
     setActualFileObject(null);
     setAnalysisResults(null);
     setSelectedDuty(null);
+    setDutyCrewOverrides(new Map());
   };
 
   const handleRunAnalysis = async () => {
@@ -147,7 +162,8 @@ const Index = () => {
         settings.pilotId,
         settings.homeBase,
         settings.configPreset,
-        settings.crewSet
+        settings.crewSet,
+        dutyCrewOverrides
       );
 
       // Debug logging
@@ -484,6 +500,9 @@ const Index = () => {
               onDrawerOpenChange={setDrawerOpen}
               sidebarOpen={sidebarOpen}
               onSidebarOpenChange={setSidebarOpen}
+              globalCrewSet={settings.crewSet}
+              dutyCrewOverride={dutyCrewOverrides.get(selectedDuty?.dutyId || '')}
+              onCrewChange={handleDutyCrewChange}
             />
           </div>
         )}
