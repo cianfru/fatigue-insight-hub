@@ -54,8 +54,6 @@ export function DutyDetailsDrawer({ duty, analysisId, open, onOpenChange, global
           is_in_rest: pt.is_in_rest ?? false,
         })) : undefined;
 
-        console.log('Fetched timeline points:', timelinePoints?.length, 'points');
-
         setDetailedDuty({
           ...duty,
           timelinePoints: timelinePoints ?? duty.timelinePoints,

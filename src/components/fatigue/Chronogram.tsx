@@ -13,41 +13,7 @@ import { cn } from '@/lib/utils';
 import { useChronogramZoom } from '@/hooks/useChronogramZoom';
 import { HumanPerformanceTimeline } from './HumanPerformanceTimeline';
 import { TimelineLegend } from './TimelineLegend';
-
-// Helper to calculate recovery score from sleep estimate
-const getRecoveryScore = (estimate: NonNullable<DutyAnalysis['sleepEstimate']>): number => {
-  const baseScore = (estimate.effectiveSleepHours / 8) * 100;
-  const efficiencyBonus = estimate.sleepEfficiency * 20;
-  const woclPenalty = estimate.woclOverlapHours * 5;
-  return Math.min(100, Math.max(0, baseScore + efficiencyBonus - woclPenalty));
-};
-
-const getRecoveryClasses = (score: number): { border: string; bg: string; text: string } => {
-  // Use semantic design tokens (no hard-coded Tailwind colors).
-  if (score >= 80) return { border: 'border-success', bg: 'bg-success/10', text: 'text-success' };
-  if (score >= 65) return { border: 'border-success/70', bg: 'bg-success/10', text: 'text-success/80' };
-  if (score >= 50) return { border: 'border-warning', bg: 'bg-warning/10', text: 'text-warning' };
-  if (score >= 35) return { border: 'border-high', bg: 'bg-high/10', text: 'text-high' };
-  return { border: 'border-critical', bg: 'bg-critical/10', text: 'text-critical' };
-};
-
-const getStrategyIcon = (strategy: string): string => {
-  switch (strategy) {
-    case 'anchor': return '⚓';
-    case 'split': return '✂️';
-    case 'nap': return '💤';
-    case 'afternoon_nap': return '☀️'; // Afternoon nap before night duty
-    case 'early_bedtime': return '🌙'; // Early bedtime for early report
-    case 'extended': return '🛏️';
-    case 'restricted': return '⏰';
-    case 'recovery': return '🔋';
-    case 'post_duty_recovery': return '🛏️';
-    case 'normal': return '😴';
-    case 'ulr_pre_duty': return '✈️🌙'; // ULR 4-pilot crew (48h protocol)
-    case 'augmented_3_pilot': return '✈️😴'; // 3-pilot augmented crew
-    default: return '😴';
-  }
-};
+import { getRecoveryScore, getRecoveryClasses, getStrategyIcon, parseTimeToHours, decimalToHHmm, isoToZulu, getPerformanceColor } from '@/lib/fatigue-utils';
 
 interface ChronogramProps {
   duties: DutyAnalysis[];
@@ -68,32 +34,7 @@ interface ChronogramProps {
 // Used as fallback when report_time_local is not available from the parser
 const DEFAULT_CHECK_IN_MINUTES = 60;
 
-// Parse HH:mm time string to decimal hours
-const parseTimeToHours = (timeStr: string | undefined): number | undefined => {
-  if (!timeStr) return undefined;
-  const parts = timeStr.split(':').map(Number);
-  if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-    return parts[0] + parts[1] / 60;
-  }
-  return undefined;
-};
-
-// Convert decimal hours to HH:mm string (e.g., 18.5 → "18:30")
-const decimalToHHmm = (h: number): string => {
-  const hours = Math.floor(h);
-  const minutes = Math.round((h - hours) * 60);
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-};
-
-// Extract UTC (Zulu) time as "HH:mmZ" from an ISO timestamp string
-const isoToZulu = (isoStr?: string): string | null => {
-  if (!isoStr) return null;
-  try {
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return null;
-    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}Z`;
-  } catch { return null; }
-};
+// parseTimeToHours, decimalToHHmm, isoToZulu imported from @/lib/fatigue-utils
 
 interface FlightSegmentBar {
   type: 'checkin' | 'flight' | 'ground';
@@ -163,15 +104,7 @@ interface InFlightRestBar {
 const WOCL_START = 2;
 const WOCL_END = 6;
 
-const getPerformanceColor = (performance: number): string => {
-  // Create gradient from red (0) to yellow (50) to green (100)
-  if (performance >= 80) return 'hsl(120, 70%, 45%)'; // Green
-  if (performance >= 70) return 'hsl(90, 70%, 50%)'; // Yellow-green
-  if (performance >= 60) return 'hsl(55, 90%, 55%)'; // Yellow
-  if (performance >= 50) return 'hsl(40, 95%, 50%)'; // Orange-yellow
-  if (performance >= 40) return 'hsl(25, 95%, 50%)'; // Orange
-  return 'hsl(0, 80%, 50%)'; // Red
-};
+// getPerformanceColor imported from @/lib/fatigue-utils
 
 export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep }: ChronogramProps) {
   const [infoOpen, setInfoOpen] = useState(false);
@@ -577,28 +510,24 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         const startHour = sleepEstimate.sleepStartHourHomeTz ?? sleepEstimate.sleepStartHour!;
         const endHour = sleepEstimate.sleepEndHourHomeTz ?? sleepEstimate.sleepEndHour!;
         
-        // Validate: days must be within month range and hours within 0-24
-        const validStart = startDay >= 1 && startDay <= daysInMonth && startHour >= 0 && startHour <= 24;
-        const validEnd = endDay >= 1 && endDay <= daysInMonth && endHour >= 0 && endHour <= 24;
+        // Clamp to visible month range instead of dropping blocks that
+        // cross month boundaries.  A sleep block from Jan 31 → Feb 1 should
+        // still render its visible portion rather than being silently dropped.
+        const validHours = startHour >= 0 && startHour <= 24 && endHour >= 0 && endHour <= 24;
+        const anyPartVisible = startDay <= daysInMonth && endDay >= 1 && validHours;
 
-        if (!validStart || !validEnd) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn(
-              `❌ Duty ${duty.dutyId} sleep positioning invalid:\n` +
-              `   startDay=${startDay} (valid=${validStart})\n` +
-              `   endDay=${endDay} (valid=${validEnd})\n` +
-              `   daysInMonth=${daysInMonth}`
-            );
-          }
-        }
-
-        if (validStart && validEnd) {
-          if (startDay === endDay && endHour > startHour) {
+        if (anyPartVisible) {
+          // Clamp days to visible range
+          const clampedStartDay = Math.max(1, Math.min(startDay, daysInMonth));
+          const clampedEndDay = Math.max(1, Math.min(endDay, daysInMonth));
+          const clampedStartHour = startDay < 1 ? 0 : startHour;
+          const clampedEndHour = endDay > daysInMonth ? 24 : endHour;
+          if (clampedStartDay === clampedEndDay && clampedEndHour > clampedStartHour) {
             // Same-day sleep (e.g., afternoon nap)
             bars.push({
-              dayIndex: startDay,
-              startHour,
-              endHour,
+              dayIndex: clampedStartDay,
+              startHour: clampedStartHour,
+              endHour: clampedEndHour,
               recoveryScore,
               effectiveSleep: sleepEstimate.effectiveSleepHours,
               sleepEfficiency: sleepEstimate.sleepEfficiency,
@@ -608,29 +537,31 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               originalStartHour: startHour,
               originalEndHour: endHour,
             });
-          } else if (startDay !== endDay) {
+          } else if (clampedStartDay !== clampedEndDay) {
             // Overnight sleep: crosses midnight into different day
             // Part 1: startHour to 24:00 on start day
-            bars.push({
-              dayIndex: startDay,
-              startHour,
-              endHour: 24,
-              recoveryScore,
-              effectiveSleep: sleepEstimate.effectiveSleepHours,
-              sleepEfficiency: sleepEstimate.sleepEfficiency,
-              sleepStrategy: sleepEstimate.sleepStrategy,
-              isPreDuty: true,
-              relatedDuty: duty,
-              isOvernightStart: true,
-              originalStartHour: startHour,
-              originalEndHour: endHour,
-            });
-            // Part 2: 00:00 to endHour on end day
-            if (endHour > 0) {
+            if (clampedStartDay >= 1 && clampedStartDay <= daysInMonth) {
               bars.push({
-                dayIndex: endDay,
+                dayIndex: clampedStartDay,
+                startHour: clampedStartHour,
+                endHour: 24,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+                isOvernightStart: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
+              });
+            }
+            // Part 2: 00:00 to endHour on end day
+            if (clampedEndDay >= 1 && clampedEndDay <= daysInMonth && clampedEndHour > 0) {
+              bars.push({
+                dayIndex: clampedEndDay,
                 startHour: 0,
-                endHour,
+                endHour: clampedEndHour,
                 recoveryScore,
                 effectiveSleep: sleepEstimate.effectiveSleepHours,
                 sleepEfficiency: sleepEstimate.sleepEfficiency,
@@ -644,26 +575,28 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             }
           }
           // If same day but endHour <= startHour, treat as overnight (endDay = startDay + 1)
-          else if (startDay === endDay && endHour <= startHour) {
-            bars.push({
-              dayIndex: startDay,
-              startHour,
-              endHour: 24,
-              recoveryScore,
-              effectiveSleep: sleepEstimate.effectiveSleepHours,
-              sleepEfficiency: sleepEstimate.sleepEfficiency,
-              sleepStrategy: sleepEstimate.sleepStrategy,
-              isPreDuty: true,
-              relatedDuty: duty,
-              isOvernightStart: true,
-              originalStartHour: startHour,
-              originalEndHour: endHour,
-            });
-            if (startDay + 1 <= daysInMonth && endHour > 0) {
+          else if (clampedStartDay === clampedEndDay && clampedEndHour <= clampedStartHour) {
+            if (clampedStartDay >= 1 && clampedStartDay <= daysInMonth) {
               bars.push({
-                dayIndex: startDay + 1,
+                dayIndex: clampedStartDay,
+                startHour: clampedStartHour,
+                endHour: 24,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+                isOvernightStart: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
+              });
+            }
+            if (clampedStartDay + 1 <= daysInMonth && clampedEndHour > 0) {
+              bars.push({
+                dayIndex: clampedStartDay + 1,
                 startHour: 0,
-                endHour,
+                endHour: clampedEndHour,
                 recoveryScore,
                 effectiveSleep: sleepEstimate.effectiveSleepHours,
                 sleepEfficiency: sleepEstimate.sleepEfficiency,
@@ -676,15 +609,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               });
             }
           }
-        }
-        // If validation fails, fall through to ISO/HH:mm fallback
-        else {
-          // Let the else branch below handle it by pretending hasPrecomputed is false
-          // (we re-enter below via the else)
-        }
-        
-        // Skip fallback if we successfully used precomputed values
-        if (validStart && validEnd) {
+
           // Enrich bars from this duty now (before moving to next duty)
           const barsFromThisDuty = bars.filter(b => b.relatedDuty === duty && !b.qualityFactors);
           barsFromThisDuty.forEach(b => Object.assign(b, sleepBarExtras));
@@ -1062,39 +987,21 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       });
     }
     
-    // Deduplicate overlapping sleep bars on the same day
-    const deduped: SleepBar[] = [];
-    const barsByDay = new Map<number, SleepBar[]>();
-    bars.forEach(b => {
-      const existing = barsByDay.get(b.dayIndex) || [];
-      existing.push(b);
-      barsByDay.set(b.dayIndex, existing);
+    // Deduplicate EXACT duplicates only (same day, same hour range, same duty).
+    // Previously this dropped ALL overlapping bars on the same day — which
+    // incorrectly removed valid sleep bars (e.g., a rest-day bar + a pre-duty
+    // nap on the same day, or overnight continuation + daytime nap).
+    // Now we only remove bars that are truly redundant (identical positioning
+    // from the same related duty).
+    const seen = new Set<string>();
+    const deduped = bars.filter(bar => {
+      // Round to 2 decimal places to avoid floating-point near-duplicates
+      const key = `${bar.dayIndex}|${bar.startHour.toFixed(2)}|${bar.endHour.toFixed(2)}|${bar.sleepStrategy ?? ''}|${bar.isPreDuty}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
-    
-    barsByDay.forEach((dayBars) => {
-      dayBars.sort((a, b) => a.startHour - b.startHour);
-      const kept: SleepBar[] = [];
-      for (const bar of dayBars) {
-        const overlapping = kept.find(k =>
-          bar.startHour < k.endHour && bar.endHour > k.startHour
-        );
-        if (overlapping) {
-          // Prefer bar with richer metadata (score-based selection)
-          const barScore = (bar.qualityFactors ? 10 : 0) + (bar.explanation ? 5 : 0);
-          const keptScore = (overlapping.qualityFactors ? 10 : 0) + (overlapping.explanation ? 5 : 0);
 
-          if (barScore > keptScore) {
-            // Replace with bar that has better metadata
-            kept[kept.indexOf(overlapping)] = bar;
-          }
-          // Otherwise keep existing (discard current bar)
-        } else {
-          kept.push(bar);
-        }
-      }
-      deduped.push(...kept);
-    });
-    
     return deduped;
   }, [duties, restDaysSleep, daysInMonth]);
 
