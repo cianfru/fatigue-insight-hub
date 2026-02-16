@@ -53,6 +53,8 @@ interface ElapsedSegment {
   arrival?: string;
   widthPercent: number;
   performance: number;
+  activityCode?: string | null;
+  isDeadhead?: boolean;
   phases?: { phase: FlightPhase; performance: number; widthPercent: number }[];
 }
 
@@ -269,6 +271,8 @@ export function HumanPerformanceTimeline({
               arrival: seg.arrival,
               widthPercent: ((flightEnd - flightStart) / barDuration) * 100,
               performance: seg.performance,
+              activityCode: seg.activityCode,
+              isDeadhead: seg.isDeadhead,
               phases,
             });
           }
@@ -793,6 +797,7 @@ export function HumanPerformanceTimeline({
                               </PopoverTrigger>
                               <PopoverContent align="start" side="top" className="max-w-sm p-3">
                                 <div className="space-y-2 text-xs">
+                                  {/* Header */}
                                   <div className="flex items-center justify-between border-b border-border pb-2">
                                     <div className="font-semibold flex items-center gap-1.5">
                                       <span className="text-base">{bar.isPreDuty ? '🛏️' : '🔋'}</span>
@@ -802,11 +807,15 @@ export function HumanPerformanceTimeline({
                                       {Math.round(bar.recoveryScore)}%
                                     </div>
                                   </div>
+
+                                  {/* Explanation */}
                                   {bar.explanation && (
                                     <div className="bg-primary/5 border border-primary/20 rounded-md p-2 text-[11px] text-muted-foreground leading-relaxed">
                                       <span className="text-primary font-medium">💡 </span>{bar.explanation}
                                     </div>
                                   )}
+
+                                  {/* Sleep Timing */}
                                   <div className="flex items-center justify-between text-muted-foreground">
                                     <span>Sleep Window</span>
                                     <span className="font-mono font-medium text-foreground">
@@ -823,20 +832,57 @@ export function HumanPerformanceTimeline({
                                       </span>
                                     </div>
                                   )}
+
+                                  {/* Recovery Score Breakdown */}
                                   <div className="bg-secondary/30 rounded-lg p-2 space-y-1.5">
-                                    <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Recovery Score</div>
-                                    <div className="flex items-center justify-between">
-                                      <span>Effective Sleep</span>
-                                      <span className="font-mono">{bar.effectiveSleep.toFixed(1)}h</span>
+                                    <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                                      Recovery Score Breakdown
                                     </div>
                                     <div className="flex items-center justify-between">
-                                      <span>Efficiency</span>
-                                      <span className="font-mono">{Math.round(bar.sleepEfficiency * 100)}%</span>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-muted-foreground">⏱️</span><span>Effective Sleep</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground">{bar.effectiveSleep.toFixed(1)}h / 8h</span>
+                                        <span className={cn("font-mono font-medium min-w-[40px] text-right",
+                                          bar.effectiveSleep >= 7 ? "text-success" : bar.effectiveSleep >= 5 ? "text-warning" : "text-critical"
+                                        )}>+{Math.round((bar.effectiveSleep / 8) * 100)}</span>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-muted-foreground">✨</span><span>Sleep Quality</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground">{Math.round(bar.sleepEfficiency * 100)}% efficiency</span>
+                                        <span className={cn("font-mono font-medium min-w-[40px] text-right",
+                                          bar.sleepEfficiency >= 0.9 ? "text-success" : bar.sleepEfficiency >= 0.7 ? "text-warning" : "text-high"
+                                        )}>+{Math.round(bar.sleepEfficiency * 20)}</span>
+                                      </div>
+                                    </div>
+                                    {(bar.woclOverlapHours ?? 0) > 0 && (
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-muted-foreground">🌙</span><span>WOCL Overlap</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-muted-foreground">{bar.woclOverlapHours!.toFixed(1)}h</span>
+                                          <span className="font-mono font-medium text-critical min-w-[40px] text-right">-{Math.round(bar.woclOverlapHours! * 5)}</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div className="border-t border-border/50 pt-1.5 flex items-center justify-between font-medium">
+                                      <span>Total Score</span>
+                                      <span className={cn("font-mono", classes.text)}>= {Math.round(bar.recoveryScore)}%</span>
                                     </div>
                                   </div>
+
+                                  {/* Quality Factors */}
                                   {bar.qualityFactors && (
                                     <div className="bg-secondary/20 rounded-lg p-2 space-y-1.5">
-                                      <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">🔬 Model Factors</div>
+                                      <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                                        🔬 Model Calculation Factors
+                                      </div>
                                       {Object.entries(bar.qualityFactors).map(([key, value]) => {
                                         const labels: Record<string, string> = {
                                           base_efficiency: 'Base Efficiency', wocl_boost: 'WOCL Boost',
@@ -846,20 +892,64 @@ export function HumanPerformanceTimeline({
                                         };
                                         const numValue = value as number;
                                         const isHours = key === 'pre_duty_awake_hours';
+                                        const isBoost = numValue >= 1;
                                         return (
                                           <div key={key} className="flex items-center justify-between text-[11px]">
                                             <span className="text-muted-foreground">{labels[key] || key}</span>
-                                            <span className="font-mono font-medium">
-                                              {isHours ? `${numValue.toFixed(1)}h` : `${numValue >= 1 ? '+' : ''}${((numValue - 1) * 100).toFixed(0)}%`}
+                                            <span className={cn("font-mono font-medium",
+                                              isHours
+                                                ? (numValue <= 2 ? "text-success" : numValue <= 4 ? "text-muted-foreground" : numValue <= 8 ? "text-warning" : "text-critical")
+                                                : (numValue >= 1.05 ? "text-success" : numValue >= 0.98 ? "text-muted-foreground" : numValue >= 0.90 ? "text-warning" : "text-critical")
+                                            )}>
+                                              {isHours ? `${numValue.toFixed(1)}h` : `${isBoost ? '+' : ''}${((numValue - 1) * 100).toFixed(0)}%`}
                                             </span>
                                           </div>
                                         );
                                       })}
                                     </div>
                                   )}
+
+                                  {/* Confidence */}
+                                  {bar.confidence != null && (
+                                    <div className="flex items-center justify-between text-[11px]">
+                                      <span className="text-muted-foreground">Model Confidence</span>
+                                      <span className={cn("font-mono font-medium px-1.5 py-0.5 rounded",
+                                        bar.confidence >= 0.7 ? "bg-success/10 text-success" :
+                                        bar.confidence >= 0.5 ? "bg-warning/10 text-warning" : "bg-high/10 text-high"
+                                      )}>{Math.round(bar.confidence * 100)}%</span>
+                                    </div>
+                                  )}
+                                  {bar.confidenceBasis && (
+                                    <div className="text-[10px] text-muted-foreground/70 italic leading-relaxed">{bar.confidenceBasis}</div>
+                                  )}
+
+                                  {/* References */}
+                                  {bar.references && bar.references.length > 0 && (
+                                    <div className="border-t border-border/30 pt-2 space-y-1">
+                                      <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">📚 Sources</div>
+                                      <div className="flex flex-wrap gap-1">
+                                        {bar.references.map((ref, i) => (
+                                          <span key={ref.key || i} className="text-[9px] px-1.5 py-0.5 rounded bg-secondary/50 text-muted-foreground" title={ref.full}>{ref.short}</span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Strategy Badge */}
                                   <div className="flex items-center justify-between pt-1">
                                     <span className="text-muted-foreground">Strategy</span>
-                                    <span className="capitalize">{getStrategyIcon(bar.sleepStrategy)} {bar.sleepStrategy.split('_').join(' ')}</span>
+                                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-secondary/50">
+                                      <span>{getStrategyIcon(bar.sleepStrategy)}</span>
+                                      <span className="capitalize font-medium">{bar.sleepStrategy.split('_').join(' ')}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Footer Context */}
+                                  <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/50">
+                                    {bar.isPreDuty 
+                                      ? `Rest before ${format(bar.relatedDuty.date, 'EEEE, MMM d')} duty`
+                                      : `Rest day recovery • ${format(bar.relatedDuty.date, 'EEEE, MMM d')}`
+                                    }
                                   </div>
                                 </div>
                               </PopoverContent>
@@ -918,6 +1008,8 @@ export function HumanPerformanceTimeline({
                                         );
                                       }
 
+                                      const isDH = seg.isDeadhead || seg.activityCode === 'DH';
+                                      const isIR = seg.activityCode === 'IR';
                                       return (
                                         <div
                                           key={segIdx}
@@ -930,12 +1022,35 @@ export function HumanPerformanceTimeline({
                                             width: `${seg.widthPercent}%`,
                                             backgroundColor: seg.type === 'ground'
                                               ? 'hsl(var(--muted))'
-                                              : getPerformanceColor(seg.performance),
+                                              : isDH ? 'transparent' : getPerformanceColor(seg.performance),
+                                            ...(isDH ? {
+                                              background: `repeating-linear-gradient(135deg, ${getPerformanceColor(seg.performance)}40, ${getPerformanceColor(seg.performance)}40 3px, ${getPerformanceColor(seg.performance)}20 3px, ${getPerformanceColor(seg.performance)}20 6px)`,
+                                              border: `1px dashed ${getPerformanceColor(seg.performance)}80`,
+                                            } : {}),
                                           }}
                                         >
                                           {segIdx > 0 && <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70" />}
                                           {seg.type === 'flight' && seg.flightNumber && seg.widthPercent > 8 && (
-                                            <span className="text-[8px] font-medium text-background truncate px-0.5">{seg.flightNumber}</span>
+                                            <span className={cn(
+                                              "text-[8px] font-medium truncate px-0.5 flex items-center gap-0.5",
+                                              isDH ? "text-foreground/70" : "text-background"
+                                            )}>
+                                              {seg.activityCode && (
+                                                <span className={cn(
+                                                  "text-[7px] px-0.5 rounded font-bold",
+                                                  isDH ? "bg-muted-foreground/30 text-foreground" :
+                                                  isIR ? "bg-primary/60 text-primary-foreground" :
+                                                  "bg-background/30"
+                                                )}>{seg.activityCode}</span>
+                                              )}
+                                              {seg.flightNumber}
+                                            </span>
+                                          )}
+                                          {seg.type === 'flight' && seg.activityCode && seg.widthPercent <= 8 && seg.widthPercent > 3 && (
+                                            <span className={cn(
+                                              "text-[6px] font-bold px-0.5",
+                                              isDH ? "text-foreground/70" : "text-background/90"
+                                            )}>{seg.activityCode}</span>
                                           )}
                                           {seg.type === 'checkin' && seg.widthPercent > 5 && (
                                             <span className="text-[8px] text-background/80">✓</span>
@@ -952,17 +1067,74 @@ export function HumanPerformanceTimeline({
                                 </TooltipTrigger>
                                 <TooltipContent side="top" align="start" className="max-w-xs p-3 z-[100]">
                                   <div className="space-y-2 text-xs">
-                                    <div className="font-semibold text-sm border-b pb-1 border-border">
-                                      {format(bar.duty.date, 'EEEE, MMM d')} {bar.isOverflowContinuation && '(continued)'}
+                                    {/* Header */}
+                                    <div className={cn(
+                                      "font-semibold text-sm border-b pb-1 flex items-center justify-between",
+                                      usedDiscretion ? "border-critical" : "border-border"
+                                    )}>
+                                      <span>
+                                        {format(bar.duty.date, 'EEEE, MMM d')} {bar.isOverflowContinuation && '(continued)'}
+                                      </span>
+                                      {usedDiscretion && (
+                                        <Badge variant="destructive" className="text-[10px] px-1 py-0">DISCRETION</Badge>
+                                      )}
                                     </div>
                                     <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                                       <span className="text-muted-foreground">Flights:</span>
                                       <span>{bar.duty.flightSegments.map(s => s.flightNumber).join(', ')}</span>
+                                    </div>
+
+                                    {/* EASA ORO.FTL Section */}
+                                    {(() => {
+                                      const maxFdp = bar.duty.maxFdpHours;
+                                      const actualFdp = bar.duty.actualFdpHours || bar.duty.dutyHours;
+                                      return (maxFdp || bar.duty.extendedFdpHours) ? (
+                                        <div className="border-t border-border pt-2 mt-2">
+                                          <span className="text-muted-foreground font-medium">EASA ORO.FTL:</span>
+                                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                                            {maxFdp && (<><span className="text-muted-foreground">Max FDP:</span><span>{maxFdp.toFixed(1)}h</span></>)}
+                                            {bar.duty.extendedFdpHours && (<><span className="text-muted-foreground">Extended FDP:</span><span className="text-warning">{bar.duty.extendedFdpHours.toFixed(1)}h</span></>)}
+                                            <span className="text-muted-foreground">Actual FDP:</span>
+                                            <span className={cn(maxFdp && actualFdp > maxFdp && "text-critical font-medium", maxFdp && actualFdp <= maxFdp && "text-success")}>{actualFdp.toFixed(1)}h</span>
+                                            {bar.duty.fdpExceedance && bar.duty.fdpExceedance > 0 && (<><span className="text-muted-foreground">Exceedance:</span><span className="text-critical font-medium">+{bar.duty.fdpExceedance.toFixed(1)}h</span></>)}
+                                          </div>
+                                        </div>
+                                      ) : null;
+                                    })()}
+
+                                    {/* Flight Segments */}
+                                    <div className="border-t border-border pt-2 mt-2">
+                                      <span className="text-muted-foreground font-medium">Flight Segments:</span>
+                                      <div className="flex flex-col gap-1 mt-1">
+                                        {bar.duty.flightSegments.map((segment, i) => (
+                                          <div key={i} className="flex items-center justify-between text-[10px] p-1 rounded gap-1" style={{ backgroundColor: `${getPerformanceColor(segment.performance)}20` }}>
+                                            <span className="font-medium">{segment.flightNumber}</span>
+                                            {segment.activityCode && (
+                                              <span className={cn(
+                                                "text-[9px] px-1 rounded font-medium",
+                                                segment.activityCode === 'DH' ? "bg-muted text-muted-foreground" :
+                                                segment.activityCode === 'IR' ? "bg-primary/20 text-primary" :
+                                                "bg-secondary text-secondary-foreground"
+                                              )}>{segment.activityCode}</span>
+                                            )}
+                                            <span className="text-muted-foreground">{segment.departure} → {segment.arrival}</span>
+                                            <span style={{ color: getPerformanceColor(segment.performance) }} className="font-medium">{Math.round(segment.performance)}%</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {/* Performance metrics */}
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border pt-2">
                                       <span className="text-muted-foreground">Min Perf:</span>
                                       <span style={{ color: getPerformanceColor(bar.duty.minPerformance) }}>{Math.round(bar.duty.minPerformance)}%</span>
-                                      <span className="text-muted-foreground">WOCL:</span>
-                                      <span>{bar.duty.woclExposure.toFixed(1)}h</span>
-                                      <span className="text-muted-foreground">Risk:</span>
+                                      <span className="text-muted-foreground">WOCL Exposure:</span>
+                                      <span className={bar.duty.woclExposure > 0 ? "text-warning" : ""}>{bar.duty.woclExposure.toFixed(1)}h</span>
+                                      <span className="text-muted-foreground">Prior Sleep:</span>
+                                      <span className={bar.duty.priorSleep < 8 ? "text-warning" : ""}>{bar.duty.priorSleep.toFixed(1)}h</span>
+                                      <span className="text-muted-foreground">Sleep Debt:</span>
+                                      <span className={bar.duty.sleepDebt > 4 ? "text-high" : ""}>{bar.duty.sleepDebt.toFixed(1)}h</span>
+                                      <span className="text-muted-foreground">Risk Level:</span>
                                       <span className={cn(
                                         bar.duty.overallRisk === 'LOW' && "text-success",
                                         bar.duty.overallRisk === 'MODERATE' && "text-warning",
@@ -970,12 +1142,33 @@ export function HumanPerformanceTimeline({
                                         bar.duty.overallRisk === 'CRITICAL' && "text-critical"
                                       )}>{bar.duty.overallRisk}</span>
                                     </div>
+
+                                    {/* Sleep Recovery Section */}
                                     {bar.duty.sleepEstimate && (
-                                      <div className="border-t border-border pt-1">
-                                        <span className="text-muted-foreground">Sleep:</span>{' '}
-                                        <span>{bar.duty.sleepEstimate.effectiveSleepHours.toFixed(1)}h</span>
-                                        <span className="text-muted-foreground ml-2">Recovery:</span>{' '}
-                                        <span>{Math.round(getRecoveryScore(bar.duty.sleepEstimate!))}%</span>
+                                      <div className="border-t border-border pt-2 mt-2">
+                                        <span className="text-muted-foreground font-medium flex items-center gap-1">
+                                          <Battery className="h-3 w-3" />
+                                          Sleep Recovery
+                                        </span>
+                                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                                          <span className="text-muted-foreground">Recovery Score:</span>
+                                          {(() => {
+                                            const score = getRecoveryScore(bar.duty.sleepEstimate);
+                                            const cls = getRecoveryClasses(score);
+                                            return <span className={cn("font-medium", cls.text)}>{Math.round(score)}%</span>;
+                                          })()}
+                                          <span className="text-muted-foreground">Effective Sleep:</span>
+                                          <span>{bar.duty.sleepEstimate.effectiveSleepHours.toFixed(1)}h</span>
+                                          <span className="text-muted-foreground">Efficiency:</span>
+                                          <span>{Math.round(bar.duty.sleepEstimate.sleepEfficiency * 100)}%</span>
+                                          <span className="text-muted-foreground">Strategy:</span>
+                                          <span className="capitalize">{bar.duty.sleepEstimate.sleepStrategy}</span>
+                                          {bar.duty.sleepEstimate.warnings.length > 0 && (
+                                            <span className="text-muted-foreground col-span-2 text-warning text-[10px] mt-1">
+                                              ⚠️ {bar.duty.sleepEstimate.warnings[0]}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     )}
                                   </div>
