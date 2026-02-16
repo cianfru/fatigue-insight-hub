@@ -987,6 +987,25 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       });
     }
     
+    // Debug: log computed sleep bars per duty
+    console.log('[SleepBars] Total computed:', bars.length, 'bars for', duties.length, 'duties');
+    duties.forEach((duty) => {
+      const dutyDay = duty.dateString ? Number(duty.dateString.split('-')[2]) : duty.date.getDate();
+      const matching = bars.filter(b => b.relatedDuty === duty);
+      const se = duty.sleepEstimate;
+      if (matching.length === 0) {
+        console.warn(`[SleepBars] ❌ No bar for duty ${duty.dutyId} day=${dutyDay}`, {
+          hasSleepEstimate: !!se,
+          hasHomeTz: se ? [se.sleepStartDayHomeTz, se.sleepStartHourHomeTz, se.sleepEndDayHomeTz, se.sleepEndHourHomeTz] : null,
+          hasPrecomputed: se ? [se.sleepStartDay, se.sleepStartHour, se.sleepEndDay, se.sleepEndHour] : null,
+          hasIso: se ? [se.sleepStartIso, se.sleepEndIso] : null,
+          hasHHmm: se ? [se.sleepStartTime, se.sleepEndTime] : null,
+        });
+      } else {
+        console.log(`[SleepBars] ✅ Duty ${duty.dutyId} day=${dutyDay}: ${matching.length} bars`, matching.map(b => `d${b.dayIndex} ${b.startHour.toFixed(1)}-${b.endHour.toFixed(1)}`));
+      }
+    });
+
     // Deduplicate EXACT duplicates only (same day, same hour range, same duty).
     // Previously this dropped ALL overlapping bars on the same day — which
     // incorrectly removed valid sleep bars (e.g., a rest-day bar + a pre-duty
@@ -1001,6 +1020,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       seen.add(key);
       return true;
     });
+
+    console.log('[SleepBars] After dedup:', deduped.length, 'bars (removed', bars.length - deduped.length, 'dupes)');
 
     return deduped;
   }, [duties, restDaysSleep, daysInMonth]);
