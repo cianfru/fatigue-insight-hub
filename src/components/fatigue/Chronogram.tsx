@@ -44,6 +44,8 @@ interface FlightSegmentBar {
   startHour: number;
   endHour: number;
   performance: number;
+  activityCode?: string | null; // "IR" = inflight rest, "DH" = deadhead
+  isDeadhead?: boolean;
   // Flight phase breakdown (when zoomed in)
   phases?: {
     phase: FlightPhase;
@@ -183,6 +185,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             startHour: 0,
             endHour: arrHour,
             performance: seg.performance,
+            activityCode: seg.activityCode,
+            isDeadhead: seg.isDeadhead,
           });
           lastEndHour = arrHour;
         } else if (depHour < 12 && arrHour < 12) {
@@ -204,6 +208,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             startHour: depHour,
             endHour: arrHour,
             performance: seg.performance,
+            activityCode: seg.activityCode,
+            isDeadhead: seg.isDeadhead,
           });
           lastEndHour = arrHour;
         }
@@ -296,6 +302,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         startHour: depHour,
         endHour: arrHour,
         performance: seg.performance,
+        activityCode: seg.activityCode,
+        isDeadhead: seg.isDeadhead,
         phases,
       });
     });
@@ -1696,30 +1704,54 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           }
                                           
                                           // Standard rendering (not zoomed or non-flight segments)
+                                          const isDH = segment.isDeadhead || segment.activityCode === 'DH';
+                                          const isIR = segment.activityCode === 'IR';
                                           return (
                                             <div
                                               key={segIndex}
                                               className={cn(
                                                 "h-full relative flex items-center justify-center",
                                                 segment.type === 'checkin' && "opacity-70",
-                                                segment.type === 'ground' && "opacity-50"
+                                                segment.type === 'ground' && "opacity-50",
                                               )}
                                               style={{
                                                 width: `${segmentWidth}%`,
                                                 backgroundColor: segment.type === 'ground' 
                                                   ? 'hsl(var(--muted))' 
-                                                  : getPerformanceColor(segment.performance),
+                                                  : isDH ? 'transparent' : getPerformanceColor(segment.performance),
+                                                ...(isDH ? {
+                                                  background: `repeating-linear-gradient(135deg, ${getPerformanceColor(segment.performance)}40, ${getPerformanceColor(segment.performance)}40 3px, ${getPerformanceColor(segment.performance)}20 3px, ${getPerformanceColor(segment.performance)}20 6px)`,
+                                                  border: `1px dashed ${getPerformanceColor(segment.performance)}80`,
+                                                } : {}),
                                               }}
                                             >
                                               {/* Segment separator line */}
                                               {segIndex > 0 && (
                                                 <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70" />
                                               )}
-                                              {/* Flight number label for flights */}
+                                              {/* Flight number + activity code label */}
                                               {segment.type === 'flight' && segment.flightNumber && segmentWidth > 8 && (
-                                                <span className="text-[8px] font-medium text-background truncate px-0.5">
+                                                <span className={cn(
+                                                  "text-[8px] font-medium truncate px-0.5 flex items-center gap-0.5",
+                                                  isDH ? "text-foreground/70" : "text-background"
+                                                )}>
+                                                  {segment.activityCode && (
+                                                    <span className={cn(
+                                                      "text-[7px] px-0.5 rounded font-bold",
+                                                      isDH ? "bg-muted-foreground/30 text-foreground" :
+                                                      isIR ? "bg-primary/60 text-primary-foreground" :
+                                                      "bg-background/30"
+                                                    )}>{segment.activityCode}</span>
+                                                  )}
                                                   {segment.flightNumber}
                                                 </span>
+                                              )}
+                                              {/* Show code even on narrow bars */}
+                                              {segment.type === 'flight' && segment.activityCode && segmentWidth <= 8 && segmentWidth > 3 && (
+                                                <span className={cn(
+                                                  "text-[6px] font-bold px-0.5",
+                                                  isDH ? "text-foreground/70" : "text-background/90"
+                                                )}>{segment.activityCode}</span>
                                               )}
                                               {/* Check-in indicator */}
                                               {segment.type === 'checkin' && segmentWidth > 5 && (
@@ -1795,13 +1827,32 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       <div className="border-t border-border pt-2 mt-2">
                                         <span className="text-muted-foreground font-medium">Flight Segments:</span>
                                         <div className="flex flex-col gap-1 mt-1">
-                                          {bar.segments.filter(s => s.type === 'flight').map((segment, i) => (
-                                            <div key={i} className="flex items-center justify-between text-[10px] p-1 rounded" style={{ backgroundColor: `${getPerformanceColor(segment.performance)}20` }}>
-                                              <span className="font-medium">{segment.flightNumber}</span>
-                                              <span className="text-muted-foreground">{segment.departure} → {segment.arrival}</span>
-                                              <span style={{ color: getPerformanceColor(segment.performance) }} className="font-medium">{Math.round(segment.performance)}%</span>
-                                            </div>
-                                          ))}
+                                          {bar.segments.filter(s => s.type === 'flight').map((segment, i) => {
+                                            const isDH = segment.isDeadhead || segment.activityCode === 'DH';
+                                            const isIR = segment.activityCode === 'IR';
+                                            return (
+                                              <div key={i} className={cn(
+                                                "flex items-center justify-between text-[10px] p-1 rounded gap-1",
+                                                isDH && "border border-dashed border-muted-foreground/40"
+                                              )} style={{ backgroundColor: isDH ? 'transparent' : `${getPerformanceColor(segment.performance)}20` }}>
+                                                <span className="font-medium flex items-center gap-1">
+                                                  {segment.activityCode && (
+                                                    <span className={cn(
+                                                      "text-[9px] px-1 rounded font-bold",
+                                                      isDH ? "bg-muted text-muted-foreground" :
+                                                      isIR ? "bg-primary/20 text-primary" :
+                                                      "bg-secondary text-secondary-foreground"
+                                                    )}>{segment.activityCode}</span>
+                                                  )}
+                                                  {segment.flightNumber}
+                                                </span>
+                                                <span className="text-muted-foreground">{segment.departure} → {segment.arrival}</span>
+                                                <span style={{ color: getPerformanceColor(segment.performance) }} className="font-medium">
+                                                  {isDH ? 'PAX' : `${Math.round(segment.performance)}%`}
+                                                </span>
+                                              </div>
+                                            );
+                                          })}
                                         </div>
                                       </div>
                                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border pt-2">
