@@ -330,28 +330,41 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         const checkInHour = Math.max(0, reportHour ?? (startHour - DEFAULT_CHECK_IN_MINUTES / 60));
         const endHour = endH + endM / 60;
         
-        // Detect overnight duty - FDP crosses midnight:
-        // 1. End time is numerically less than start time (e.g., depart 18:00, arrive 04:00)
+        // Detect overnight duty - FDP crosses midnight in home-base time.
+        // Three cases:
+        // 1. Last arrival < first departure (e.g. depart 22:00, arrive 04:00)
         // 2. Departure after 16:00 AND arrival before 10:00 (covers night ops)
-        // This ensures flights like 18:00→02:00 or 20:00→05:00 are properly split
-        const isOvernight = endHour < startHour || (startHour >= 16 && endHour < 10);
-        
+        // 3. Report time (checkInHour) > arrival (endHour) — late-night check-in
+        //    whose flights finish the next morning (e.g. RPT 23:30, arrive 07:45)
+        const isOvernight = endHour < startHour
+          || (startHour >= 16 && endHour < 10)
+          || (checkInHour > endHour && checkInHour >= 16);
+
         if (isOvernight) {
-          // First bar: from check-in to midnight (24:00) on departure day
-          bars.push({
-            dayIndex: dayOfMonth,
-            startHour: checkInHour,
-            endHour: 24, // Always ends at midnight for display
-            duty,
-            isOvernightStart: true,
-            segments: calculateSegments(duty, false),
-          });
-          
-          // Second bar: from midnight (00:00) to arrival on next day
-          // Only add if the duty actually continues past midnight
-          if (dayOfMonth < daysInMonth && endHour > 0) {
+          // Determine which calendar day the check-in falls on.
+          // If checkInHour >= 20 and flights land before noon → check-in is the
+          // *previous* calendar day relative to dateString (e.g. duty dated Mar 8
+          // but check-in 23:30 on Mar 7).
+          const checkInOnPrevDay = checkInHour > endHour && checkInHour >= 16;
+          const startDayIndex = checkInOnPrevDay ? dayOfMonth - 1 : dayOfMonth;
+          const endDayIndex   = checkInOnPrevDay ? dayOfMonth     : dayOfMonth + 1;
+
+          // First bar: from check-in to midnight on the check-in day
+          if (startDayIndex >= 1) {
             bars.push({
-              dayIndex: dayOfMonth + 1,
+              dayIndex: startDayIndex,
+              startHour: checkInHour,
+              endHour: 24,
+              duty,
+              isOvernightStart: true,
+              segments: calculateSegments(duty, false),
+            });
+          }
+
+          // Second bar: from midnight to arrival on the following day
+          if (endDayIndex <= daysInMonth && endHour > 0) {
+            bars.push({
+              dayIndex: endDayIndex,
               startHour: 0,
               endHour: endHour,
               duty,
