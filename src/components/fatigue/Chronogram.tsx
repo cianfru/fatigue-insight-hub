@@ -12,6 +12,7 @@ import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useChronogramZoom } from '@/hooks/useChronogramZoom';
 import { HumanPerformanceTimeline } from './HumanPerformanceTimeline';
+import { UtcTimeline } from './UtcTimeline';
 import { TimelineLegend } from './TimelineLegend';
 import { getRecoveryScore, getRecoveryClasses, getStrategyIcon, parseTimeToHours, decimalToHHmm, isoToZulu, getPerformanceColor } from '@/lib/fatigue-utils';
 
@@ -1166,7 +1167,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
   const ROW_HEIGHT = 40; // Increased from 28px for breathing room
   const hours = Array.from({ length: 8 }, (_, i) => i * 3); // 00, 03, 06, 09, 12, 15, 18, 21
 
-  const [activeTab, setActiveTab] = useState<'homebase' | 'elapsed'>('homebase');
+  const [activeTab, setActiveTab] = useState<'homebase' | 'utc' | 'elapsed'>('homebase');
 
   return (
     <Card variant="glass">
@@ -1181,10 +1182,13 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Tab selector for timeline type */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'homebase' | 'elapsed')}>
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'homebase' | 'utc' | 'elapsed')}>
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="homebase" className="text-xs">
               🏠 Home-Base Timeline
+            </TabsTrigger>
+            <TabsTrigger value="utc" className="text-xs">
+              🌐 UTC (Zulu)
             </TabsTrigger>
             <TabsTrigger value="elapsed" className="text-xs">
               <Brain className="h-3 w-3 mr-1" />
@@ -1995,6 +1999,25 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             ))}
           </div>
         </div>
+          </TabsContent>
+
+          {/* UTC (Zulu) Timeline Tab */}
+          <TabsContent value="utc" className="mt-4">
+            <UtcTimeline
+              duties={duties}
+              statistics={{
+                totalDuties: statistics.totalDuties,
+                highRiskDuties: statistics.highRiskDuties,
+                criticalRiskDuties: statistics.criticalRiskDuties,
+              }}
+              month={month}
+              pilotName={pilotName}
+              pilotBase={pilotBase}
+              pilotAircraft={pilotAircraft}
+              onDutySelect={onDutySelect}
+              selectedDuty={selectedDuty}
+              restDaysSleep={restDaysSleep}
+            />
           </TabsContent>
 
           {/* Human Performance (Elapsed Time) Tab */}
