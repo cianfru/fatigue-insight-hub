@@ -44,8 +44,6 @@ interface FlightSegmentBar {
   startHour: number;
   endHour: number;
   performance: number;
-  activityCode?: string | null; // "IR" = inflight rest, "DH" = deadhead
-  isDeadhead?: boolean;
   // Flight phase breakdown (when zoomed in)
   phases?: {
     phase: FlightPhase;
@@ -185,8 +183,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             startHour: 0,
             endHour: arrHour,
             performance: seg.performance,
-            activityCode: seg.activityCode,
-            isDeadhead: seg.isDeadhead,
           });
           lastEndHour = arrHour;
         } else if (depHour < 12 && arrHour < 12) {
@@ -208,8 +204,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             startHour: depHour,
             endHour: arrHour,
             performance: seg.performance,
-            activityCode: seg.activityCode,
-            isDeadhead: seg.isDeadhead,
           });
           lastEndHour = arrHour;
         }
@@ -302,8 +296,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         startHour: depHour,
         endHour: arrHour,
         performance: seg.performance,
-        activityCode: seg.activityCode,
-        isDeadhead: seg.isDeadhead,
         phases,
       });
     });
@@ -479,6 +471,16 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         if (process.env.NODE_ENV === 'development') {
           console.warn(`❌ Duty ${duty.dutyId} missing sleepEstimate - skipping sleep bar`);
         }
+        return;
+      }
+
+      // ULR pre-duty sleep spans multiple nights (Night 1 + Night 2) and is
+      // rendered individually — one bar per night — via the restDaysSleep path
+      // (strategy key = duty ID in sleep_strategies).  Rendering it here from
+      // the aggregate sleepStartDay→sleepEndDay span produces a single
+      // mis-positioned bar that overwrites the correctly-split recovery bars.
+      // Skip the duties-loop path for ULR duties; restDaysSleep handles them.
+      if (sleepEstimate.sleepStrategy === 'ulr_pre_duty') {
         return;
       }
 
@@ -995,25 +997,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       });
     }
     
-    // Debug: log computed sleep bars per duty
-    console.log('[SleepBars] Total computed:', bars.length, 'bars for', duties.length, 'duties');
-    duties.forEach((duty) => {
-      const dutyDay = duty.dateString ? Number(duty.dateString.split('-')[2]) : duty.date.getDate();
-      const matching = bars.filter(b => b.relatedDuty === duty);
-      const se = duty.sleepEstimate;
-      if (matching.length === 0) {
-        console.warn(`[SleepBars] ❌ No bar for duty ${duty.dutyId} day=${dutyDay}`, {
-          hasSleepEstimate: !!se,
-          hasHomeTz: se ? [se.sleepStartDayHomeTz, se.sleepStartHourHomeTz, se.sleepEndDayHomeTz, se.sleepEndHourHomeTz] : null,
-          hasPrecomputed: se ? [se.sleepStartDay, se.sleepStartHour, se.sleepEndDay, se.sleepEndHour] : null,
-          hasIso: se ? [se.sleepStartIso, se.sleepEndIso] : null,
-          hasHHmm: se ? [se.sleepStartTime, se.sleepEndTime] : null,
-        });
-      } else {
-        console.log(`[SleepBars] ✅ Duty ${duty.dutyId} day=${dutyDay}: ${matching.length} bars`, matching.map(b => `d${b.dayIndex} ${b.startHour.toFixed(1)}-${b.endHour.toFixed(1)}`));
-      }
-    });
-
     // Deduplicate EXACT duplicates only (same day, same hour range, same duty).
     // Previously this dropped ALL overlapping bars on the same day — which
     // incorrectly removed valid sleep bars (e.g., a rest-day bar + a pre-duty
@@ -1028,8 +1011,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       seen.add(key);
       return true;
     });
-
-    console.log('[SleepBars] After dedup:', deduped.length, 'bars (removed', bars.length - deduped.length, 'dupes)');
 
     return deduped;
   }, [duties, restDaysSleep, daysInMonth]);
@@ -1073,30 +1054,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       const utcOffset = getLocalOffsetHours(duty);
 
       duty.inflightRestBlocks.forEach((block) => {
-        // Parse ISO UTC timestamps
-        const startMatch = block.startUtc.match(/T(\d{2}):(\d{2})/);
-        const endMatch = block.endUtc.match(/T(\d{2}):(\d{2})/);
-        if (!startMatch || !endMatch) return;
-
-        // Convert UTC hours to local time for alignment with duty bars
-        let startHour = Number(startMatch[1]) + Number(startMatch[2]) / 60 + utcOffset;
-        let endHour = Number(endMatch[1]) + Number(endMatch[2]) / 60 + utcOffset;
-
-        // Also check if the UTC date differs from the duty date (rest block may span days in UTC)
-        const startDateMatch = block.startUtc.match(/(\d{4})-(\d{2})-(\d{2})/);
-        const endDateMatch = block.endUtc.match(/(\d{4})-(\d{2})-(\d{2})/);
-        const startDayUtc = startDateMatch ? Number(startDateMatch[3]) : dutyDayOfMonth;
-        const endDayUtc = endDateMatch ? Number(endDateMatch[3]) : dutyDayOfMonth;
-
-        // Adjust day index based on UTC→local conversion crossing midnight
-        let startDayLocal = startDayUtc;
-        if (startHour >= 24) { startHour -= 24; startDayLocal += 1; }
-        if (startHour < 0) { startHour += 24; startDayLocal -= 1; }
-
-        let endDayLocal = endDayUtc;
-        if (endHour >= 24) { endHour -= 24; endDayLocal += 1; }
-        if (endHour < 0) { endHour += 24; endDayLocal -= 1; }
-
         const pushBar = (dayIdx: number, sH: number, eH: number) => {
           if (dayIdx < 1 || dayIdx > daysInMonth) return;
           bars.push({
@@ -1111,18 +1068,60 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           });
         };
 
-        if (startDayLocal === endDayLocal) {
-          if (endHour > startHour) {
-            pushBar(startDayLocal, startHour, endHour);
+        // Prefer pre-computed home-TZ fields (most reliable, no offset arithmetic)
+        const hasHomeTz = block.startDayHomeTz != null && block.startHourHomeTz != null;
+
+        if (hasHomeTz) {
+          const startDay = block.startDayHomeTz!;
+          const endDay = block.endDayHomeTz!;
+          const startHour = block.startHourHomeTz!;
+          const endHour = block.endHourHomeTz!;
+
+          if (startDay === endDay) {
+            pushBar(startDay, startHour, endHour);
           } else {
-            // Crosses midnight in local time
-            pushBar(startDayLocal, startHour, 24);
-            pushBar(startDayLocal + 1, 0, endHour);
+            // Crosses midnight in home TZ
+            pushBar(startDay, startHour, 24);
+            pushBar(endDay, 0, endHour);
           }
         } else {
-          // Multi-day: first day until midnight, last day from midnight
-          pushBar(startDayLocal, startHour, 24);
-          pushBar(endDayLocal, 0, endHour);
+          // Fallback: legacy UTC offset arithmetic (old behaviour, kept for safety)
+          const startMatch = block.startUtc?.match(/T(\d{2}):(\d{2})/);
+          const endMatch = block.endUtc?.match(/T(\d{2}):(\d{2})/);
+          if (!startMatch || !endMatch) return;
+
+          // Convert UTC hours to local time for alignment with duty bars
+          let startHour = Number(startMatch[1]) + Number(startMatch[2]) / 60 + utcOffset;
+          let endHour = Number(endMatch[1]) + Number(endMatch[2]) / 60 + utcOffset;
+
+          // Also check if the UTC date differs from the duty date (rest block may span days in UTC)
+          const startDateMatch = block.startUtc.match(/(\d{4})-(\d{2})-(\d{2})/);
+          const endDateMatch = block.endUtc.match(/(\d{4})-(\d{2})-(\d{2})/);
+          const startDayUtc = startDateMatch ? Number(startDateMatch[3]) : dutyDayOfMonth;
+          const endDayUtc = endDateMatch ? Number(endDateMatch[3]) : dutyDayOfMonth;
+
+          // Adjust day index based on UTC→local conversion crossing midnight
+          let startDayLocal = startDayUtc;
+          if (startHour >= 24) { startHour -= 24; startDayLocal += 1; }
+          if (startHour < 0) { startHour += 24; startDayLocal -= 1; }
+
+          let endDayLocal = endDayUtc;
+          if (endHour >= 24) { endHour -= 24; endDayLocal += 1; }
+          if (endHour < 0) { endHour += 24; endDayLocal -= 1; }
+
+          if (startDayLocal === endDayLocal) {
+            if (endHour > startHour) {
+              pushBar(startDayLocal, startHour, endHour);
+            } else {
+              // Crosses midnight in local time
+              pushBar(startDayLocal, startHour, 24);
+              pushBar(startDayLocal + 1, 0, endHour);
+            }
+          } else {
+            // Multi-day: first day until midnight, last day from midnight
+            pushBar(startDayLocal, startHour, 24);
+            pushBar(endDayLocal, 0, endHour);
+          }
         }
       });
     });
@@ -1704,54 +1703,30 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           }
                                           
                                           // Standard rendering (not zoomed or non-flight segments)
-                                          const isDH = segment.isDeadhead || segment.activityCode === 'DH';
-                                          const isIR = segment.activityCode === 'IR';
                                           return (
                                             <div
                                               key={segIndex}
                                               className={cn(
                                                 "h-full relative flex items-center justify-center",
                                                 segment.type === 'checkin' && "opacity-70",
-                                                segment.type === 'ground' && "opacity-50",
+                                                segment.type === 'ground' && "opacity-50"
                                               )}
                                               style={{
                                                 width: `${segmentWidth}%`,
                                                 backgroundColor: segment.type === 'ground' 
                                                   ? 'hsl(var(--muted))' 
-                                                  : isDH ? 'transparent' : getPerformanceColor(segment.performance),
-                                                ...(isDH ? {
-                                                  background: `repeating-linear-gradient(135deg, ${getPerformanceColor(segment.performance)}40, ${getPerformanceColor(segment.performance)}40 3px, ${getPerformanceColor(segment.performance)}20 3px, ${getPerformanceColor(segment.performance)}20 6px)`,
-                                                  border: `1px dashed ${getPerformanceColor(segment.performance)}80`,
-                                                } : {}),
+                                                  : getPerformanceColor(segment.performance),
                                               }}
                                             >
                                               {/* Segment separator line */}
                                               {segIndex > 0 && (
                                                 <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70" />
                                               )}
-                                              {/* Flight number + activity code label */}
+                                              {/* Flight number label for flights */}
                                               {segment.type === 'flight' && segment.flightNumber && segmentWidth > 8 && (
-                                                <span className={cn(
-                                                  "text-[8px] font-medium truncate px-0.5 flex items-center gap-0.5",
-                                                  isDH ? "text-foreground/70" : "text-background"
-                                                )}>
-                                                  {segment.activityCode && (
-                                                    <span className={cn(
-                                                      "text-[7px] px-0.5 rounded font-bold",
-                                                      isDH ? "bg-muted-foreground/30 text-foreground" :
-                                                      isIR ? "bg-primary/60 text-primary-foreground" :
-                                                      "bg-background/30"
-                                                    )}>{segment.activityCode}</span>
-                                                  )}
+                                                <span className="text-[8px] font-medium text-background truncate px-0.5">
                                                   {segment.flightNumber}
                                                 </span>
-                                              )}
-                                              {/* Show code even on narrow bars */}
-                                              {segment.type === 'flight' && segment.activityCode && segmentWidth <= 8 && segmentWidth > 3 && (
-                                                <span className={cn(
-                                                  "text-[6px] font-bold px-0.5",
-                                                  isDH ? "text-foreground/70" : "text-background/90"
-                                                )}>{segment.activityCode}</span>
                                               )}
                                               {/* Check-in indicator */}
                                               {segment.type === 'checkin' && segmentWidth > 5 && (
@@ -1827,32 +1802,13 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       <div className="border-t border-border pt-2 mt-2">
                                         <span className="text-muted-foreground font-medium">Flight Segments:</span>
                                         <div className="flex flex-col gap-1 mt-1">
-                                          {bar.segments.filter(s => s.type === 'flight').map((segment, i) => {
-                                            const isDH = segment.isDeadhead || segment.activityCode === 'DH';
-                                            const isIR = segment.activityCode === 'IR';
-                                            return (
-                                              <div key={i} className={cn(
-                                                "flex items-center justify-between text-[10px] p-1 rounded gap-1",
-                                                isDH && "border border-dashed border-muted-foreground/40"
-                                              )} style={{ backgroundColor: isDH ? 'transparent' : `${getPerformanceColor(segment.performance)}20` }}>
-                                                <span className="font-medium flex items-center gap-1">
-                                                  {segment.activityCode && (
-                                                    <span className={cn(
-                                                      "text-[9px] px-1 rounded font-bold",
-                                                      isDH ? "bg-muted text-muted-foreground" :
-                                                      isIR ? "bg-primary/20 text-primary" :
-                                                      "bg-secondary text-secondary-foreground"
-                                                    )}>{segment.activityCode}</span>
-                                                  )}
-                                                  {segment.flightNumber}
-                                                </span>
-                                                <span className="text-muted-foreground">{segment.departure} → {segment.arrival}</span>
-                                                <span style={{ color: getPerformanceColor(segment.performance) }} className="font-medium">
-                                                  {isDH ? 'PAX' : `${Math.round(segment.performance)}%`}
-                                                </span>
-                                              </div>
-                                            );
-                                          })}
+                                          {bar.segments.filter(s => s.type === 'flight').map((segment, i) => (
+                                            <div key={i} className="flex items-center justify-between text-[10px] p-1 rounded" style={{ backgroundColor: `${getPerformanceColor(segment.performance)}20` }}>
+                                              <span className="font-medium">{segment.flightNumber}</span>
+                                              <span className="text-muted-foreground">{segment.departure} → {segment.arrival}</span>
+                                              <span style={{ color: getPerformanceColor(segment.performance) }} className="font-medium">{Math.round(segment.performance)}%</span>
+                                            </div>
+                                          ))}
                                         </div>
                                       </div>
                                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border pt-2">

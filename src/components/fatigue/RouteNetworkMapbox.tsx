@@ -188,8 +188,8 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
-    // Mapbox public token - safe to embed in client-side code
-    const token = 'pk.eyJ1Ijoib3BlbmNsaW1iIiwiYSI6ImNta3V1bzhjczI0aTIzZXFybnRhZWt6Z3gifQ.Rv9rv-HauUDgONzqMBkLcg';
+    // Mapbox public token loaded from environment variable
+    const token = import.meta.env.VITE_MAPBOX_TOKEN || '';
     
     if (!token) {
       setTokenMissing(true);
