@@ -15,7 +15,7 @@ import { HumanPerformanceTimeline } from './HumanPerformanceTimeline';
 import { UtcTimeline } from './UtcTimeline';
 import { ContinuousPerformanceTimeline } from './ContinuousPerformanceTimeline';
 import { TimelineLegend } from './TimelineLegend';
-import { getRecoveryScore, getRecoveryClasses, getStrategyIcon, parseTimeToHours, decimalToHHmm, isoToZulu, getPerformanceColor } from '@/lib/fatigue-utils';
+import { getRecoveryScore, getRecoveryClasses, getStrategyIcon, parseTimeToHours, decimalToHHmm, isoToZulu, getPerformanceColor, isTrainingDuty, getTrainingDutyColor, getTrainingDutyLabel } from '@/lib/fatigue-utils';
 
 interface ChronogramProps {
   duties: DutyAnalysis[];
@@ -40,7 +40,7 @@ const DEFAULT_CHECK_IN_MINUTES = 60;
 // parseTimeToHours, decimalToHHmm, isoToZulu imported from @/lib/fatigue-utils
 
 interface FlightSegmentBar {
-  type: 'checkin' | 'flight' | 'ground';
+  type: 'checkin' | 'flight' | 'ground' | 'training';
   flightNumber?: string;
   departure?: string;
   arrival?: string;
@@ -384,9 +384,49 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             segments: calculateSegments(duty, false),
           });
         }
+      } else if (isTrainingDuty(duty)) {
+        // Training duty — no flight segments, use report/release local times
+        const reportHour = parseTimeToHours(duty.reportTimeLocal);
+        const releaseHour = parseTimeToHours(duty.releaseTimeLocal);
+        if (reportHour === null || releaseHour === null) return;
+
+        const isOvernight = releaseHour < reportHour;
+
+        if (isOvernight) {
+          // Overnight training (e.g. night SIM) — split like flight overnights
+          if (dayOfMonth >= 1) {
+            bars.push({
+              dayIndex: dayOfMonth,
+              startHour: reportHour,
+              endHour: 24,
+              duty,
+              isOvernightStart: true,
+              segments: [{ type: 'training', startHour: reportHour, endHour: 24, performance: duty.minPerformance }],
+            });
+          }
+          const nextDay = dayOfMonth + 1;
+          if (nextDay <= daysInMonth && releaseHour > 0) {
+            bars.push({
+              dayIndex: nextDay,
+              startHour: 0,
+              endHour: releaseHour,
+              duty,
+              isOvernightContinuation: true,
+              segments: [{ type: 'training', startHour: 0, endHour: releaseHour, performance: duty.minPerformance }],
+            });
+          }
+        } else {
+          bars.push({
+            dayIndex: dayOfMonth,
+            startHour: reportHour,
+            endHour: releaseHour,
+            duty,
+            segments: [{ type: 'training', startHour: reportHour, endHour: releaseHour, performance: duty.minPerformance }],
+          });
+        }
       }
     });
-    
+
     return bars;
   }, [duties, daysInMonth]);
 
@@ -1725,6 +1765,33 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                             );
                                           }
                                           
+                                          // Training segment — distinct solid color with performance accent
+                                          if (segment.type === 'training') {
+                                            const bgColor = getTrainingDutyColor(bar.duty.dutyType || 'simulator');
+                                            const perfColor = getPerformanceColor(segment.performance);
+                                            const isSim = bar.duty.dutyType === 'simulator';
+                                            return (
+                                              <div
+                                                key={segIndex}
+                                                className="h-full relative flex items-center justify-center"
+                                                style={{
+                                                  width: `${segmentWidth}%`,
+                                                  backgroundColor: bgColor,
+                                                  borderLeft: `3px solid ${perfColor}`,
+                                                  ...(isSim && {
+                                                    backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.08) 3px, rgba(255,255,255,0.08) 6px)',
+                                                  }),
+                                                }}
+                                              >
+                                                {segmentWidth > 6 && (
+                                                  <span className="text-[8px] font-semibold text-white/90 truncate px-0.5">
+                                                    {bar.duty.trainingCode || getTrainingDutyLabel(bar.duty.dutyType || '')}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            );
+                                          }
+
                                           // Standard rendering (not zoomed or non-flight segments)
                                           return (
                                             <div
@@ -1736,8 +1803,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                               )}
                                               style={{
                                                 width: `${segmentWidth}%`,
-                                                backgroundColor: segment.type === 'ground' 
-                                                  ? 'hsl(var(--muted))' 
+                                                backgroundColor: segment.type === 'ground'
+                                                  ? 'hsl(var(--muted))'
                                                   : getPerformanceColor(segment.performance),
                                               }}
                                             >
@@ -1782,58 +1849,87 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           </Badge>
                                         )}
                                       </div>
-                                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                                        <span className="text-muted-foreground">Flights:</span>
-                                        <span>{bar.duty.flightSegments.map(s => s.flightNumber).join(', ')}</span>
-                                      </div>
-                                      
-                                      {/* EASA ORO.FTL Section */}
-                                      {(maxFdp || bar.duty.extendedFdpHours) && (
-                                        <div className="border-t border-border pt-2 mt-2">
-                                          <span className="text-muted-foreground font-medium">EASA ORO.FTL:</span>
-                                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
-                                            {maxFdp && (
-                                              <>
-                                                <span className="text-muted-foreground">Max FDP:</span>
-                                                <span>{maxFdp.toFixed(1)}h</span>
-                                              </>
-                                            )}
-                                            {bar.duty.extendedFdpHours && (
-                                              <>
-                                                <span className="text-muted-foreground">Extended FDP:</span>
-                                                <span className="text-warning">{bar.duty.extendedFdpHours.toFixed(1)}h</span>
-                                              </>
-                                            )}
-                                            <span className="text-muted-foreground">Actual FDP:</span>
-                                            <span className={cn(
-                                              maxFdp && actualFdp > maxFdp && "text-critical font-medium",
-                                              maxFdp && actualFdp <= maxFdp && "text-success"
-                                            )}>
-                                              {actualFdp.toFixed(1)}h
-                                            </span>
-                                            {bar.duty.fdpExceedance && bar.duty.fdpExceedance > 0 && (
-                                              <>
-                                                <span className="text-muted-foreground">Exceedance:</span>
-                                                <span className="text-critical font-medium">+{bar.duty.fdpExceedance.toFixed(1)}h</span>
-                                              </>
-                                            )}
+                                      {isTrainingDuty(bar.duty) ? (
+                                        <>
+                                          {/* Training duty type + code */}
+                                          <div className="flex items-center gap-2">
+                                            <Badge variant="outline" className="text-[10px]" style={{ borderColor: getTrainingDutyColor(bar.duty.dutyType!) }}>
+                                              {getTrainingDutyLabel(bar.duty.dutyType!)}
+                                            </Badge>
+                                            <span className="font-mono text-xs font-semibold">{bar.duty.trainingCode}</span>
                                           </div>
-                                        </div>
-                                      )}
-                                      
-                                      {/* Flight Segments */}
-                                      <div className="border-t border-border pt-2 mt-2">
-                                        <span className="text-muted-foreground font-medium">Flight Segments:</span>
-                                        <div className="flex flex-col gap-1 mt-1">
-                                          {bar.segments.filter(s => s.type === 'flight').map((segment, i) => (
-                                            <div key={i} className="flex items-center justify-between text-[10px] p-1 rounded" style={{ backgroundColor: `${getPerformanceColor(segment.performance)}20` }}>
-                                              <span className="font-medium">{segment.flightNumber}</span>
-                                              <span className="text-muted-foreground">{segment.departure} → {segment.arrival}</span>
-                                              <span style={{ color: getPerformanceColor(segment.performance) }} className="font-medium">{Math.round(segment.performance)}%</span>
+                                          {/* Time window */}
+                                          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                            <span className="text-muted-foreground">Report:</span>
+                                            <span>{bar.duty.reportTimeLocal}</span>
+                                            <span className="text-muted-foreground">Release:</span>
+                                            <span>{bar.duty.releaseTimeLocal}</span>
+                                            <span className="text-muted-foreground">Duration:</span>
+                                            <span>{bar.duty.dutyHours.toFixed(1)}h</span>
+                                          </div>
+                                          {bar.duty.trainingAnnotations && bar.duty.trainingAnnotations.length > 0 && (
+                                            <div className="text-[10px] text-muted-foreground">
+                                              Annotations: {bar.duty.trainingAnnotations.join(', ')}
                                             </div>
-                                          ))}
-                                        </div>
-                                      </div>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <>
+                                          {/* Flight duty: flights list, EASA FDP, segments */}
+                                          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                            <span className="text-muted-foreground">Flights:</span>
+                                            <span>{bar.duty.flightSegments.map(s => s.flightNumber).join(', ')}</span>
+                                          </div>
+
+                                          {/* EASA ORO.FTL Section */}
+                                          {(maxFdp || bar.duty.extendedFdpHours) && (
+                                            <div className="border-t border-border pt-2 mt-2">
+                                              <span className="text-muted-foreground font-medium">EASA ORO.FTL:</span>
+                                              <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                                                {maxFdp && (
+                                                  <>
+                                                    <span className="text-muted-foreground">Max FDP:</span>
+                                                    <span>{maxFdp.toFixed(1)}h</span>
+                                                  </>
+                                                )}
+                                                {bar.duty.extendedFdpHours && (
+                                                  <>
+                                                    <span className="text-muted-foreground">Extended FDP:</span>
+                                                    <span className="text-warning">{bar.duty.extendedFdpHours.toFixed(1)}h</span>
+                                                  </>
+                                                )}
+                                                <span className="text-muted-foreground">Actual FDP:</span>
+                                                <span className={cn(
+                                                  maxFdp && actualFdp > maxFdp && "text-critical font-medium",
+                                                  maxFdp && actualFdp <= maxFdp && "text-success"
+                                                )}>
+                                                  {actualFdp.toFixed(1)}h
+                                                </span>
+                                                {bar.duty.fdpExceedance && bar.duty.fdpExceedance > 0 && (
+                                                  <>
+                                                    <span className="text-muted-foreground">Exceedance:</span>
+                                                    <span className="text-critical font-medium">+{bar.duty.fdpExceedance.toFixed(1)}h</span>
+                                                  </>
+                                                )}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* Flight Segments */}
+                                          <div className="border-t border-border pt-2 mt-2">
+                                            <span className="text-muted-foreground font-medium">Flight Segments:</span>
+                                            <div className="flex flex-col gap-1 mt-1">
+                                              {bar.segments.filter(s => s.type === 'flight').map((segment, i) => (
+                                                <div key={i} className="flex items-center justify-between text-[10px] p-1 rounded" style={{ backgroundColor: `${getPerformanceColor(segment.performance)}20` }}>
+                                                  <span className="font-medium">{segment.flightNumber}</span>
+                                                  <span className="text-muted-foreground">{segment.departure} → {segment.arrival}</span>
+                                                  <span style={{ color: getPerformanceColor(segment.performance) }} className="font-medium">{Math.round(segment.performance)}%</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </>
+                                      )}
                                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border pt-2">
                                         <span className="text-muted-foreground">Min Perf:</span>
                                         <span style={{ color: getPerformanceColor(bar.duty.minPerformance) }}>{Math.round(bar.duty.minPerformance)}%</span>

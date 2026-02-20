@@ -55,6 +55,8 @@ export interface FlightSegment {
   // Activity code from roster PDF
   activityCode?: string | null;  // "IR" = inflight rest, "DH" = deadhead
   isDeadhead?: boolean;          // true when activity_code == "DH"
+  // Line training annotations (X, U, UL, L, E, ZFT)
+  lineTrainingCodes?: string[];
 }
 
 export type FlightPhase = 'preflight' | 'taxi' | 'takeoff' | 'climb' | 'cruise' | 'descent' | 'approach' | 'landing';
@@ -199,6 +201,11 @@ export interface DutyAnalysis {
   }[];
   returnToDeckPerformance: number | null;
   preDutyAwakeHours: number;
+
+  // Training duty classification
+  dutyType?: 'flight' | 'simulator' | 'ground_training';
+  trainingCode?: string;           // Raw activity code: "OPTR", "FFS", "EBTGR", etc.
+  trainingAnnotations?: string[];  // Trailing codes: ["ea"], ["aw","lpc","rh"]
 }
 
 // Sleep quality calculation factors

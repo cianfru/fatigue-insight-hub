@@ -43,6 +43,11 @@
     --wocl: 280 60% 70%;
     --wocl-foreground: 222 47% 6%;
 
+    --simulator: 185 65% 45%;
+    --simulator-foreground: 210 40% 98%;
+    --ground-training: 215 30% 55%;
+    --ground-training-foreground: 210 40% 98%;
+
     --border: 222 30% 18%;
     --input: 222 30% 14%;
     --ring: 199 89% 48%;
@@ -114,6 +119,11 @@
 
     --wocl: 280 60% 80%;
     --wocl-foreground: 222 47% 11%;
+
+    --simulator: 185 60% 40%;
+    --simulator-foreground: 222 47% 11%;
+    --ground-training: 215 25% 45%;
+    --ground-training-foreground: 222 47% 11%;
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
