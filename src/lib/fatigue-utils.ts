@@ -82,3 +82,27 @@ export const getPerformanceColor = (performance: number): string => {
   if (performance >= 40) return 'hsl(20, 95%, 50%)';
   return 'hsl(0, 80%, 50%)';
 };
+
+// --- Training duty helpers ---
+
+/** Check if a duty is a training duty (simulator or ground training) */
+export const isTrainingDuty = (duty: { dutyType?: string }): boolean =>
+  duty.dutyType === 'simulator' || duty.dutyType === 'ground_training';
+
+/** Background color for training duty chronogram bars (uses CSS variables for theme support) */
+export const getTrainingDutyColor = (dutyType: string): string => {
+  switch (dutyType) {
+    case 'simulator':       return 'hsl(var(--simulator))';
+    case 'ground_training': return 'hsl(var(--ground-training))';
+    default:                return 'hsl(var(--muted))';
+  }
+};
+
+/** Human-readable label for training duty type */
+export const getTrainingDutyLabel = (dutyType: string): string => {
+  switch (dutyType) {
+    case 'simulator':       return 'Simulator';
+    case 'ground_training': return 'Ground Training';
+    default:                return 'Training';
+  }
+};

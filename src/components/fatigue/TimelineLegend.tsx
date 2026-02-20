@@ -47,6 +47,21 @@ export function TimelineLegend({ showDiscretion, variant = 'homebase' }: Timelin
 
           <span className="text-border">|</span>
 
+          {/* Training duties */}
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 w-6 rounded-sm" style={{
+              backgroundColor: 'hsl(var(--simulator))',
+              backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)',
+            }} />
+            <span className="text-muted-foreground">Simulator</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 w-6 rounded-sm" style={{ backgroundColor: 'hsl(var(--ground-training))' }} />
+            <span className="text-muted-foreground">Ground Training</span>
+          </span>
+
+          <span className="text-border">|</span>
+
           {/* Sleep */}
           <span className="flex items-center gap-1.5">
             <span className="h-3 w-6 rounded-sm bg-primary/10 border border-dashed border-primary/30" />

@@ -412,6 +412,11 @@ const Index = () => {
             returnToDeckPerformance: duty.return_to_deck_performance ?? null,
             preDutyAwakeHours: duty.pre_duty_awake_hours ?? 0,
 
+            // Training duty classification
+            dutyType: duty.duty_type || 'flight',
+            trainingCode: duty.training_code || undefined,
+            trainingAnnotations: duty.training_annotations || undefined,
+
             flightSegments: (duty.segments ?? []).map((seg, idx) => ({
               flightNumber: seg.flight_number,
               departure: seg.departure,
@@ -428,6 +433,7 @@ const Index = () => {
               arrivalTimezone: seg.arrival_timezone,
               departureUtcOffset: seg.departure_utc_offset,
               arrivalUtcOffset: seg.arrival_utc_offset,
+              lineTrainingCodes: seg.line_training_codes || undefined,
             })),
           };
         }),

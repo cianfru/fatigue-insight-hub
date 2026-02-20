@@ -1,4 +1,4 @@
-import { AlertTriangle, Plane, Clock, Moon, ChevronDown, Globe, Zap, Users, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Plane, Clock, Moon, ChevronDown, Globe, Zap, Users, RefreshCw, Monitor, BookOpen } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { PriorSleepIndicator } from './PriorSleepIndicator';
 import { SleepRecoveryIndicator } from './SleepRecoveryIndicator';
 import { FlightPhasePerformance } from './FlightPhasePerformance';
 import { PerformanceDegradation } from './PerformanceDegradation';
+import { isTrainingDuty, getTrainingDutyColor, getTrainingDutyLabel } from '@/lib/fatigue-utils';
 
 interface DutyDetailsProps {
   duty: DutyAnalysis;
@@ -62,8 +63,14 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
       {/* Section 1: General Details */}
       <Card variant="glow">
         <CardHeader className="pb-2 md:pb-3">
-          <CardTitle className="text-base md:text-lg">
+          <CardTitle className="text-base md:text-lg flex items-center gap-2">
             {format(duty.date, 'EEE, MMM d, yyyy')}
+            {isTrainingDuty(duty) && (
+              <Badge variant="info" className="text-[10px] flex items-center gap-1">
+                {duty.dutyType === 'simulator' ? <Monitor className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
+                {getTrainingDutyLabel(duty.dutyType!)}
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -74,7 +81,7 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
             </div>
             <div className="space-y-0.5 md:space-y-1">
               <p className="text-[10px] md:text-xs text-muted-foreground">Sectors</p>
-              <p className="font-medium text-sm md:text-base">{duty.sectors}</p>
+              <p className="font-medium text-sm md:text-base">{isTrainingDuty(duty) ? '—' : duty.sectors}</p>
             </div>
             <div className="space-y-0.5 md:space-y-1">
               <p className="text-[10px] md:text-xs text-muted-foreground">Block Hours</p>
@@ -92,9 +99,13 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
             </div>
             <div className="space-y-0.5 md:space-y-1">
               <p className="text-[10px] md:text-xs text-muted-foreground">Landing</p>
-              <p className={`font-medium text-sm md:text-base ${(duty.landingPerformance ?? 0) < 50 ? 'text-critical' : (duty.landingPerformance ?? 0) < 60 ? 'text-warning' : 'text-foreground'}`}>
-                {(duty.landingPerformance ?? 0).toFixed(1)}/100
-              </p>
+              {isTrainingDuty(duty) ? (
+                <p className="font-medium text-sm md:text-base text-muted-foreground">N/A</p>
+              ) : (
+                <p className={`font-medium text-sm md:text-base ${(duty.landingPerformance ?? 0) < 50 ? 'text-critical' : (duty.landingPerformance ?? 0) < 60 ? 'text-warning' : 'text-foreground'}`}>
+                  {(duty.landingPerformance ?? 0).toFixed(1)}/100
+                </p>
+              )}
             </div>
             {/* Crew Composition - only for augmented crews */}
             {duty.crewComposition !== 'standard' && (
@@ -123,95 +134,135 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
         </CardContent>
       </Card>
 
-      {/* Section 2: Flight Segments */}
-      <Card variant="glass">
-        <CardHeader className="pb-2 md:pb-3">
-          <CardTitle className="flex items-center gap-2 text-sm md:text-base">
-            <Plane className="h-3.5 w-3.5 md:h-4 md:w-4 text-primary" />
-            Flight Segments
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {(duty.flightSegments ?? []).map((segment, index) => {
-              const formatUtcOffset = (offset: number | null | undefined): string => {
-                if (offset === null || offset === undefined) return '';
-                const sign = offset >= 0 ? '+' : '';
-                const hours = Math.floor(Math.abs(offset));
-                const minutes = Math.round((Math.abs(offset) - hours) * 60);
-                if (minutes === 0) return `UTC${sign}${offset}`;
-                return `UTC${sign}${offset >= 0 ? '' : '-'}${hours}:${minutes.toString().padStart(2, '0')}`;
-              };
-
-              const depTimeAirport = segment.departureTimeAirportLocal || segment.departureTime;
-              const arrTimeAirport = segment.arrivalTimeAirportLocal || segment.arrivalTime;
-              const depTzBadge = formatUtcOffset(segment.departureUtcOffset);
-              const arrTzBadge = formatUtcOffset(segment.arrivalUtcOffset);
-
-              return (
-                <div
-                  key={index}
-                  className="rounded-xl border border-border/40 bg-secondary/30 p-3 md:p-4 space-y-2.5"
-                >
-                  {/* Row 1: Flight number + Route + Performance */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-xs md:text-sm font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded">
-                        {segment.flightNumber}
-                      </span>
-                      {segment.activityCode && (
-                        <span className={`text-[10px] md:text-xs font-semibold px-1.5 py-0.5 rounded ${
-                          segment.activityCode === 'DH'
-                            ? 'bg-muted text-muted-foreground'
-                            : segment.activityCode === 'IR'
-                              ? 'bg-blue-500/15 text-blue-400'
-                              : 'bg-muted text-muted-foreground'
-                        }`}>
-                          {segment.activityCode === 'DH' ? '🪑 DH' :
-                           segment.activityCode === 'IR' ? '🛏️ IR' :
-                           segment.activityCode}
-                        </span>
-                      )}
-                      <span className="text-sm md:text-base font-medium">
-                        {segment.departure} → {segment.arrival}
-                      </span>
-                    </div>
-                    <Badge variant={(segment.performance ?? 0) < 50 ? 'critical' : (segment.performance ?? 0) < 60 ? 'warning' : 'success'} className="text-[10px] md:text-xs">
-                      {(segment.performance ?? 0).toFixed(0)}%
-                    </Badge>
-                  </div>
-
-                  {/* Row 2: Times */}
-                  <div className="space-y-1 pl-1">
-                    {/* Primary: Airport-local times */}
-                    <div className="flex items-center gap-1.5 text-xs md:text-sm text-foreground">
-                      <span>{depTimeAirport}</span>
-                      <span className="text-muted-foreground">{segment.departure}</span>
-                      {depTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground/70">({depTzBadge})</span>}
-                      <span className="text-muted-foreground mx-1">—</span>
-                      <span>{arrTimeAirport}</span>
-                      <span className="text-muted-foreground">{segment.arrival}</span>
-                      {arrTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground/70">({arrTzBadge})</span>}
-                    </div>
-                    {/* Secondary: UTC times */}
-                    {segment.departureTimeUtc && segment.arrivalTimeUtc && (
-                      <p className="text-[10px] md:text-[11px] text-muted-foreground font-mono">
-                        {segment.departureTimeUtc} — {segment.arrivalTimeUtc}
-                      </p>
-                    )}
-                    {/* Tertiary: Home base times */}
-                    {segment.departureTimeAirportLocal && segment.departureTime !== segment.departureTimeAirportLocal && (
-                      <p className="text-[9px] md:text-[10px] text-muted-foreground/70">
-                        Home: {segment.departureTime} — {segment.arrivalTime}
-                      </p>
-                    )}
-                  </div>
+      {/* Section 2: Flight Segments / Training Session */}
+      {isTrainingDuty(duty) ? (
+        <Card variant="glass">
+          <CardHeader className="pb-2 md:pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm md:text-base">
+              {duty.dutyType === 'simulator'
+                ? <Monitor className="h-3.5 w-3.5 md:h-4 md:w-4" style={{ color: 'hsl(var(--simulator))' }} />
+                : <BookOpen className="h-3.5 w-3.5 md:h-4 md:w-4" style={{ color: 'hsl(var(--ground-training))' }} />}
+              Training Session
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-xl border border-border/40 bg-secondary/30 p-3 md:p-4 space-y-2.5">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-xs md:text-sm font-semibold px-2 py-0.5 rounded"
+                  style={{ backgroundColor: `${getTrainingDutyColor(duty.dutyType!)}20`, color: getTrainingDutyColor(duty.dutyType!) }}>
+                  {duty.trainingCode}
+                </span>
+                <Badge variant="outline">{getTrainingDutyLabel(duty.dutyType!)}</Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs md:text-sm">
+                <span className="text-muted-foreground">Report</span>
+                <span>{duty.reportTimeLocal}</span>
+                <span className="text-muted-foreground">Release</span>
+                <span>{duty.releaseTimeLocal}</span>
+                <span className="text-muted-foreground">Duration</span>
+                <span>{(duty.dutyHours ?? 0).toFixed(1)}h</span>
+              </div>
+              {duty.trainingAnnotations && duty.trainingAnnotations.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] md:text-xs text-muted-foreground">Annotations:</span>
+                  {duty.trainingAnnotations.map(a => (
+                    <Badge key={a} variant="outline" className="text-[9px] md:text-[10px]">{a}</Badge>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card variant="glass">
+          <CardHeader className="pb-2 md:pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm md:text-base">
+              <Plane className="h-3.5 w-3.5 md:h-4 md:w-4 text-primary" />
+              Flight Segments
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {(duty.flightSegments ?? []).map((segment, index) => {
+                const formatUtcOffset = (offset: number | null | undefined): string => {
+                  if (offset === null || offset === undefined) return '';
+                  const sign = offset >= 0 ? '+' : '';
+                  const hours = Math.floor(Math.abs(offset));
+                  const minutes = Math.round((Math.abs(offset) - hours) * 60);
+                  if (minutes === 0) return `UTC${sign}${offset}`;
+                  return `UTC${sign}${offset >= 0 ? '' : '-'}${hours}:${minutes.toString().padStart(2, '0')}`;
+                };
+
+                const depTimeAirport = segment.departureTimeAirportLocal || segment.departureTime;
+                const arrTimeAirport = segment.arrivalTimeAirportLocal || segment.arrivalTime;
+                const depTzBadge = formatUtcOffset(segment.departureUtcOffset);
+                const arrTzBadge = formatUtcOffset(segment.arrivalUtcOffset);
+
+                return (
+                  <div
+                    key={index}
+                    className="rounded-xl border border-border/40 bg-secondary/30 p-3 md:p-4 space-y-2.5"
+                  >
+                    {/* Row 1: Flight number + Route + Performance */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-xs md:text-sm font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded">
+                          {segment.flightNumber}
+                        </span>
+                        {segment.activityCode && (
+                          <span className={`text-[10px] md:text-xs font-semibold px-1.5 py-0.5 rounded ${
+                            segment.activityCode === 'DH'
+                              ? 'bg-muted text-muted-foreground'
+                              : segment.activityCode === 'IR'
+                                ? 'bg-blue-500/15 text-blue-400'
+                                : 'bg-muted text-muted-foreground'
+                          }`}>
+                            {segment.activityCode === 'DH' ? '🪑 DH' :
+                             segment.activityCode === 'IR' ? '🛏️ IR' :
+                             segment.activityCode}
+                          </span>
+                        )}
+                        <span className="text-sm md:text-base font-medium">
+                          {segment.departure} → {segment.arrival}
+                        </span>
+                      </div>
+                      <Badge variant={(segment.performance ?? 0) < 50 ? 'critical' : (segment.performance ?? 0) < 60 ? 'warning' : 'success'} className="text-[10px] md:text-xs">
+                        {(segment.performance ?? 0).toFixed(0)}%
+                      </Badge>
+                    </div>
+
+                    {/* Row 2: Times */}
+                    <div className="space-y-1 pl-1">
+                      {/* Primary: Airport-local times */}
+                      <div className="flex items-center gap-1.5 text-xs md:text-sm text-foreground">
+                        <span>{depTimeAirport}</span>
+                        <span className="text-muted-foreground">{segment.departure}</span>
+                        {depTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground/70">({depTzBadge})</span>}
+                        <span className="text-muted-foreground mx-1">—</span>
+                        <span>{arrTimeAirport}</span>
+                        <span className="text-muted-foreground">{segment.arrival}</span>
+                        {arrTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground/70">({arrTzBadge})</span>}
+                      </div>
+                      {/* Secondary: UTC times */}
+                      {segment.departureTimeUtc && segment.arrivalTimeUtc && (
+                        <p className="text-[10px] md:text-[11px] text-muted-foreground font-mono">
+                          {segment.departureTimeUtc} — {segment.arrivalTimeUtc}
+                        </p>
+                      )}
+                      {/* Tertiary: Home base times */}
+                      {segment.departureTimeAirportLocal && segment.departureTime !== segment.departureTimeAirportLocal && (
+                        <p className="text-[9px] md:text-[10px] text-muted-foreground/70">
+                          Home: {segment.departureTime} — {segment.arrivalTime}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Crew Assignment - for augmented/ULR duties */}
       {onCrewChange && duty.crewComposition === 'augmented_4' && (
