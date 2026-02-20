@@ -125,6 +125,7 @@ export function DashboardContent({
                 onDutySelect={onDutySelect}
                 selectedDuty={selectedDuty}
                 restDaysSleep={analysisResults.restDaysSleep}
+                analysisId={analysisResults.analysisId}
               />
             </div>
           )}

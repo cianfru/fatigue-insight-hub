@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useChronogramZoom } from '@/hooks/useChronogramZoom';
 import { HumanPerformanceTimeline } from './HumanPerformanceTimeline';
 import { UtcTimeline } from './UtcTimeline';
+import { ContinuousPerformanceTimeline } from './ContinuousPerformanceTimeline';
 import { TimelineLegend } from './TimelineLegend';
 import { getRecoveryScore, getRecoveryClasses, getStrategyIcon, parseTimeToHours, decimalToHHmm, isoToZulu, getPerformanceColor } from '@/lib/fatigue-utils';
 
@@ -27,6 +28,7 @@ interface ChronogramProps {
   onDutySelect: (duty: DutyAnalysis) => void;
   selectedDuty: DutyAnalysis | null;
   restDaysSleep?: RestDaySleep[];
+  analysisId?: string;
 }
 
 // Display mode removed - chronogram is always a heatmap now
@@ -107,7 +109,7 @@ const WOCL_END = 6;
 
 // getPerformanceColor imported from @/lib/fatigue-utils
 
-export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep }: ChronogramProps) {
+export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep, analysisId }: ChronogramProps) {
   const [infoOpen, setInfoOpen] = useState(false);
   
   // Zoom functionality
@@ -1180,7 +1182,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
   const ROW_HEIGHT = 40; // Increased from 28px for breathing room
   const hours = Array.from({ length: 8 }, (_, i) => i * 3); // 00, 03, 06, 09, 12, 15, 18, 21
 
-  const [activeTab, setActiveTab] = useState<'homebase' | 'utc' | 'elapsed'>('homebase');
+  const [activeTab, setActiveTab] = useState<'homebase' | 'utc' | 'elapsed' | 'continuous'>('homebase');
 
   return (
     <Card variant="glass">
@@ -1195,8 +1197,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Tab selector for timeline type */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'homebase' | 'utc' | 'elapsed')}>
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'homebase' | 'utc' | 'elapsed' | 'continuous')}>
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="homebase" className="text-xs">
               🏠 Home-Base Timeline
             </TabsTrigger>
@@ -1206,6 +1208,10 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             <TabsTrigger value="elapsed" className="text-xs">
               <Brain className="h-3 w-3 mr-1" />
               Human Performance (Elapsed)
+            </TabsTrigger>
+            <TabsTrigger value="continuous" className="text-xs">
+              <Battery className="h-3 w-3 mr-1" />
+              SAFTE View
             </TabsTrigger>
           </TabsList>
 
@@ -2043,6 +2049,19 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               onDutySelect={onDutySelect}
               selectedDuty={selectedDuty}
               restDaysSleep={restDaysSleep}
+            />
+          </TabsContent>
+
+          {/* Continuous Performance Timeline (SAFTE View) Tab */}
+          <TabsContent value="continuous" className="mt-4">
+            <ContinuousPerformanceTimeline
+              duties={duties}
+              month={month}
+              analysisId={analysisId}
+              restDaysSleep={restDaysSleep}
+              onDutySelect={onDutySelect}
+              selectedDuty={selectedDuty}
+              pilotBase={pilotBase}
             />
           </TabsContent>
         </Tabs>
