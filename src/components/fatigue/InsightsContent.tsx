@@ -82,7 +82,7 @@ export function InsightsContent({ analysisResults, settings }: InsightsContentPr
             <PerformanceTimeline duties={analysisResults.duties} month={analysisResults.month} />
           </TabsContent>
           <TabsContent value="circadian" className="mt-4">
-            <BodyClockDriftChart duties={analysisResults.duties} month={analysisResults.month} homeBase={settings.homeBase} />
+            <BodyClockDriftChart duties={analysisResults.duties} month={analysisResults.month} homeBase={settings.homeBase} bodyClockTimeline={analysisResults.bodyClockTimeline} />
           </TabsContent>
           <TabsContent value="sleepdebt" className="mt-4">
             <SleepDebtTrendChart duties={analysisResults.duties} month={analysisResults.month} />
