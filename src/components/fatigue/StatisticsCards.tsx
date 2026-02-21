@@ -1,4 +1,4 @@
-import { Plane, Timer, Zap, TrendingDown, AlertTriangle, AlertCircle, Clock, Globe, Users } from 'lucide-react';
+import { Plane, Timer, Zap, TrendingDown, AlertTriangle, AlertCircle, Clock, Globe, Users, Moon } from 'lucide-react';
 import { DutyStatistics } from '@/types/fatigue';
 import { cn } from '@/lib/utils';
 
@@ -49,6 +49,12 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
           value={statistics.criticalRiskDuties.toString()}
           icon={<AlertCircle className="h-3.5 w-3.5" />}
           variant={statistics.criticalRiskDuties === 0 ? 'success' : 'critical'}
+        />
+        <RibbonStat
+          label="Avg Sleep"
+          value={`${statistics.avgSleepPerNight.toFixed(1)}h`}
+          icon={<Moon className="h-3.5 w-3.5" />}
+          variant={statistics.avgSleepPerNight >= 7 ? 'success' : statistics.avgSleepPerNight >= 6 ? 'warning' : 'critical'}
         />
         <RibbonStat
           label="Sleep Debt"

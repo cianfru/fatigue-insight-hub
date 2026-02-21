@@ -1061,8 +1061,13 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     // from the same related duty).
     const seen = new Set<string>();
     const deduped = bars.filter(bar => {
-      // Round to 2 decimal places to avoid floating-point near-duplicates
-      const key = `${bar.dayIndex}|${bar.startHour.toFixed(2)}|${bar.endHour.toFixed(2)}|${bar.sleepStrategy ?? ''}|${bar.isPreDuty}`;
+      // Round to 2 decimal places to avoid floating-point near-duplicates.
+      // Key on position only (dayIndex + time slot) — two bars occupying the
+      // same slot on the same day are visual duplicates regardless of which
+      // path generated them (duty path vs restDaysSleep path). The duty path
+      // runs first in the useMemo loop, so its bar (correct strategy label,
+      // isPreDuty=true) always wins the slot.
+      const key = `${bar.dayIndex}|${bar.startHour.toFixed(2)}|${bar.endHour.toFixed(2)}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
