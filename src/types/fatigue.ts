@@ -228,6 +228,11 @@ export interface TimelinePoint {
   circadian: number;               // Process C (Dijk & Czeisler, 1995)
   performance?: number;            // Combined performance score
   is_in_rest?: boolean;            // True when crew member is in bunk rest
+  // Extended fields (Phase 2 — populated from GET /api/duty detail)
+  flight_phase?: string | null;    // Current flight phase: "takeoff", "cruise", "landing", etc.
+  is_critical?: boolean;           // True during takeoff/landing phases
+  timestamp?: string;              // ISO 8601 UTC timestamp
+  timestamp_local?: string;        // ISO 8601 home-base timezone timestamp
 }
 
 // Academic reference for sleep calculations

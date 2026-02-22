@@ -42,7 +42,7 @@ export function DutyDetailsDrawer({ duty, analysisId, open, onOpenChange, global
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rawTimeline = detail?.timeline ?? detail?.timeline_points ?? detail?.timelinePoints;
         
-        // Map snake_case fields to TimelinePoint interface
+        // Map snake_case fields to TimelinePoint interface (preserve all fields for Phase 2 components)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const timelinePoints = Array.isArray(rawTimeline) ? rawTimeline.map((pt: any) => ({
           hours_on_duty: pt.hours_on_duty ?? 0,
@@ -52,6 +52,10 @@ export function DutyDetailsDrawer({ duty, analysisId, open, onOpenChange, global
           circadian: pt.circadian ?? 0,
           performance: pt.performance,
           is_in_rest: pt.is_in_rest ?? false,
+          flight_phase: pt.flight_phase ?? null,
+          is_critical: pt.is_critical ?? false,
+          timestamp: pt.timestamp,
+          timestamp_local: pt.timestamp_local,
         })) : undefined;
 
         setDetailedDuty({

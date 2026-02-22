@@ -15,8 +15,19 @@ export type AcclimatizationState = 'acclimatized' | 'unknown' | 'departed';
 export interface InFlightRestBlock {
   start_utc: string;
   end_utc: string;
+  // Home-base TZ positioning
+  start_home_tz?: string | null;
+  end_home_tz?: string | null;
+  start_day_home_tz?: number | null;
+  start_hour_home_tz?: number | null;
+  end_day_home_tz?: number | null;
+  end_hour_home_tz?: number | null;
+  start_iso_home_tz?: string | null;
+  end_iso_home_tz?: string | null;
   duration_hours: number;
   effective_sleep_hours: number;
+  quality_factor?: number;
+  environment?: string;
   crew_member_id: string | null;
   crew_set: ULRCrewSet | null;
   is_during_wocl: boolean;
@@ -53,6 +64,8 @@ export interface DutySegment {
   arrival_timezone: string;             // IANA timezone e.g. "Asia/Qatar"
   departure_utc_offset: number | null;  // UTC offset hours e.g. 5.5
   arrival_utc_offset: number | null;    // UTC offset hours e.g. 3.0
+  // Line training annotations (X, U, UL, L, E, ZFT)
+  line_training_codes?: string[];
 }
 
 // Sleep block from strategic sleep estimator
@@ -190,6 +203,11 @@ export interface Duty {
   inflight_rest_blocks?: InFlightRestBlock[];
   return_to_deck_performance?: number | null;
   pre_duty_awake_hours?: number;
+
+  // Training duty classification
+  duty_type?: 'flight' | 'simulator' | 'ground_training';
+  training_code?: string;
+  training_annotations?: string[];
 }
 
 // Rest day sleep block from backend

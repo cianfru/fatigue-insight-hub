@@ -7,14 +7,12 @@ import { PerformanceTimeline } from '@/components/fatigue/PerformanceTimeline';
 import { BodyClockDriftChart } from '@/components/fatigue/BodyClockDriftChart';
 import { SleepDebtTrendChart } from '@/components/fatigue/SleepDebtTrendChart';
 import { ExportOptions } from '@/components/fatigue/ExportOptions';
-import { AnalysisResults, PilotSettings } from '@/types/fatigue';
+import { useAnalysis } from '@/contexts/AnalysisContext';
 
-interface InsightsContentProps {
-  analysisResults: AnalysisResults | null;
-  settings: PilotSettings;
-}
+export function InsightsContent() {
+  const { state } = useAnalysis();
+  const { analysisResults, settings } = state;
 
-export function InsightsContent({ analysisResults, settings }: InsightsContentProps) {
   if (!analysisResults) {
     return (
       <div className="flex-1 p-4 md:p-6">

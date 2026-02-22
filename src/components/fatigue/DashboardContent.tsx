@@ -5,57 +5,52 @@ import { SettingsSidebar } from '@/components/fatigue/SettingsSidebar';
 import { Chronogram } from '@/components/fatigue/Chronogram';
 import { PinchEventAlerts } from '@/components/fatigue/PinchEventAlerts';
 import { DutyDetailsDrawer } from '@/components/fatigue/DutyDetailsDrawer';
-import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
+import { useAnalysis } from '@/contexts/AnalysisContext';
+import { useAnalyzeRoster } from '@/hooks/useAnalyzeRoster';
+import { useTheme } from '@/hooks/useTheme';
+import { PilotSettings } from '@/types/fatigue';
 
-interface DashboardContentProps {
-  settings: PilotSettings;
-  onSettingsChange: (newSettings: Partial<PilotSettings>) => void;
-  uploadedFile: UploadedFile | null;
-  onFileUpload: (file: UploadedFile, actualFile: File) => void;
-  onRemoveFile: () => void;
-  onRunAnalysis: () => Promise<void>;
-  isAnalyzing: boolean;
-  analysisResults: AnalysisResults | null;
-  selectedDuty: DutyAnalysis | null;
-  onDutySelect: (duty: DutyAnalysis) => void;
-  drawerOpen: boolean;
-  onDrawerOpenChange: (open: boolean) => void;
-  sidebarOpen: boolean;
-  onSidebarOpenChange: (open: boolean) => void;
-  globalCrewSet?: 'crew_a' | 'crew_b';
-  dutyCrewOverride?: 'crew_a' | 'crew_b';
-  onCrewChange?: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
-}
+export function DashboardContent() {
+  const {
+    state,
+    setSettings,
+    uploadFile,
+    removeFile,
+    selectDuty,
+    setDrawerOpen,
+    setSidebarOpen,
+    setCrewOverride,
+  } = useAnalysis();
+  const { runAnalysis, isAnalyzing } = useAnalyzeRoster();
+  const { setTheme } = useTheme();
 
-export function DashboardContent({
-  settings,
-  onSettingsChange,
-  uploadedFile,
-  onFileUpload,
-  onRemoveFile,
-  onRunAnalysis,
-  isAnalyzing,
-  analysisResults,
-  selectedDuty,
-  onDutySelect,
-  drawerOpen,
-  onDrawerOpenChange,
-  sidebarOpen,
-  onSidebarOpenChange,
-  globalCrewSet,
-  dutyCrewOverride,
-  onCrewChange,
-}: DashboardContentProps) {
+  const {
+    settings,
+    uploadedFile,
+    analysisResults,
+    selectedDuty,
+    drawerOpen,
+    sidebarOpen,
+    dutyCrewOverrides,
+  } = state;
+
+  const handleSettingsChange = (newSettings: Partial<PilotSettings>) => {
+    if (newSettings.theme) {
+      setTheme(newSettings.theme);
+    }
+    setSettings(newSettings);
+  };
+
   return (
     <div className="flex flex-1 relative">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 md:hidden"
-          onClick={() => onSidebarOpenChange(false)}
+          onClick={() => setSidebarOpen(false)}
         />
       )}
-      
+
       {/* Settings Sidebar */}
       <div className={`
         fixed inset-y-0 left-0 z-50 w-80 transform transition-transform duration-300 ease-in-out
@@ -66,19 +61,19 @@ export function DashboardContent({
           variant="ghost"
           size="icon"
           className="absolute right-2 top-2 md:hidden z-10"
-          onClick={() => onSidebarOpenChange(false)}
+          onClick={() => setSidebarOpen(false)}
         >
           <X className="h-5 w-5" />
         </Button>
-        
+
         <div className="h-full overflow-y-auto glass-strong border-r border-border/30">
-          <SettingsSidebar 
-            settings={settings} 
-            onSettingsChange={onSettingsChange}
+          <SettingsSidebar
+            settings={settings}
+            onSettingsChange={handleSettingsChange}
             uploadedFile={uploadedFile}
-            onFileUpload={onFileUpload}
-            onRemoveFile={onRemoveFile}
-            onRunAnalysis={onRunAnalysis}
+            onFileUpload={uploadFile}
+            onRemoveFile={removeFile}
+            onRunAnalysis={() => runAnalysis()}
             isAnalyzing={isAnalyzing}
             hasResults={!!analysisResults}
             pilotInfo={analysisResults ? {
@@ -122,7 +117,7 @@ export function DashboardContent({
                 statistics={analysisResults.statistics}
                 month={analysisResults.month}
                 pilotId={settings.pilotId}
-                onDutySelect={onDutySelect}
+                onDutySelect={selectDuty}
                 selectedDuty={selectedDuty}
                 restDaysSleep={analysisResults.restDaysSleep}
                 analysisId={analysisResults.analysisId}
@@ -161,10 +156,10 @@ export function DashboardContent({
         duty={selectedDuty}
         analysisId={analysisResults?.analysisId}
         open={drawerOpen}
-        onOpenChange={onDrawerOpenChange}
-        globalCrewSet={globalCrewSet}
-        dutyCrewOverride={dutyCrewOverride}
-        onCrewChange={onCrewChange}
+        onOpenChange={setDrawerOpen}
+        globalCrewSet={settings.crewSet}
+        dutyCrewOverride={dutyCrewOverrides.get(selectedDuty?.dutyId || '')}
+        onCrewChange={setCrewOverride}
       />
     </div>
   );
