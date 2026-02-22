@@ -1,5 +1,6 @@
 import { Plane, Timer, Zap, TrendingDown, AlertTriangle, AlertCircle, Clock, Globe, Users, Moon } from 'lucide-react';
 import { DutyStatistics } from '@/types/fatigue';
+import { InfoTooltip, FATIGUE_INFO, type InfoTooltipEntry } from '@/components/ui/InfoTooltip';
 import { cn } from '@/lib/utils';
 
 interface StatisticsCardsProps {
@@ -31,12 +32,14 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
           value={statistics.totalPinchEvents.toString()}
           icon={<Zap className="h-3.5 w-3.5" />}
           variant={statistics.totalPinchEvents === 0 ? 'success' : statistics.totalPinchEvents <= 3 ? 'warning' : 'critical'}
+          info={FATIGUE_INFO.pinchEvent}
         />
         <RibbonStat
           label="Worst Score"
           value={`${Math.round(statistics.worstPerformance)}%`}
           icon={<TrendingDown className="h-3.5 w-3.5" />}
           variant={statistics.worstPerformance >= 70 ? 'success' : statistics.worstPerformance >= 60 ? 'warning' : 'critical'}
+          info={FATIGUE_INFO.performance}
         />
         <RibbonStat
           label="High Risk"
@@ -55,12 +58,14 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
           value={`${statistics.avgSleepPerNight.toFixed(1)}h`}
           icon={<Moon className="h-3.5 w-3.5" />}
           variant={statistics.avgSleepPerNight >= 7 ? 'success' : statistics.avgSleepPerNight >= 6 ? 'warning' : 'critical'}
+          info={FATIGUE_INFO.avgSleep}
         />
         <RibbonStat
           label="Sleep Debt"
           value={`${statistics.maxSleepDebt.toFixed(1)}h`}
           icon={<Clock className="h-3.5 w-3.5" />}
           variant={statistics.maxSleepDebt <= 2 ? 'success' : statistics.maxSleepDebt <= 4 ? 'warning' : 'critical'}
+          info={FATIGUE_INFO.sleepDebt}
         />
       </div>
 
@@ -96,9 +101,11 @@ interface RibbonStatProps {
   value: string;
   icon: React.ReactNode;
   variant?: 'neutral' | 'success' | 'warning' | 'critical';
+  /** Optional info tooltip entry — shows (i) icon on hover/click. */
+  info?: InfoTooltipEntry;
 }
 
-function RibbonStat({ label, value, icon, variant = 'neutral' }: RibbonStatProps) {
+function RibbonStat({ label, value, icon, variant = 'neutral', info }: RibbonStatProps) {
   const variantStyles = {
     neutral: { value: 'text-foreground', icon: 'text-muted-foreground' },
     success: { value: 'text-success', icon: 'text-success' },
@@ -112,7 +119,10 @@ function RibbonStat({ label, value, icon, variant = 'neutral' }: RibbonStatProps
       <span className={cn("flex-shrink-0", styles.icon)}>{icon}</span>
       <div className="min-w-0">
         <div className={cn("text-base font-semibold tabular-nums leading-tight", styles.value)}>{value}</div>
-        <div className="text-[11px] text-muted-foreground truncate">{label}</div>
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+          <span className="truncate">{label}</span>
+          {info && <InfoTooltip entry={info} size="sm" />}
+        </div>
       </div>
     </div>
   );
